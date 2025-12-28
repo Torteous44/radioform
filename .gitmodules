@@ -1,3 +1,3 @@
-[submodule "packages/dsp/vendor/lsp-dsp-lib"]
-	path = packages/dsp/vendor/lsp-dsp-lib
-	url = https://github.com/lsp-plugins/lsp-dsp-lib.git
+[submodule "packages/driver/vendor/libASPL"]
+	path = packages/driver/vendor/libASPL
+	url = https://github.com/gavv/libASPL

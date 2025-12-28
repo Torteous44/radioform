@@ -1,0 +1,5 @@
+module CRadioformDSP {
+    header "radioform_types.h"
+    header "radioform_dsp.h"
+    export *
+}

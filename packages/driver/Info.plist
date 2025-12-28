@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+
+    <key>CFBundleExecutable</key>
+    <string>RadioformDriver</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.radioform.driver</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>CFBundleName</key>
+    <string>Radioform Audio Driver</string>
+
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <key>CFPlugInDynamicRegisterFunction</key>
+    <string></string>
+
+    <key>CFPlugInDynamicRegistration</key>
+    <string>NO</string>
+
+    <key>CFPlugInFactories</key>
+    <dict>
+        <key>B3F04000-8F04-4F84-A72E-B2D4F8E6F1DA</key>
+        <string>RadioformDriverPluginFactory</string>
+    </dict>
+
+    <key>CFPlugInTypes</key>
+    <dict>
+        <key>443ABAB8-E7B3-491A-B985-BEB9187030DB</key>
+        <string>B3F04000-8F04-4F84-A72E-B2D4F8E6F1DA</string>
+    </dict>
+
+    <key>CFPlugInUnloadFunction</key>
+    <string></string>
+
+    <key>AudioServerPlugIn_DefaultDeviceAcquireRelease</key>
+    <false/>
+
+    <key>AudioServerPlugIn_IsUISound</key>
+    <false/>
+
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025 Radioform. All rights reserved.</string>
+</dict>
+</plist>

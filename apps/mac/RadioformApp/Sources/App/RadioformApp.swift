@@ -46,6 +46,67 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hostProcess?.terminate()
     }
 
+    func checkAndLoadDriverIfNeeded() {
+        // Check if Radioform driver is already loaded
+        if isDriverLoaded() {
+            print("✓ Radioform driver already loaded, no need to restart coreaudiod")
+            return
+        }
+
+        print("⚠️  Radioform driver not detected, attempting to load...")
+
+        // Check if driver is installed
+        let driverPath = "/Library/Audio/Plug-Ins/HAL/RadioformDriver.driver"
+        guard FileManager.default.fileExists(atPath: driverPath) else {
+            showAlert("Driver Not Installed", "Radioform driver is not installed at \(driverPath)\n\nPlease run setup.sh first.")
+            return
+        }
+
+        // Attempt to restart coreaudiod
+        // This uses AppleScript to request admin privileges
+        let script = """
+        do shell script "killall coreaudiod" with administrator privileges
+        """
+
+        let appleScript = NSAppleScript(source: script)
+        var error: NSDictionary?
+        appleScript?.executeAndReturnError(&error)
+
+        if let error = error {
+            print("Failed to restart coreaudiod: \(error)")
+            showAlert("Driver Load Failed", "Could not restart coreaudiod. You may need to manually run:\nsudo killall coreaudiod")
+        } else {
+            print("✓ coreaudiod restarted successfully")
+            // Wait a bit for coreaudiod to restart
+            Thread.sleep(forTimeInterval: 2.0)
+        }
+    }
+
+    func isDriverLoaded() -> Bool {
+        // Use system_profiler to check if Radioform devices are visible
+        let task = Process()
+        task.launchPath = "/usr/sbin/system_profiler"
+        task.arguments = ["SPAudioDataType"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8) {
+                return output.contains("Radioform")
+            }
+        } catch {
+            print("Failed to check driver status: \(error)")
+        }
+
+        return false
+    }
+
     func launchHostIfNeeded() {
         // Check if RadioformHost is already running
         let task = Process()

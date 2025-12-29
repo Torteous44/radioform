@@ -9,12 +9,20 @@ struct MenuBarView: View {
             VisualEffectView(material: .popover, blendingMode: .behindWindow)
 
             VStack(spacing: 0) {
-                // Header with Radioform title
+                // Header with Radioform title and toggle
                 HStack {
-                    Spacer()
                     Text("Radioform")
                         .font(.system(size: 13, weight: .semibold))
+
                     Spacer()
+
+                    Toggle("", isOn: Binding(
+                        get: { presetManager.isEnabled },
+                        set: { _ in presetManager.toggleEnabled() }
+                    ))
+                    .toggleStyle(.switch)
+                    .scaleEffect(0.7)
+                    .labelsHidden()
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 4)

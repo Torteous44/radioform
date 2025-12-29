@@ -18,23 +18,40 @@ if [ ! -d "/Library/Audio/Plug-Ins/HAL/RadioformDriver.driver" ]; then
     exit 1
 fi
 
-# Kill any existing instances first
-pkill -f RadioformHost 2>/dev/null
+# Kill existing instances
+echo "Stopping existing Radioform processes..."
 pkill -f RadioformApp 2>/dev/null
+pkill -f RadioformHost 2>/dev/null
 sleep 1
 
-# Always restart coreaudiod to ensure fresh state
-# This fixes various audio routing and device initialization issues
-echo "Restarting coreaudiod for clean audio state..."
-sudo killall coreaudiod
-sleep 3
+# Save old control file to detect changes
+CONTROL_FILE="/tmp/radioform-devices.txt"
+OLD_DEVICES=""
+if [ -f "$CONTROL_FILE" ]; then
+    OLD_DEVICES=$(cat "$CONTROL_FILE")
+fi
 
-# Note: Radioform devices won't appear until the host starts and creates the control file
-# The host will be started by the menu bar app, so we don't check for devices here
+# Start RadioformHost first so it writes the control file
+echo "Starting RadioformHost..."
+packages/host/.build/arm64-apple-macosx/release/RadioformHost &
+sleep 1.5
 
-# Launch the menu bar app (it will auto-launch the host, which creates the control file)
+# Check if device list changed
+NEW_DEVICES=$(cat "$CONTROL_FILE" 2>/dev/null || echo "")
+
+if [ "$OLD_DEVICES" != "$NEW_DEVICES" ] || [ -z "$OLD_DEVICES" ]; then
+    echo "Device list changed, activating audio devices (requires password)..."
+    sudo killall coreaudiod
+    sleep 2
+    echo "✓ Audio devices activated"
+else
+    echo "✓ Device list unchanged, skipping coreaudiod restart"
+    echo "   (Your music will continue playing!)"
+fi
+echo ""
+
+# Launch the menu bar app
 echo "Starting menu bar app..."
-echo "   (Radioform devices will appear once the host starts)"
 echo ""
 
 # Set environment variable so app can find the host executable

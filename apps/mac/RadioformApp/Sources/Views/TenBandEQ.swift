@@ -2,10 +2,8 @@ import SwiftUI
 
 struct TenBandEQ: View {
     @ObservedObject private var presetManager = PresetManager.shared
-    @State private var bandValues: [Float] = Array(repeating: 0, count: 10)
 
     let frequencies = ["32", "64", "125", "250", "500", "1K", "2K", "4K", "8K", "16K"]
-    let frequencyHz: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -36,7 +34,12 @@ struct TenBandEQ: View {
                         VStack(spacing: 4) {
                             // Vertical slider
                             VerticalSlider(
-                                value: $bandValues[index],
+                                value: Binding(
+                                    get: { presetManager.currentBands[index] },
+                                    set: { newValue in
+                                        presetManager.updateBand(index: index, gainDb: newValue)
+                                    }
+                                ),
                                 range: -12...12
                             )
                             .frame(width: 20, height: 100)
@@ -52,39 +55,6 @@ struct TenBandEQ: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-        }
-        .onChange(of: presetManager.currentPreset) { newPreset in
-            updateSlidersFromPreset(newPreset)
-        }
-        .onAppear {
-            updateSlidersFromPreset(presetManager.currentPreset)
-        }
-    }
-
-    private func updateSlidersFromPreset(_ preset: EQPreset?) {
-        guard let preset = preset else {
-            bandValues = Array(repeating: 0, count: 10)
-            return
-        }
-
-        // Map preset bands to the 10 standard frequencies
-        for i in 0..<10 {
-            let targetFreq = frequencyHz[i]
-
-            // Find the closest enabled band
-            if let closestBand = preset.bands
-                .filter({ $0.enabled })
-                .min(by: { abs($0.frequencyHz - targetFreq) < abs($1.frequencyHz - targetFreq) }) {
-
-                // If the band is close enough to this frequency (within an octave), use its gain
-                if abs(closestBand.frequencyHz - targetFreq) < targetFreq * 0.7 {
-                    bandValues[i] = closestBand.gainDb
-                } else {
-                    bandValues[i] = 0
-                }
-            } else {
-                bandValues[i] = 0
-            }
         }
     }
 }

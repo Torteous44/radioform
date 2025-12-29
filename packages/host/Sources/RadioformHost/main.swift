@@ -312,7 +312,22 @@ let defaultOutputChangedCallback: AudioObjectPropertyListenerProc = { (
                 // Switch audio unit output to physical device
                 if let unit = outputUnit {
                     var newDeviceID = physicalDevice.id
-                    AudioUnitSetProperty(
+
+                    // Stop audio unit before changing device
+                    var wasRunning = false
+                    var isRunning: UInt32 = 0
+                    var size = UInt32(MemoryLayout<UInt32>.size)
+
+                    if AudioUnitGetProperty(unit, kAudioOutputUnitProperty_IsRunning, kAudioUnitScope_Global, 0, &isRunning, &size) == noErr {
+                        wasRunning = (isRunning != 0)
+                    }
+
+                    if wasRunning {
+                        AudioOutputUnitStop(unit)
+                    }
+
+                    // Change the device
+                    let status = AudioUnitSetProperty(
                         unit,
                         kAudioOutputUnitProperty_CurrentDevice,
                         kAudioUnitScope_Global,
@@ -320,6 +335,17 @@ let defaultOutputChangedCallback: AudioObjectPropertyListenerProc = { (
                         &newDeviceID,
                         UInt32(MemoryLayout<AudioDeviceID>.size)
                     )
+
+                    if status == noErr {
+                        print("✓ Switched to \(physicalDevice.name)")
+                    } else {
+                        print("⚠️  Failed to switch device (error \(status))")
+                    }
+
+                    // Restart if it was running
+                    if wasRunning {
+                        AudioOutputUnitStart(unit)
+                    }
                 }
             }
         }

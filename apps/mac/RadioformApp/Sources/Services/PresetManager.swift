@@ -14,8 +14,11 @@ class PresetManager: ObservableObject {
     @Published var bundledPresets: [EQPreset] = []
     @Published var userPresets: [EQPreset] = []
     @Published var currentPreset: EQPreset?
+    @Published var isEnabled: Bool = true
+    @Published var currentBands: [Float] = Array(repeating: 0, count: 10) // Current gain values for 10 bands
 
     private let userPresetsURL: URL
+    private let standardFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
 
     private init() {
         // Get user presets directory
@@ -152,9 +155,69 @@ class PresetManager: ObservableObject {
         do {
             try IPCController.shared.applyPreset(preset)
             currentPreset = preset
+
+            // Update currentBands from preset
+            for i in 0..<10 {
+                let targetFreq = standardFrequencies[i]
+                if let closestBand = preset.bands
+                    .filter({ $0.enabled })
+                    .min(by: { abs($0.frequencyHz - targetFreq) < abs($1.frequencyHz - targetFreq) }) {
+                    if abs(closestBand.frequencyHz - targetFreq) < targetFreq * 0.7 {
+                        currentBands[i] = closestBand.gainDb
+                    } else {
+                        currentBands[i] = 0
+                    }
+                } else {
+                    currentBands[i] = 0
+                }
+            }
         } catch {
             print("Failed to apply preset: \(error)")
         }
+    }
+
+    /// Update a single band and apply immediately
+    func updateBand(index: Int, gainDb: Float) {
+        guard index >= 0 && index < 10 else { return }
+        currentBands[index] = gainDb
+        applyCurrentState()
+    }
+
+    /// Apply current state (either enabled with current bands, or disabled with all zeros)
+    func applyCurrentState() {
+        let bands: [EQBand] = standardFrequencies.enumerated().map { index, frequency in
+            let gain = isEnabled ? currentBands[index] : 0.0
+            return EQBand(
+                frequencyHz: frequency,
+                gainDb: gain,
+                qFactor: 1.0,
+                filterType: .peak,
+                enabled: abs(gain) > 0.01
+            )
+        }
+
+        let customPreset = EQPreset(
+            name: "Custom",
+            bands: bands,
+            preampDb: 0.0,
+            limiterEnabled: true,
+            limiterThresholdDb: -1.0
+        )
+
+        do {
+            try IPCController.shared.applyPreset(customPreset)
+            if isEnabled {
+                currentPreset = nil // Indicate it's a custom state
+            }
+        } catch {
+            print("Failed to apply current state: \(error)")
+        }
+    }
+
+    /// Toggle EQ enabled state
+    func toggleEnabled() {
+        isEnabled.toggle()
+        applyCurrentState()
     }
 
     /// Sanitize filename (remove invalid characters)

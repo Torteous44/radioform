@@ -9,7 +9,11 @@ echo ""
 
 # Build DSP library
 echo "1. Building DSP library..."
-cd packages/dsp/build
+cd packages/dsp
+if [ ! -d "build" ]; then
+    mkdir -p build
+fi
+cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make
 cd ../../..

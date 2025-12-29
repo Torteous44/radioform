@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import Darwin
 
 @main
 struct RadioformApp: App {
@@ -69,14 +70,69 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startHost() {
-        // Find the host executable
-        let possiblePaths = [
-            "/Users/mattporteous/radioform/packages/host/.build/release/RadioformHost",
-            "/Users/mattporteous/radioform/packages/host/.build/debug/RadioformHost"
-        ]
+        // Find the host executable - try multiple possible locations
+        let fileManager = FileManager.default
+        
+        // Get possible base paths
+        var possibleBasePaths: [String] = []
+        
+        // Try to find relative to app bundle
+        if let appPath = Bundle.main.bundlePath as String? {
+            // If running from Xcode/build, go up to project root
+            let appURL = URL(fileURLWithPath: appPath)
+            if appPath.contains("/RadioformApp/") {
+                let projectRoot = appURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                possibleBasePaths.append(projectRoot.path)
+            }
+        }
+        
+        // Try current working directory
+        if let cwd = fileManager.currentDirectoryPath as String? {
+            possibleBasePaths.append(cwd)
+        }
+        
+        // Try home directory
+        if let homeDir = ProcessInfo.processInfo.environment["HOME"] {
+            possibleBasePaths.append("\(homeDir)/radioform")
+        }
+        
+        // Build possible paths
+        var possiblePaths: [String] = []
+        for basePath in possibleBasePaths {
+            // Try release build (with architecture subdirectory)
+            if let arch = getArchitecture() {
+                possiblePaths.append("\(basePath)/packages/host/.build/\(arch)/release/RadioformHost")
+            }
+            possiblePaths.append("\(basePath)/packages/host/.build/release/RadioformHost")
+            // Try debug build
+            if let arch = getArchitecture() {
+                possiblePaths.append("\(basePath)/packages/host/.build/\(arch)/debug/RadioformHost")
+            }
+            possiblePaths.append("\(basePath)/packages/host/.build/debug/RadioformHost")
+        }
+        
+        // Also try absolute path based on current user (most reliable)
+        if let homeDir = ProcessInfo.processInfo.environment["HOME"] {
+            if let arch = getArchitecture() {
+                possiblePaths.append("\(homeDir)/radioform/packages/host/.build/\(arch)/release/RadioformHost")
+            }
+            possiblePaths.append("\(homeDir)/radioform/packages/host/.build/release/RadioformHost")
+        }
+        
+        // Try environment variable if set
+        if let radioformRoot = ProcessInfo.processInfo.environment["RADIOFORM_ROOT"] {
+            if let arch = getArchitecture() {
+                possiblePaths.append("\(radioformRoot)/packages/host/.build/\(arch)/release/RadioformHost")
+            }
+            possiblePaths.append("\(radioformRoot)/packages/host/.build/release/RadioformHost")
+        }
 
-        guard let hostPath = possiblePaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
+        guard let hostPath = possiblePaths.first(where: { fileManager.fileExists(atPath: $0) }) else {
             print("ERROR: Could not find RadioformHost executable")
+            print("Searched in:")
+            for path in possiblePaths {
+                print("  - \(path)")
+            }
             showAlert("Radioform Host Not Found", "Please build the host first:\ncd packages/host && swift build -c release")
             return
         }
@@ -99,6 +155,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func getArchitecture() -> String? {
+        var size = 0
+        sysctlbyname("hw.machine", nil, &size, nil, 0)
+        var machine = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.machine", &machine, &size, nil, 0)
+        let arch = String(cString: machine)
+        
+        // Map to SwiftPM architecture names
+        if arch.contains("arm64") {
+            return "arm64-apple-macosx"
+        } else if arch.contains("x86_64") {
+            return "x86_64-apple-macosx"
+        }
+        return nil
+    }
+    
     func showAlert(_ title: String, _ message: String) {
         let alert = NSAlert()
         alert.messageText = title

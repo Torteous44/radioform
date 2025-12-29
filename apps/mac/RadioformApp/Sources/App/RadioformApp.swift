@@ -36,7 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Create popover with menu content
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: 300, height: 400)
+        popover?.contentSize = NSSize(width: 340, height: 600) // Larger height to accommodate expanded presets
         popover?.behavior = .transient
         popover?.contentViewController = NSHostingController(rootView: MenuBarView())
     }

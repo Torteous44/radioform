@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     @ObservedObject private var presetManager = PresetManager.shared
+    @State private var showPresets = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -9,50 +10,67 @@ struct MenuBarView: View {
             VisualEffectView(material: .popover, blendingMode: .behindWindow)
 
             VStack(spacing: 0) {
-                // Header with Radioform title and toggle
+                // Header with toggle only (no title)
                 HStack {
-                    Text("Radioform")
-                        .font(.system(size: 13, weight: .semibold))
-
+                    Text("Equalizer")
+                        .bold()
                     Spacer()
 
                     Toggle("", isOn: Binding(
                         get: { presetManager.isEnabled },
-                        set: { _ in presetManager.toggleEnabled() }
+                        set: { newValue in
+                            if presetManager.isEnabled != newValue {
+                                if newValue {
+                                    // Turning ON: if there's a preset selected, reapply it
+                                    if let preset = presetManager.currentPreset {
+                                        presetManager.isEnabled = true
+                                        presetManager.applyPreset(preset)
+                                    } else {
+                                        presetManager.toggleEnabled()
+                                    }
+                                } else {
+                                    // Turning OFF: just toggle
+                                    presetManager.toggleEnabled()
+                                }
+                            }
+                        }
                     ))
                     .toggleStyle(.switch)
-                    .scaleEffect(0.7)
                     .labelsHidden()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 4)
-
-                Divider()
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
 
                 // 10-Band EQ
                 TenBandEQ()
-                    .padding(.vertical, 8)
-
-                Divider()
-
-                // Control Center-style Preset Dropdown
-                PresetDropdown()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
 
-                Divider()
+                // Control Center-style Preset Dropdown
+                PresetDropdown(isExpanded: $showPresets)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+
+                // Preset list (shown when expanded)
+                if showPresets {
+                    PresetList(
+                        presets: (presetManager.bundledPresets + presetManager.userPresets).filter { preset in
+                            preset.id != presetManager.currentPreset?.id
+                        },
+                        activeID: presetManager.currentPreset?.id,
+                        onSelect: { preset in
+                            presetManager.applyPreset(preset)
+                            showPresets = false
+                        }
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
+                }
 
                 // Footer
-                HStack(spacing: 12) {
-                    Button("Quit Radioform") {
-                        NSApp.terminate(nil)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
+                QuitButton()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
             }
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -63,23 +81,24 @@ struct MenuBarView: View {
 
 struct PresetDropdown: View {
     @ObservedObject private var presetManager = PresetManager.shared
-    @State private var show = false
+    @Binding var isExpanded: Bool
+    @State private var isHovered = false
 
     var body: some View {
         Button {
-            show.toggle()
+            isExpanded.toggle()
         } label: {
             HStack(spacing: 10) {
-                // Left circular icon with native vibrancy
+                // Left circular icon with blue fill when active and enabled
                 ZStack {
                     Circle()
-                        .fill(Color(NSColor.separatorColor).opacity(0.5))
+                        .fill(presetManager.currentPreset != nil && presetManager.isEnabled ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.5))
                         .frame(width: 28, height: 28)
 
                     Image(systemName: "music.note")
                         .font(.system(size: 13, weight: .medium))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(presetManager.currentPreset != nil && presetManager.isEnabled ? .white : .secondary)
                 }
 
                 Text(presetManager.currentPreset?.name ?? "No Preset")
@@ -88,50 +107,31 @@ struct PresetDropdown: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.up.chevron.down")
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                    .fill(isHovered ? Color(NSColor.separatorColor).opacity(0.5) : Color.clear)
             )
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $show, arrowEdge: .top) {
-            ZStack {
-                VisualEffectView(material: .menu, blendingMode: .behindWindow)
-
-                PresetPopoverList(
-                    presets: presetManager.bundledPresets + presetManager.userPresets,
-                    activeID: presetManager.currentPreset?.id,
-                    onSelect: { preset in
-                        presetManager.applyPreset(preset)
-                        show = false
-                    }
-                )
-            }
-            .frame(width: 240)
+        .onHover { hovering in
+            isHovered = hovering
         }
     }
 }
 
-struct PresetPopoverList: View {
+struct PresetList: View {
     let presets: [EQPreset]
     let activeID: EQPreset.ID?
     let onSelect: (EQPreset) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Presets")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.top, 6)
-                .padding(.bottom, 4)
-
             ForEach(presets) { preset in
                 MenuItemButton(
                     preset: preset,
@@ -139,10 +139,7 @@ struct PresetPopoverList: View {
                     onSelect: { onSelect(preset) }
                 )
             }
-
-            Spacer(minLength: 4)
         }
-        .padding(.vertical, 2)
     }
 }
 
@@ -177,10 +174,34 @@ struct MenuItemButton: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(isHovered ? Color(NSColor.controlAccentColor).opacity(0.15) : Color.clear)
+                    .fill(isHovered ? Color(NSColor.separatorColor).opacity(0.5) : Color.clear)
             )
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+struct QuitButton: View {
+    @State private var isHovered = false
+
+    var body: some View {
+        Button("Quit Radioform") {
+            NSApp.terminate(nil)
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11, weight: .regular))
+        .foregroundColor(isHovered ? .white : .primary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isHovered ? Color.accentColor : Color.clear)
+        )
         .onHover { hovering in
             isHovered = hovering
         }

@@ -1,13 +1,21 @@
 import Foundation
 
 /// Complete EQ preset matching radioform_preset_t
-struct EQPreset: Codable, Identifiable {
+struct EQPreset: Codable, Identifiable, Equatable {
     let id = UUID()
     var name: String                    // Max 64 chars
     var bands: [EQBand]                 // Up to 10 bands
     var preampDb: Float                 // -12.0 to +12.0
     var limiterEnabled: Bool
     var limiterThresholdDb: Float       // -6.0 to 0.0
+
+    static func == (lhs: EQPreset, rhs: EQPreset) -> Bool {
+        return lhs.name == rhs.name &&
+               lhs.bands == rhs.bands &&
+               lhs.preampDb == rhs.preampDb &&
+               lhs.limiterEnabled == rhs.limiterEnabled &&
+               lhs.limiterThresholdDb == rhs.limiterThresholdDb
+    }
 
     enum CodingKeys: String, CodingKey {
         case name

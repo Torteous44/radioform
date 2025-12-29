@@ -12,13 +12,21 @@ enum FilterType: Int, Codable {
 }
 
 /// Single EQ band matching radioform_band_t
-struct EQBand: Codable, Identifiable {
+struct EQBand: Codable, Identifiable, Equatable {
     let id = UUID()
     var frequencyHz: Float       // 20-20000 Hz
     var gainDb: Float           // -12.0 to +12.0 dB
     var qFactor: Float          // 0.1 to 10.0
     var filterType: FilterType
     var enabled: Bool
+
+    static func == (lhs: EQBand, rhs: EQBand) -> Bool {
+        return lhs.frequencyHz == rhs.frequencyHz &&
+               lhs.gainDb == rhs.gainDb &&
+               lhs.qFactor == rhs.qFactor &&
+               lhs.filterType == rhs.filterType &&
+               lhs.enabled == rhs.enabled
+    }
 
     enum CodingKeys: String, CodingKey {
         case frequencyHz = "frequency_hz"

@@ -17,6 +17,9 @@
     <key>CFBundleShortVersionString</key>
     <string>1.0.0</string>
 
+    <key>CFBundleExecutable</key>
+    <string>RadioformApp</string>
+
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
 

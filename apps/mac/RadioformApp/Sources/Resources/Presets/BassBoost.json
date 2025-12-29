@@ -1,0 +1,29 @@
+{
+  "name": "Bass Boost",
+  "bands": [
+    {
+      "frequency_hz": 60.0,
+      "gain_db": 4.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 100.0,
+      "gain_db": 6.0,
+      "q_factor": 0.707,
+      "filter_type": 1,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 200.0,
+      "gain_db": 3.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    }
+  ],
+  "preamp_db": 0.0,
+  "limiter_enabled": true,
+  "limiter_threshold_db": -1.0
+}

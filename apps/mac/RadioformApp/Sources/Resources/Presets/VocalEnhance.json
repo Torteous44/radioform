@@ -1,0 +1,36 @@
+{
+  "name": "Vocal Enhance",
+  "bands": [
+    {
+      "frequency_hz": 200.0,
+      "gain_db": -3.0,
+      "q_factor": 1.0,
+      "filter_type": 4,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 1000.0,
+      "gain_db": 2.0,
+      "q_factor": 1.5,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 3000.0,
+      "gain_db": 4.0,
+      "q_factor": 2.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 8000.0,
+      "gain_db": -2.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    }
+  ],
+  "preamp_db": 0.0,
+  "limiter_enabled": true,
+  "limiter_threshold_db": -1.0
+}

@@ -5,10 +5,9 @@ macOS application targets for Radioform.
 ## Structure
 
 - **RadioformApp/**: SwiftUI menu bar application (UX + preferences)
-- **RadioformAudioHost/**: CoreAudio engine + device management layer
 
-## Architecture Rule
+## Architecture
 
-The menu bar app and audio host are **separate processes**. The app communicates with the host via a clean API (XPC or local controller), ensuring that UI crashes never kill audio.
+The menu bar app and audio host are **separate processes**. The app communicates with the host via JSON control file (`/tmp/radioform-preset.json`), ensuring that UI crashes never kill audio.
 
-The audio host can run headless as a launch agent, independent of the menu bar UI.
+The audio host (`packages/host/`) runs headless as a launch agent, independent of the menu bar UI.

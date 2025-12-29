@@ -1,0 +1,36 @@
+{
+  "name": "V-Shaped",
+  "bands": [
+    {
+      "frequency_hz": 60.0,
+      "gain_db": 5.0,
+      "q_factor": 1.0,
+      "filter_type": 1,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 250.0,
+      "gain_db": -2.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 1000.0,
+      "gain_db": -3.0,
+      "q_factor": 1.5,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 8000.0,
+      "gain_db": 5.0,
+      "q_factor": 1.0,
+      "filter_type": 2,
+      "enabled": true
+    }
+  ],
+  "preamp_db": 0.0,
+  "limiter_enabled": true,
+  "limiter_threshold_db": -1.0
+}

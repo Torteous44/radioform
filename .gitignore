@@ -48,7 +48,7 @@ playground.xcworkspace
 
 # Swift Package Manager
 .swiftpm/
-Packages/
+# Packages/ -- commented out to not ignore our packages/ directory
 Package.pins
 Package.resolved
 

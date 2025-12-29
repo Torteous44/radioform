@@ -6,6 +6,14 @@ import Darwin
 struct RadioformApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        // Check for --reset-onboarding flag
+        if CommandLine.arguments.contains("--reset-onboarding") {
+            OnboardingState.reset()
+            print("🔄 Onboarding reset - will show on next launch")
+        }
+    }
+
     var body: some Scene {
         Settings {
             EmptyView()
@@ -17,11 +25,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
     var hostProcess: Process?
+    var onboardingCoordinator: OnboardingCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Check if onboarding is needed
+        if !OnboardingState.hasCompleted() {
+            showOnboarding()
+            return
+        }
+
         // Launch audio host if not already running
         launchHostIfNeeded()
 
+        // Set up menu bar UI
+        setupMenuBar()
+    }
+
+    func showOnboarding() {
+        // Switch to regular activation policy to show window properly
+        NSApp.setActivationPolicy(.regular)
+
+        // Create and show onboarding
+        onboardingCoordinator = OnboardingCoordinator()
+        onboardingCoordinator?.show()
+
+        print("✓ Showing onboarding")
+    }
+
+    func setupMenuBar() {
         // Hide from Dock (menu bar only)
         NSApp.setActivationPolicy(.accessory)
 
@@ -133,11 +164,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func startHost() {
         // Find the host executable - try multiple possible locations
         let fileManager = FileManager.default
-        
-        // Get possible base paths
+        var possiblePaths: [String] = []
+
+        // PRIORITY 1: Check for embedded binary in .app bundle (for distribution)
+        if let executablePath = Bundle.main.executableURL?.deletingLastPathComponent().path {
+            let embeddedHost = "\(executablePath)/RadioformHost"
+            possiblePaths.append(embeddedHost)
+        }
+
+        // PRIORITY 2: Development builds - relative to app bundle
         var possibleBasePaths: [String] = []
-        
-        // Try to find relative to app bundle
+
         if let appPath = Bundle.main.bundlePath as String? {
             // If running from Xcode/build, go up to project root
             let appURL = URL(fileURLWithPath: appPath)
@@ -146,19 +183,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 possibleBasePaths.append(projectRoot.path)
             }
         }
-        
+
         // Try current working directory
         if let cwd = fileManager.currentDirectoryPath as String? {
             possibleBasePaths.append(cwd)
         }
-        
+
         // Try home directory
         if let homeDir = ProcessInfo.processInfo.environment["HOME"] {
             possibleBasePaths.append("\(homeDir)/radioform")
         }
-        
-        // Build possible paths
-        var possiblePaths: [String] = []
+
+        // Build development paths
         for basePath in possibleBasePaths {
             // Try release build (with architecture subdirectory)
             if let arch = getArchitecture() {
@@ -171,15 +207,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             possiblePaths.append("\(basePath)/packages/host/.build/debug/RadioformHost")
         }
-        
-        // Also try absolute path based on current user (most reliable)
+
+        // Also try absolute path based on current user
         if let homeDir = ProcessInfo.processInfo.environment["HOME"] {
             if let arch = getArchitecture() {
                 possiblePaths.append("\(homeDir)/radioform/packages/host/.build/\(arch)/release/RadioformHost")
             }
             possiblePaths.append("\(homeDir)/radioform/packages/host/.build/release/RadioformHost")
         }
-        
+
         // Try environment variable if set
         if let radioformRoot = ProcessInfo.processInfo.environment["RADIOFORM_ROOT"] {
             if let arch = getArchitecture() {

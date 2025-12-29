@@ -1,0 +1,77 @@
+name: "Bug: audio pipeline issue"
+description: Report reproducible problems in the HAL driver, host engine, DSP, or macOS app.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping keep Radioform stable. Please include environment details and logs so we can reproduce quickly.
+  - type: checkboxes
+    id: components
+    attributes:
+      label: Affected components
+      options:
+        - label: HAL driver (`packages/driver`)
+        - label: Host engine (`packages/host`)
+        - label: DSP library (`packages/dsp`)
+        - label: Menu bar app (`apps/mac`)
+        - label: Web/app UI (`apps/web`)
+        - label: Documentation or scripts
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: macOS version, Mac model/SoC, output device (AirPods, interface, etc.), commit/branch, and whether libASPL vendor assets are present.
+      placeholder: "macOS 14.2.1, M2 Pro, AirPods Pro, commit abc123 on main, libASPL vendor available: yes"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, commands, and audio apps involved. Include whether the host was running before selecting the Radioform device.
+      placeholder: |
+        1. Build DSP + host
+        2. Start host via `./start_host.sh`
+        3. Set Radioform as system output
+        4. Play audio from Spotify
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "Audio routes cleanly with no dropouts; menu bar status shows connected."
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include frequency/severity (once, intermittent, always).
+      placeholder: "Audio crackles every ~20s; host logs show underruns."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / diagnostics
+      description: |
+        Paste relevant output: host stdout, `log stream --predicate 'process == "coreaudiod"'`, or driver build/install output.
+      render: shell
+  - type: textarea
+    id: notes
+    attributes:
+      label: Extra context
+      description: Screenshots, audio clips, timing (after sleep, after device switch), or related issues/PRs.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: Searched existing issues for duplicates
+          required: true
+        - label: Reproduced on a clean build following TESTING.md
+          required: false

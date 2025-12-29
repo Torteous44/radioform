@@ -1,0 +1,37 @@
+name: "Task: engineering follow-up"
+description: Track maintenance work, refactors, infra, or docs.
+labels: ["chore"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for scoped engineering work that is not a user-facing feature.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What needs to be done? Include directories/files if known.
+      placeholder: "Refactor shared memory wrapper; add CI coverage for host build; document install flow."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Exit criteria
+      description: Definition of done, test coverage, or diagnostics to add.
+      placeholder: "- Host builds on macOS CI\n- Driver installer warns before restarting coreaudiod\n- Add log stream snippet to README"
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks / blockers
+      description: Realtime constraints, permissions, vendor libraries, or missing tooling.
+      placeholder: "libASPL vendor bundle not committed yet; requires sudo to test installer."
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Readiness
+      options:
+        - label: Linked to a roadmap item or milestone
+        - label: No external approvals required

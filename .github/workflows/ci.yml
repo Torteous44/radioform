@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dsp:
+    name: DSP (CMake + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Configure DSP
+        run: cmake -S packages/dsp -B packages/dsp/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build DSP
+        run: cmake --build packages/dsp/build --config Release --parallel
+      - name: Run DSP tests
+        run: |
+          cd packages/dsp/build
+          ctest --output-on-failure
+
+  host:
+    name: Host (Swift)
+    runs-on: macos-14
+    needs: dsp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build DSP dependency
+        run: |
+          cmake -S packages/dsp -B packages/dsp/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build packages/dsp/build --config Release --parallel
+      - name: Build host engine
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "13.0"
+        run: swift build --configuration release --package-path packages/host
+
+  driver:
+    name: HAL Driver (optional)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect libASPL vendor drop
+        id: libaspl
+        run: |
+          if [ -d packages/driver/vendor/libASPL ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Skip driver build (libASPL missing)
+        if: steps.libaspl.outputs.present != 'true'
+        run: echo "::warning::libASPL vendor folder not present; skipping driver build."
+      - name: Build HAL driver
+        if: steps.libaspl.outputs.present == 'true'
+        run: |
+          cmake -S packages/driver -B packages/driver/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build packages/driver/build --config Release --parallel
+
+  web:
+    name: Web (Next.js)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/site/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/web/site
+        run: npm ci
+      - name: Lint
+        working-directory: apps/web/site
+        run: npm run lint
+      - name: Build
+        working-directory: apps/web/site
+        run: npm run build

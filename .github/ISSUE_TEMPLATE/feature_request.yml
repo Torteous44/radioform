@@ -1,0 +1,51 @@
+name: "Feature: capability or UX improvement"
+description: Propose a new capability, integration, or user experience improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us understand the user problem first, then the desired solution. Include success criteria we can test.
+  - type: input
+    id: audience
+    attributes:
+      label: Who benefits?
+      description: Target user (e.g., power users, creators, casual listeners).
+      placeholder: "Creators using external interfaces; commuters on AirPods; etc."
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem / job-to-be-done
+      description: Describe the pain or scenario, not the solution.
+      placeholder: "Need automatic device follow so audio keeps working when switching from speakers to AirPods."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should happen? Include UI/API changes, presets, or automation hooks.
+      placeholder: "Menu bar toggle for 'Follow system device', with optional exclusions for AirPlay devices."
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: Measurable outcomes or acceptance tests (e.g., latency budget, UX flow, install friction).
+      placeholder: "- Switching devices never drops audio\n- Additional latency under 5 ms\n- No extra prompts after initial install"
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks / dependencies
+      description: OS requirements, entitlements, third-party services, or driver constraints.
+      placeholder: "Requires LaunchAgent for host; may need new CoreAudio APIs; conflicts with auto-sleep behavior."
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to prior art, designs, or related issues/PRs.

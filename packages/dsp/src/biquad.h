@@ -45,8 +45,8 @@ public:
      * @brief Reset filter state (clear delay line)
      */
     void reset() {
-        std::memset(&state_left_, 0, sizeof(state_left_));
-        std::memset(&state_right_, 0, sizeof(state_right_));
+        state_left_ = {};
+        state_right_ = {};
     }
 
     /**
@@ -133,7 +133,6 @@ private:
 
             case RADIOFORM_FILTER_LOW_SHELF: {
                 // Low shelf
-                const float S = 1.0f; // Shelf slope (can be configurable)
                 const float beta = std::sqrt(A) / Q;
                 const float a0 = (A + 1.0f) + (A - 1.0f) * cos_w0 + beta * sin_w0;
 

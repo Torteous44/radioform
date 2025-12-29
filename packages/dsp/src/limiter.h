@@ -6,6 +6,7 @@
 #ifndef RADIOFORM_LIMITER_H
 #define RADIOFORM_LIMITER_H
 
+#include <cstdint>
 #include <cmath>
 #include <algorithm>
 
@@ -63,7 +64,7 @@ public:
         float* left, float* right,
         uint32_t num_frames
     ) {
-        for (uint32_t i = 0; i < num_frames; i++) {
+        for (uint32_t i = 0; i < num_frames; ++i) {
             left[i] = processSample(left[i]);
             right[i] = processSample(right[i]);
         }
@@ -90,7 +91,7 @@ public:
     }
 
     void processBuffer(float* left, float* right, uint32_t num_frames) {
-        for (uint32_t i = 0; i < num_frames; i++) {
+        for (uint32_t i = 0; i < num_frames; ++i) {
             left[i] = processSample(left[i]);
             right[i] = processSample(right[i]);
         }

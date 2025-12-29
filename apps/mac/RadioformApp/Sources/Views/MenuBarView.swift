@@ -4,128 +4,177 @@ struct MenuBarView: View {
     @ObservedObject private var presetManager = PresetManager.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Image(systemName: "waveform.circle.fill")
-                    .foregroundColor(.blue)
-                Text("Radioform EQ")
-                    .font(.headline)
-                Spacer()
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
+        ZStack(alignment: .top) {
+            // Background with native popover material
+            VisualEffectView(material: .popover, blendingMode: .behindWindow)
 
-            Divider()
-
-            // Current preset indicator
-            if let current = presetManager.currentPreset {
+            VStack(spacing: 0) {
+                // Header with Radioform title
                 HStack {
-                    Text("Now Playing:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(current.name)
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                    Spacer()
+                    Text("Radioform")
+                        .font(.system(size: 13, weight: .semibold))
                     Spacer()
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-            }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
 
-            // Preset list
-            ScrollView {
-                VStack(spacing: 4) {
-                    // Bundled presets
-                    if !presetManager.bundledPresets.isEmpty {
-                        PresetSection(
-                            title: "Presets",
-                            presets: presetManager.bundledPresets,
-                            currentPreset: presetManager.currentPreset
-                        )
+                Divider()
+
+                // 10-Band EQ
+                TenBandEQ()
+                    .padding(.vertical, 8)
+
+                Divider()
+
+                // Control Center-style Preset Dropdown
+                PresetDropdown()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+
+                Divider()
+
+                // Footer
+                HStack(spacing: 12) {
+                    Button("Quit Radioform") {
+                        NSApp.terminate(nil)
                     }
-
-                    // User presets
-                    if !presetManager.userPresets.isEmpty {
-                        Divider()
-                            .padding(.vertical, 8)
-
-                        PresetSection(
-                            title: "My Presets",
-                            presets: presetManager.userPresets,
-                            currentPreset: presetManager.currentPreset
-                        )
-                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
                 }
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
             }
-
-            Divider()
-
-            // Footer actions
-            HStack(spacing: 16) {
-                Button(action: {
-                    NSApp.terminate(nil)
-                }) {
-                    Text("Quit")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.secondary)
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(width: 300, height: 400)
+        .frame(width: 340)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-struct PresetSection: View {
-    let title: String
-    let presets: [EQPreset]
-    let currentPreset: EQPreset?
+struct PresetDropdown: View {
+    @ObservedObject private var presetManager = PresetManager.shared
+    @State private var show = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
+        Button {
+            show.toggle()
+        } label: {
+            HStack(spacing: 10) {
+                // Left circular icon with native vibrancy
+                ZStack {
+                    Circle()
+                        .fill(Color(NSColor.separatorColor).opacity(0.5))
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: "music.note")
+                        .font(.system(size: 13, weight: .medium))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(presetManager.currentPreset?.name ?? "No Preset")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $show, arrowEdge: .top) {
+            ZStack {
+                VisualEffectView(material: .menu, blendingMode: .behindWindow)
+
+                PresetPopoverList(
+                    presets: presetManager.bundledPresets + presetManager.userPresets,
+                    activeID: presetManager.currentPreset?.id,
+                    onSelect: { preset in
+                        presetManager.applyPreset(preset)
+                        show = false
+                    }
+                )
+            }
+            .frame(width: 240)
+        }
+    }
+}
+
+struct PresetPopoverList: View {
+    let presets: [EQPreset]
+    let activeID: EQPreset.ID?
+    let onSelect: (EQPreset) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Presets")
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
-                .padding(.horizontal)
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
                 .padding(.bottom, 4)
 
             ForEach(presets) { preset in
-                PresetRow(preset: preset, isActive: preset.id == currentPreset?.id)
+                MenuItemButton(
+                    preset: preset,
+                    isActive: preset.id == activeID,
+                    onSelect: { onSelect(preset) }
+                )
             }
+
+            Spacer(minLength: 4)
         }
+        .padding(.vertical, 2)
     }
 }
 
-struct PresetRow: View {
+struct MenuItemButton: View {
     let preset: EQPreset
     let isActive: Bool
+    let onSelect: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
-        Button(action: {
-            PresetManager.shared.applyPreset(preset)
-        }) {
-            HStack {
-                Text(preset.name)
-                    .foregroundColor(isActive ? .blue : .primary)
-                Spacer()
-                if isActive {
-                    Image(systemName: "checkmark")
-                        .foregroundColor(.blue)
-                        .font(.caption)
+        Button(action: onSelect) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(isActive ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.4))
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: "music.note")
+                        .font(.system(size: 13, weight: .medium))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(isActive ? .white : .secondary)
                 }
+
+                Text(preset.name)
+                    .font(.system(size: 13))
+                    .foregroundColor(.primary)
+
+                Spacer()
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(isActive ? Color.blue.opacity(0.1) : Color.clear)
-            .cornerRadius(4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isHovered ? Color(NSColor.controlAccentColor).opacity(0.15) : Color.clear)
+            )
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 8)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }

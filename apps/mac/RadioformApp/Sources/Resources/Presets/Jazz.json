@@ -2,10 +2,31 @@
   "name": "Jazz",
   "bands": [
     {
-      "frequency_hz": 100.0,
+      "frequency_hz": 32.0,
+      "gain_db": 1.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 64.0,
       "gain_db": 2.0,
-      "q_factor": 0.707,
-      "filter_type": 1,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 125.0,
+      "gain_db": 2.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 250.0,
+      "gain_db": 3.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
       "enabled": true
     },
     {
@@ -16,8 +37,22 @@
       "enabled": true
     },
     {
-      "frequency_hz": 2000.0,
+      "frequency_hz": 1000.0,
       "gain_db": 2.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 2000.0,
+      "gain_db": 1.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 4000.0,
+      "gain_db": 0.0,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
@@ -28,9 +63,16 @@
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
+    },
+    {
+      "frequency_hz": 16000.0,
+      "gain_db": 2.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
     }
   ],
   "preamp_db": 0.0,
-  "limiter_enabled": false,
+  "limiter_enabled": true,
   "limiter_threshold_db": -1.0
 }

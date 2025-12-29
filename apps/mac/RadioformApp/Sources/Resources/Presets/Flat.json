@@ -2,11 +2,74 @@
   "name": "Flat",
   "bands": [
     {
-      "frequency_hz": 100.0,
+      "frequency_hz": 32.0,
       "gain_db": 0.0,
       "q_factor": 1.0,
       "filter_type": 0,
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "frequency_hz": 64.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 125.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 250.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 500.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 1000.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 2000.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 4000.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 8000.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 16000.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
     }
   ],
   "preamp_db": 0.0,

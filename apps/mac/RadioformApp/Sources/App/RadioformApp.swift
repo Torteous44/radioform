@@ -4,6 +4,7 @@ import Darwin
 import AppKit
 import CoreText
 import CoreGraphics
+import CoreAudio
 
 // Main entry point - AppKit-based app with SwiftUI views
 @main
@@ -94,8 +95,190 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Stop the host process when app quits
-        hostProcess?.terminate()
+        let logFile = "/tmp/radioform-quit.log"
+
+        func log(_ message: String) {
+            let timestamp = Date()
+            let logMessage = "[\(timestamp)] \(message)\n"
+            if let data = logMessage.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: logFile) {
+                    if let handle = FileHandle(forWritingAtPath: logFile) {
+                        handle.seekToEndOfFile()
+                        handle.write(data)
+                        handle.closeFile()
+                    }
+                } else {
+                    try? data.write(to: URL(fileURLWithPath: logFile))
+                }
+            }
+            print(message)
+        }
+
+        log("=== applicationWillTerminate CALLED ===")
+
+        // Perform cleanup directly from the app
+        performCleanup(logger: log)
+
+        // Then terminate the host process
+        if let process = hostProcess, process.isRunning {
+            log("Terminating host process...")
+            process.terminate()
+        }
+
+        log("=== applicationWillTerminate COMPLETE ===")
+    }
+
+    func performCleanup(logger: (String) -> Void = { print($0) }) {
+        logger("[Cleanup] Starting cleanup process...")
+
+        // 1. Restore default device to physical device (if currently on proxy)
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var currentDeviceID: AudioDeviceID = 0
+        var dataSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+
+        if AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &currentDeviceID
+        ) == noErr {
+            // Get current device name
+            var nameAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceNameCFString,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            var deviceName: Unmanaged<CFString>?
+            var nameSize = UInt32(MemoryLayout<CFString>.size)
+
+            if AudioObjectGetPropertyData(currentDeviceID, &nameAddress, 0, nil, &nameSize, &deviceName) == noErr,
+               let name = deviceName?.takeUnretainedValue() as String? {
+
+                // If currently on a Radioform proxy, switch back to physical device
+                if name.contains("Radioform") {
+                    logger("[Cleanup] Currently on proxy device: \(name)")
+
+                    // Get proxy UID
+                    var uidAddress = AudioObjectPropertyAddress(
+                        mSelector: kAudioDevicePropertyDeviceUID,
+                        mScope: kAudioObjectPropertyScopeGlobal,
+                        mElement: kAudioObjectPropertyElementMain
+                    )
+
+                    var deviceUID: Unmanaged<CFString>?
+                    var uidSize = UInt32(MemoryLayout<CFString>.size)
+
+                    if AudioObjectGetPropertyData(currentDeviceID, &uidAddress, 0, nil, &uidSize, &deviceUID) == noErr,
+                       let proxyUIDStr = deviceUID?.takeUnretainedValue() as String? {
+
+                        // Extract physical device UID (remove "-radioform" suffix)
+                        if let physicalUID = proxyUIDStr.components(separatedBy: "-radioform").first {
+                            logger("[Cleanup] Looking for physical device with UID: \(physicalUID)")
+
+                            // Find the physical device
+                            if let physicalDeviceID = findDeviceByUID(physicalUID) {
+                                logger("[Cleanup] Restoring default device to physical device (ID: \(physicalDeviceID))")
+
+                                var newDeviceID = physicalDeviceID
+                                let result = AudioObjectSetPropertyData(
+                                    AudioObjectID(kAudioObjectSystemObject),
+                                    &propertyAddress,
+                                    0,
+                                    nil,
+                                    UInt32(MemoryLayout<AudioDeviceID>.size),
+                                    &newDeviceID
+                                )
+
+                                if result == noErr {
+                                    logger("[Cleanup] ✓ Restored to physical device")
+                                    // Give system time to switch
+                                    Thread.sleep(forTimeInterval: 0.3)
+                                } else {
+                                    logger("[Cleanup] ⚠️  Failed to restore device (error \(result))")
+                                }
+                            } else {
+                                logger("[Cleanup] ⚠️  Could not find physical device with UID: \(physicalUID)")
+                            }
+                        }
+                    }
+                } else {
+                    logger("[Cleanup] Already on physical device: \(name)")
+                }
+            }
+        }
+
+        // 2. Remove control file - driver will detect and remove proxies
+        let controlFilePath = "/tmp/radioform-devices.txt"
+        logger("[Cleanup] Removing control file: \(controlFilePath)")
+        unlink(controlFilePath)
+
+        // 3. Wait for driver to remove devices (driver checks every 1 second)
+        logger("[Cleanup] Waiting for driver to remove proxy devices...")
+        Thread.sleep(forTimeInterval: 1.5)
+
+        logger("[Cleanup] ✓ Cleanup complete")
+    }
+
+    func findDeviceByUID(_ targetUID: String) -> AudioDeviceID? {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize
+        ) == noErr else {
+            return nil
+        }
+
+        let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &deviceIDs
+        ) == noErr else {
+            return nil
+        }
+
+        // Find device with matching UID
+        for deviceID in deviceIDs {
+            var uidAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceUID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            var deviceUID: Unmanaged<CFString>?
+            var uidSize = UInt32(MemoryLayout<CFString>.size)
+
+            if AudioObjectGetPropertyData(deviceID, &uidAddress, 0, nil, &uidSize, &deviceUID) == noErr,
+               let uid = deviceUID?.takeUnretainedValue() as String? {
+                if uid == targetUID {
+                    return deviceID
+                }
+            }
+        }
+
+        return nil
     }
 
     func checkAndLoadDriverIfNeeded() {

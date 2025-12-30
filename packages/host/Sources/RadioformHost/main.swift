@@ -19,6 +19,8 @@ struct PhysicalDevice {
 func enumeratePhysicalDevices() -> [PhysicalDevice] {
     var devices: [PhysicalDevice] = []
 
+    print("[DeviceEnum] ===== ENUMERATING AUDIO DEVICES =====")
+
     // Get all audio devices
     var propertyAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDevices,
@@ -34,10 +36,13 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         nil,
         &dataSize
     ) == noErr else {
+        print("[DeviceEnum] ERROR: Failed to get device list size")
         return devices
     }
 
     let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+    print("[DeviceEnum] Found \(deviceCount) total audio devices")
+
     var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
 
     guard AudioObjectGetPropertyData(
@@ -48,11 +53,14 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         &dataSize,
         &deviceIDs
     ) == noErr else {
+        print("[DeviceEnum] ERROR: Failed to get device list")
         return devices
     }
 
     // Check each device
-    for deviceID in deviceIDs {
+    for (index, deviceID) in deviceIDs.enumerated() {
+        print("[DeviceEnum] --- Checking device \(index + 1)/\(deviceCount) (ID: \(deviceID)) ---")
+
         // Get device name
         var nameAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyDeviceNameCFString,
@@ -64,13 +72,16 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         var nameSize = UInt32(MemoryLayout<CFString>.size)
 
         guard AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, &deviceName) == noErr else {
+            print("[DeviceEnum] ✗ SKIP: Failed to get device name")
             continue
         }
 
         let name = deviceName as String
+        print("[DeviceEnum]   Name: \(name)")
 
         // Skip Radioform devices
         if name.contains("Radioform") || name.contains("Netcat") {
+            print("[DeviceEnum] ✗ SKIP: Radioform/Netcat device")
             continue
         }
 
@@ -85,10 +96,12 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         var uidSize = UInt32(MemoryLayout<CFString>.size)
 
         guard AudioObjectGetPropertyData(deviceID, &uidAddress, 0, nil, &uidSize, &deviceUID) == noErr else {
+            print("[DeviceEnum] ✗ SKIP: Failed to get device UID")
             continue
         }
 
         let uid = deviceUID as String
+        print("[DeviceEnum]   UID: \(uid)")
 
         // Get manufacturer
         var mfgAddress = AudioObjectPropertyAddress(
@@ -103,6 +116,7 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         let manufacturer = AudioObjectGetPropertyData(deviceID, &mfgAddress, 0, nil, &mfgSize, &mfgName) == noErr
             ? mfgName as String
             : "Unknown"
+        print("[DeviceEnum]   Manufacturer: \(manufacturer)")
 
         // Get transport type
         var transportAddress = AudioObjectPropertyAddress(
@@ -115,12 +129,17 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         var transportSize = UInt32(MemoryLayout<UInt32>.size)
 
         guard AudioObjectGetPropertyData(deviceID, &transportAddress, 0, nil, &transportSize, &transportType) == noErr else {
+            print("[DeviceEnum] ✗ SKIP: Failed to get transport type")
             continue
         }
+
+        let transportName = transportTypeName(transportType)
+        print("[DeviceEnum]   Transport: \(transportName) (0x\(String(transportType, radix: 16)))")
 
         // Skip virtual and aggregate devices
         if transportType == kAudioDeviceTransportTypeVirtual ||
            transportType == kAudioDeviceTransportTypeAggregate {
+            print("[DeviceEnum] ✗ SKIP: Virtual or aggregate device")
             continue
         }
 
@@ -132,12 +151,17 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         )
 
         var streamSize: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(deviceID, &streamAddress, 0, nil, &streamSize) == noErr,
-              streamSize > 0 else {
+        let hasStreams = AudioObjectGetPropertyDataSize(deviceID, &streamAddress, 0, nil, &streamSize) == noErr && streamSize > 0
+
+        print("[DeviceEnum]   Output streams: \(hasStreams ? "Yes (\(streamSize) bytes)" : "No")")
+
+        guard hasStreams else {
+            print("[DeviceEnum] ✗ SKIP: No output streams")
             continue
         }
 
         // This is a physical output device
+        print("[DeviceEnum] ✓ ACCEPTED: Adding to device list")
         devices.append(PhysicalDevice(
             id: deviceID,
             name: name,
@@ -148,6 +172,7 @@ func enumeratePhysicalDevices() -> [PhysicalDevice] {
         ))
     }
 
+    print("[DeviceEnum] ===== ENUMERATION COMPLETE: \(devices.count) devices accepted =====")
     return devices
 }
 
@@ -166,8 +191,26 @@ func transportTypeName(_ type: UInt32) -> String {
         return "AirPlay"
     case kAudioDeviceTransportTypeHDMI:
         return "HDMI"
+    case kAudioDeviceTransportTypeVirtual:
+        return "Virtual"
+    case kAudioDeviceTransportTypeAggregate:
+        return "Aggregate"
+    case kAudioDeviceTransportTypePCI:
+        return "PCI"
+    case kAudioDeviceTransportTypeFireWire:
+        return "FireWire"
+    case kAudioDeviceTransportTypeThunderbolt:
+        return "Thunderbolt"
     default:
-        return "Unknown"
+        // Show both ASCII (if printable) and hex for unknown types
+        let chars = [
+            UInt8((type >> 24) & 0xFF),
+            UInt8((type >> 16) & 0xFF),
+            UInt8((type >> 8) & 0xFF),
+            UInt8(type & 0xFF)
+        ]
+        let ascii = String(bytes: chars, encoding: .ascii) ?? ""
+        return "Unknown ('\(ascii)')"
     }
 }
 
@@ -467,6 +510,94 @@ func setDefaultOutputDevice(_ deviceID: AudioDeviceID) -> Bool {
     )
 
     return result == noErr
+}
+
+// Automatically select proxy for current default device on startup
+func autoSelectProxyOnStartup() {
+    // Get current default output device
+    var propertyAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    var deviceID: AudioDeviceID = 0
+    var dataSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+
+    guard AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject),
+        &propertyAddress,
+        0,
+        nil,
+        &dataSize,
+        &deviceID
+    ) == noErr else {
+        print("[AutoSelect] ERROR: Could not get current default device")
+        return
+    }
+
+    // Get device UID
+    var uidAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyDeviceUID,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    var deviceUID: CFString = "" as CFString
+    var uidSize = UInt32(MemoryLayout<CFString>.size)
+
+    guard AudioObjectGetPropertyData(deviceID, &uidAddress, 0, nil, &uidSize, &deviceUID) == noErr else {
+        print("[AutoSelect] ERROR: Could not get device UID")
+        return
+    }
+
+    let uid = deviceUID as String
+
+    // Get device name
+    var nameAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyDeviceNameCFString,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    var deviceName: CFString = "" as CFString
+    var nameSize = UInt32(MemoryLayout<CFString>.size)
+
+    guard AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, &deviceName) == noErr else {
+        print("[AutoSelect] ERROR: Could not get device name")
+        return
+    }
+
+    let name = deviceName as String
+    print("[AutoSelect] Current default device: \(name) (\(uid))")
+
+    // Check if already on a proxy
+    if name.contains("Radioform") {
+        print("[AutoSelect] Already on proxy device - no action needed")
+        return
+    }
+
+    // Check if this is a physical device in our registry
+    guard deviceRegistry.contains(where: { $0.uid == uid }) else {
+        print("[AutoSelect] Current device not in registry - no proxy available")
+        return
+    }
+
+    // Find the corresponding proxy device
+    guard let proxyID = findProxyDevice(forPhysicalUID: uid) else {
+        print("[AutoSelect] WARNING: Could not find proxy for device: \(name)")
+        return
+    }
+
+    // Set the proxy as default
+    print("[AutoSelect] Switching to proxy device...")
+    if setDefaultOutputDevice(proxyID) {
+        print("[AutoSelect] ✓ Successfully switched to proxy")
+        activeProxyUID = uid
+        activePhysicalDeviceID = deviceID
+    } else {
+        print("[AutoSelect] ERROR: Failed to set proxy as default")
+    }
 }
 
 // Register device monitoring listeners
@@ -939,6 +1070,14 @@ print("[RadioformHost INFO] Control file written: /tmp/radioform-devices.txt")
 print("[RadioformHost INFO] Proxy infrastructure ready - driver will load on next coreaudiod start")
 print("To activate proxies, restart coreaudiod: sudo killall coreaudiod")
 
+// Wait for driver to create proxy devices
+print("[RadioformHost INFO] Step 4: Waiting for driver to create proxy devices...")
+Thread.sleep(forTimeInterval: 2.0)
+
+// Automatically switch to proxy for current default device
+print("[RadioformHost INFO] Step 5: Auto-selecting proxy device...")
+autoSelectProxyOnStartup()
+
 // 3. Create legacy shared memory for backward compatibility
 guard createSharedMemory() else {
     exit(1)
@@ -1091,14 +1230,108 @@ monitorPresetFile()
 
 // Cleanup function
 func cleanup() {
-    // Stop audio unit
+    print("[Cleanup] Starting cleanup process...")
+
+    // 1. Restore default device to physical device (if currently on proxy)
+    var propertyAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    var currentDeviceID: AudioDeviceID = 0
+    var dataSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+
+    if AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject),
+        &propertyAddress,
+        0,
+        nil,
+        &dataSize,
+        &currentDeviceID
+    ) == noErr {
+        // Get current device name
+        var nameAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceNameCFString,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var deviceName: CFString = "" as CFString
+        var nameSize = UInt32(MemoryLayout<CFString>.size)
+
+        if AudioObjectGetPropertyData(currentDeviceID, &nameAddress, 0, nil, &nameSize, &deviceName) == noErr {
+            let name = deviceName as String
+
+            // If currently on a Radioform proxy, switch back to physical device
+            if name.contains("Radioform") {
+                print("[Cleanup] Currently on proxy device: \(name)")
+
+                // Get proxy UID
+                var uidAddress = AudioObjectPropertyAddress(
+                    mSelector: kAudioDevicePropertyDeviceUID,
+                    mScope: kAudioObjectPropertyScopeGlobal,
+                    mElement: kAudioObjectPropertyElementMain
+                )
+
+                var proxyUID: CFString = "" as CFString
+                var uidSize = UInt32(MemoryLayout<CFString>.size)
+
+                if AudioObjectGetPropertyData(currentDeviceID, &uidAddress, 0, nil, &uidSize, &proxyUID) == noErr {
+                    let proxyUIDStr = proxyUID as String
+
+                    // Extract physical device UID (remove "-radioform" suffix)
+                    if let physicalUID = proxyUIDStr.components(separatedBy: "-radioform").first {
+                        // Find matching physical device
+                        if let physicalDevice = deviceRegistry.first(where: { $0.uid == physicalUID }) {
+                            print("[Cleanup] Restoring default device to: \(physicalDevice.name)")
+
+                            var physicalDeviceID = physicalDevice.id
+                            let result = AudioObjectSetPropertyData(
+                                AudioObjectID(kAudioObjectSystemObject),
+                                &propertyAddress,
+                                0,
+                                nil,
+                                UInt32(MemoryLayout<AudioDeviceID>.size),
+                                &physicalDeviceID
+                            )
+
+                            if result == noErr {
+                                print("[Cleanup] ✓ Restored to \(physicalDevice.name)")
+                                // Give system time to switch
+                                Thread.sleep(forTimeInterval: 0.5)
+                            } else {
+                                print("[Cleanup] ⚠️  Failed to restore device (error \(result))")
+                            }
+                        } else {
+                            print("[Cleanup] ⚠️  Could not find physical device with UID: \(physicalUID)")
+                        }
+                    }
+                }
+            } else {
+                print("[Cleanup] Already on physical device: \(name)")
+            }
+        }
+    }
+
+    // 2. Stop audio unit
     if let unit = outputUnit {
+        print("[Cleanup] Stopping audio unit...")
         AudioOutputUnitStop(unit)
         AudioUnitUninitialize(unit)
         AudioComponentInstanceDispose(unit)
     }
 
-    // Unmap all shared memory
+    // 3. Remove control file - driver will detect and remove proxies automatically
+    print("[Cleanup] Removing control file...")
+    unlink(CONTROL_FILE_PATH)
+
+    // 4. Wait for driver to remove devices (driver checks every 1 second)
+    print("[Cleanup] Waiting for driver to remove proxy devices...")
+    Thread.sleep(forTimeInterval: 1.2)
+
+    // 5. Unmap all shared memory
+    print("[Cleanup] Unmapping shared memory...")
     if let mem = sharedMemory {
         munmap(mem, rf_shared_audio_size(RING_CAPACITY_FRAMES))
     }
@@ -1106,17 +1339,30 @@ func cleanup() {
         munmap(mem, rf_shared_audio_size(RING_CAPACITY_FRAMES))
     }
 
-    // Remove control file - driver will detect and remove proxies automatically
-    unlink(CONTROL_FILE_PATH)
-
-    print("Host stopped - proxies will be removed within 1 second")
+    print("[Cleanup] ✓ Cleanup complete - proxy devices removed")
 }
 
-// Keep running
-signal(SIGINT) { _ in
-    print("Stopping...")
+// Set up signal handlers using DispatchSource (proper Swift way)
+let sigintSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+sigintSource.setEventHandler {
+    print("\n[Signal] Received SIGINT (Ctrl+C)")
     cleanup()
     exit(0)
 }
+sigintSource.resume()
+
+let sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+sigtermSource.setEventHandler {
+    print("\n[Signal] Received SIGTERM (terminate)")
+    cleanup()
+    exit(0)
+}
+sigtermSource.resume()
+
+// Prevent default signal handlers from running
+signal(SIGINT, SIG_IGN)
+signal(SIGTERM, SIG_IGN)
+
+print("[Signal] Handlers installed for SIGINT and SIGTERM")
 
 RunLoop.current.run()

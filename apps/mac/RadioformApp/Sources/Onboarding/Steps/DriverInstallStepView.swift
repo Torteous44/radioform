@@ -5,28 +5,32 @@ struct DriverInstallStepView: View {
     @StateObject private var installer = DriverInstaller()
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var iconScale: CGFloat = 1.0
 
     let onContinue: () -> Void
 
     var body: some View {
         VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 64))
-                    .foregroundColor(.accentColor)
-
-                Text("Install Audio Driver")
-                    .font(.system(size: 28, weight: .bold))
-
-                Text("Radioform needs to install a system audio driver to process your audio")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
-            }
-
             Spacer()
+
+            // Icon with breathe animation
+            Image(systemName: "headphones")
+                .font(.system(size: 64))
+                .foregroundColor(.accentColor)
+                .scaleEffect(iconScale)
+                .onAppear {
+                    // Breathe animation loop
+                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                        iconScale = 1.2
+                    }
+                }
+            
+            // Explanation text
+            Text("Radioform needs to install a system audio driver to process your audio")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 400)
 
             // Status and progress
             VStack(spacing: 16) {
@@ -37,26 +41,6 @@ struct DriverInstallStepView: View {
                 if !installer.state.isComplete && !installer.state.isFailed {
                     ProgressView(value: installer.progress)
                         .frame(maxWidth: 300)
-                }
-
-                if installer.state.isComplete {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Driver installed successfully!")
-                            .foregroundColor(.green)
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                }
-
-                if installer.state.isFailed {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
-                        Text("Installation failed")
-                            .foregroundColor(.red)
-                    }
-                    .font(.system(size: 14, weight: .medium))
                 }
             }
 

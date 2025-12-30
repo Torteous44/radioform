@@ -1,9 +1,13 @@
 import SwiftUI
+import AppKit
 
 /// Main onboarding view with multi-step wizard
 struct OnboardingView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
     @State private var currentStep: OnboardingStep = .driverInstall
+    @State private var logoSize: CGFloat = 80
+    @State private var topSpacerHeight: CGFloat = 200
+    @State private var showOnboardingContent = false
 
     enum OnboardingStep {
         case driverInstall
@@ -13,21 +17,94 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Progress indicator
-            ProgressIndicator(currentStep: currentStep)
-                .padding(.top, 30)
-                .padding(.horizontal, 40)
-
-            Divider()
-                .padding(.vertical, 20)
-
-            // Step content
-            stepView(for: currentStep)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 40)
-                .padding(.bottom, 40)
+            // Top spacer - animates to shrink, moving logo up
+            Spacer()
+                .frame(height: topSpacerHeight)
+            
+            // Logo - stays in same view, just moves position
+            HStack {
+                Spacer()
+                Text("Radioform")
+                    .font(radioformFont(size: logoSize))
+                Spacer()
+            }
+            .padding(.horizontal, 40)
+            
+            // Onboarding content appears below logo
+            if showOnboardingContent {
+                onboardingContent
+            } else {
+                // Bottom spacer to keep logo centered initially
+                Spacer()
+            }
         }
         .frame(width: 600, height: 500)
+        .onAppear {
+            // After 1 second, animate logo to top
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    logoSize = 32
+                    topSpacerHeight = 20
+                }
+                // Show onboarding content after animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    showOnboardingContent = true
+                }
+            }
+        }
+    }
+    
+    private var onboardingContent: some View {
+        VStack(spacing: 0) {
+            // Step content
+            if currentStep == .completion {
+                // For completion step, show content in middle and completion view at bottom
+                VStack(spacing: 0) {
+                    // Main content area (empty for completion, but could show other steps)
+                    Spacer()
+                    
+                    // Completion step at bottom
+                    CompletionStepView(
+                        onComplete: {
+                            coordinator.complete()
+                        }
+                    )
+                    .frame(height: 60)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 20)
+                }
+            } else {
+                // Regular step content
+                stepView(for: currentStep)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 40)
+            }
+        }
+    }
+    
+    private func radioformFont(size: CGFloat) -> Font {
+        // Try the expected name first
+        if NSFont(name: "SignPainterHouseScript", size: size) != nil {
+            return .custom("SignPainterHouseScript", size: size)
+        }
+        
+        // Try variations
+        let possibleNames = [
+            "SignPainterHouseScript",
+            "SignPainter-HouseScript",
+            "SignPainter House Script",
+            "SignPainter"
+        ]
+        
+        for name in possibleNames {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        
+        // Fallback to system font
+        return .system(size: size, weight: .bold)
     }
 
     @ViewBuilder

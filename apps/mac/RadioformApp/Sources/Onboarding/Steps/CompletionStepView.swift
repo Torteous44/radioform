@@ -5,65 +5,34 @@ struct CompletionStepView: View {
     let onComplete: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 40)
-
-            // Success icon
-            ZStack {
-                Circle()
-                    .fill(Color.green.opacity(0.1))
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 64))
-                    .foregroundColor(.green)
-            }
-            .padding(.bottom, 20)
-
-            // Header
-            VStack(spacing: 8) {
+        HStack(spacing: 16) {
+            // Success icon (smaller)
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24))
+                .foregroundColor(.green)
+            
+            // Header text (compact)
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Setup Complete!")
-                    .font(.system(size: 24, weight: .bold))
-
+                    .font(.system(size: 16, weight: .semibold))
+                
                 Text("Radioform is now running in your menu bar")
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
             }
-            .padding(.bottom, 24)
-
-            // Quick tips
-            VStack(alignment: .leading, spacing: 14) {
-                TipRow(
-                    icon: "slider.horizontal.3",
-                    text: "Click the menu bar icon to adjust your EQ"
-                )
-
-                TipRow(
-                    icon: "music.note.list",
-                    text: "Choose from 8 preset configurations or create your own"
-                )
-
-                TipRow(
-                    icon: "speaker.wave.2.fill",
-                    text: "Set Radioform as your output device in System Settings"
-                )
-            }
-            .padding(20)
-            .background(Color(.controlBackgroundColor))
-            .cornerRadius(12)
-
-            Spacer(minLength: 24)
-
-            // Action button
+            
+            Spacer()
+            
+            // Action button (smaller)
             Button("Get Started") {
                 onComplete()
             }
             .keyboardShortcut(.return)
             .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .controlSize(.regular)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 }
 

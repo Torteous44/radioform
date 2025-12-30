@@ -5,26 +5,8 @@ import AppKit
 import CoreText
 import CoreGraphics
 
+// Main entry point - AppKit-based app with SwiftUI views
 @main
-struct RadioformApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    init() {
-        // Check for --reset-onboarding flag
-        if CommandLine.arguments.contains("--reset-onboarding") {
-            OnboardingState.reset()
-            print("🔄 Onboarding reset - will show on next launch")
-        }
-    }
-
-    var body: some Scene {
-        // Menu bar apps don't need a scene - all UI is managed by AppDelegate
-        Settings {
-            EmptyView()
-        }
-    }
-}
-
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
@@ -447,5 +429,22 @@ class EventMonitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
+    }
+}
+
+// Main entry point - check for command-line flags before launching app
+extension AppDelegate {
+    static func main() {
+        // Check for --reset-onboarding flag
+        if CommandLine.arguments.contains("--reset-onboarding") {
+            OnboardingState.reset()
+            print("🔄 Onboarding reset - will show on next launch")
+        }
+
+        // Launch the app
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.run()
     }
 }

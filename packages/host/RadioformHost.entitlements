@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required for Hardened Runtime -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<false/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<false/>
+	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
+	<false/>
+
+	<!-- Disable library validation - Needed to load HAL driver plugin -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+
+	<!-- App Sandbox - Disabled for audio engine that interacts with HAL driver -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<!-- Audio Device Access - CRITICAL for audio processing -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.device.audio-output</key>
+	<true/>
+
+	<!-- Audio Unit Host - For loading audio plugins if needed -->
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+
+	<!-- Network Access - For potential IPC with app -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+
+	<!-- File Access - For shared memory and IPC -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+	<array>
+		<string>/tmp/</string>
+		<string>/var/tmp/</string>
+	</array>
+</dict>
+</plist>

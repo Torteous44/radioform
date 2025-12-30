@@ -1,7 +1,7 @@
 # Radioform Development Makefile
 # Shortcuts for building, testing, and running Radioform
 
-.PHONY: help clean build run dev reset bundle install-deps test
+.PHONY: help clean build run dev reset bundle install-deps test sign verify release test-release quick rebuild
 
 # Default target - show help
 help:
@@ -9,16 +9,26 @@ help:
 	@echo "  Radioform Development Commands"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  make dev          - Start from scratch (reset + build + run with onboarding)"
-	@echo "  make run          - Run app without onboarding (keeps existing state)"
+	@echo "  Development:"
+	@echo "    make dev          - Start from scratch (reset + build + run with onboarding)"
+	@echo "    make run          - Run app without onboarding (keeps existing state)"
+	@echo "    make reset        - Reset onboarding + uninstall driver"
 	@echo ""
-	@echo "  make build        - Build all components (DSP, driver, host, app)"
-	@echo "  make bundle       - Create .app bundle in dist/"
-	@echo "  make clean        - Clean all build artifacts"
+	@echo "  Building:"
+	@echo "    make build        - Build all components (DSP, driver, host, app)"
+	@echo "    make bundle       - Create .app bundle in dist/"
+	@echo "    make clean        - Clean all build artifacts"
+	@echo "    make rebuild      - Full clean + rebuild"
 	@echo ""
-	@echo "  make reset        - Reset onboarding + uninstall driver"
-	@echo "  make test         - Run DSP tests"
-	@echo "  make install-deps - Install build dependencies"
+	@echo "  Release (Code Signing):"
+	@echo "    make release      - Build, sign, and verify for distribution"
+	@echo "    make sign         - Code sign the .app bundle"
+	@echo "    make verify       - Verify all code signatures"
+	@echo "    make test-release - Test the signed release build"
+	@echo ""
+	@echo "  Other:"
+	@echo "    make test         - Run DSP tests"
+	@echo "    make install-deps - Install build dependencies"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -98,3 +108,32 @@ quick:
 # Full clean + rebuild
 rebuild: clean build bundle
 	@echo "✓ Full rebuild complete"
+
+# Code signing targets
+sign:
+	@echo "🔐 Code signing Radioform.app..."
+	@./tools/codesign.sh
+
+verify:
+	@echo "🔍 Verifying signatures..."
+	@./tools/verify_signatures.sh
+
+# Build and sign (for release)
+release: build bundle sign verify
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  ✅ Release Build Complete!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "Signed app: dist/Radioform.app"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  • Test: make test-release"
+	@echo "  • Notarize: ./tools/notarize.sh (Phase 2)"
+	@echo "  • Package DMG: ./tools/create_dmg.sh (Phase 3)"
+	@echo ""
+
+# Test the signed release build
+test-release:
+	@echo "🧪 Testing signed release build..."
+	@open dist/Radioform.app

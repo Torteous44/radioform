@@ -74,18 +74,14 @@ class DriverInstaller: ObservableObject {
             throw DriverInstallError.driverNotFound
         }
 
-        // Copy driver to system location using AppleScript (requires admin)
-        try await copyDriverWithPrivileges(from: driverSource)
+        // Install driver with single admin prompt (copy + permissions + restart)
+        try await installDriverWithPrivileges(from: driverSource)
 
-        await MainActor.run { state = .settingPermissions; progress = 0.6 }
+        // Update progress through the stages
+        await MainActor.run { state = .settingPermissions; progress = 0.5 }
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
 
-        // Set permissions
-        try await setDriverPermissions()
-
-        await MainActor.run { state = .restartingAudio; progress = 0.8 }
-
-        // Restart coreaudiod
-        try await restartAudio()
+        await MainActor.run { state = .restartingAudio; progress = 0.7 }
 
         // Wait for audio system to restart and load driver
         print("Waiting for audio system to restart...")
@@ -165,6 +161,39 @@ class DriverInstaller: ObservableObject {
 
         print("⚠️ Driver bundle not found in app resources")
         return nil
+    }
+
+    /// Install driver with single admin prompt (combines copy, permissions, and restart)
+    private func installDriverWithPrivileges(from source: String) async throws {
+        // Escape single quotes in paths for shell
+        let escapedSource = source.replacingOccurrences(of: "'", with: "'\\''")
+        let escapedDest = driverDestination.replacingOccurrences(of: "'", with: "'\\''")
+        let driverPath = "\(driverDestination)/\(driverName)"
+        let escapedDriverPath = driverPath.replacingOccurrences(of: "'", with: "'\\''")
+
+        // Combine all operations into single command chain
+        let script = """
+        do shell script "cp -R '\(escapedSource)' '\(escapedDest)/' && \
+        chown -R root:wheel '\(escapedDriverPath)' && \
+        chmod -R 755 '\(escapedDriverPath)' && \
+        killall coreaudiod" with administrator privileges
+        """
+
+        let appleScript = NSAppleScript(source: script)
+        var error: NSDictionary?
+
+        // Run on main thread (AppleScript requires it)
+        await MainActor.run {
+            appleScript?.executeAndReturnError(&error)
+        }
+
+        if let error = error {
+            let errorMessage = error["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
+            print("Failed to install driver: \(errorMessage)")
+            throw DriverInstallError.copyFailed(errorMessage)
+        }
+
+        print("✓ Driver installed and coreaudiod restarted")
     }
 
     /// Copy driver using AppleScript with admin privileges

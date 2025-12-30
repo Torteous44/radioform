@@ -5,9 +5,12 @@ import AppKit
 /// Coordinates the onboarding window lifecycle and flow
 class OnboardingCoordinator: ObservableObject {
     @Published var currentWindow: OnboardingWindow?
+    var onComplete: (() -> Void)?
 
     /// Show the onboarding window
-    func show() {
+    func show(onComplete: @escaping () -> Void) {
+        self.onComplete = onComplete
+
         // Close existing window if any
         close()
 
@@ -30,15 +33,13 @@ class OnboardingCoordinator: ObservableObject {
 
     /// Handle onboarding completion
     func complete() {
+        print("📝 OnboardingCoordinator.complete() called")
         OnboardingState.markCompleted()
         close()
 
-        // Notify app delegate to set up menu bar
-        if let appDelegate = NSApp.delegate as? AppDelegate {
-            appDelegate.launchHostIfNeeded()
-            appDelegate.setupMenuBar()
-        }
-
+        // Call completion handler to notify app
+        print("📝 Calling onComplete handler...")
+        onComplete?()
         print("✓ Onboarding completed")
     }
 }

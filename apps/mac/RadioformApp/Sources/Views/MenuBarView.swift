@@ -77,33 +77,33 @@ struct MenuBarView: View {
                     TenBandEQ()
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-
-                    // Control Center-style Preset Dropdown
-                    PresetDropdown(isExpanded: $showPresets)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-
-                    // Preset list (shown when expanded)
-                    if showPresets {
-                        PresetList(
-                            presets: (presetManager.bundledPresets + presetManager.userPresets).filter { preset in
-                                preset.id != presetManager.currentPreset?.id
-                            },
-                            activeID: presetManager.currentPreset?.id,
-                            onSelect: { preset in
-                                presetManager.applyPreset(preset)
-                                showPresets = false
-                            }
-                        )
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 6)
-                    }
-
-                    // Footer
-                    QuitButton()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
                 }
+
+                // Control Center-style Preset Dropdown (always visible)
+                PresetDropdown(isExpanded: $showPresets)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+
+                // Preset list (shown when expanded)
+                if showPresets {
+                    PresetList(
+                        presets: (presetManager.bundledPresets + presetManager.userPresets).filter { preset in
+                            preset.id != presetManager.currentPreset?.id
+                        },
+                        activeID: presetManager.currentPreset?.id,
+                        onSelect: { preset in
+                            presetManager.applyPreset(preset)
+                            showPresets = false
+                        }
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
+                }
+
+                // Footer
+                QuitButton()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
             }
         }
         .frame(width: 340)
@@ -115,7 +115,11 @@ struct PresetDropdown: View {
     @ObservedObject private var presetManager = PresetManager.shared
     @Binding var isExpanded: Bool
     @State private var isHovered = false
-
+    
+    private var hasSelectedPreset: Bool {
+        presetManager.currentPreset != nil && presetManager.isEnabled
+    }
+    
     var body: some View {
         Button {
             isExpanded.toggle()
@@ -125,17 +129,15 @@ struct PresetDropdown: View {
                 ZStack {
                     Circle()
                         .fill(
-                            presetManager.currentPreset != nil && presetManager.isEnabled
+                            hasSelectedPreset
                                 ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.5)
                         )
                         .frame(width: 28, height: 28)
 
-                    Image(systemName: "music.note")
+                    Image(systemName: hasSelectedPreset ? "music.note" : "xmark.circle")
                         .font(.system(size: 13, weight: .medium))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(
-                            presetManager.currentPreset != nil && presetManager.isEnabled
-                                ? .white : .secondary)
+                        .foregroundStyle(hasSelectedPreset ? .white : .secondary)
                 }
 
                 Text(presetManager.currentPreset?.name ?? "Custom")
@@ -185,7 +187,7 @@ struct MenuItemButton: View {
     let isActive: Bool
     let onSelect: () -> Void
     @State private var isHovered = false
-
+    
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
@@ -197,7 +199,7 @@ struct MenuItemButton: View {
                         )
                         .frame(width: 28, height: 28)
 
-                    Image(systemName: "music.note")
+                    Image(systemName: isActive ? "music.note" : "xmark.circle")
                         .font(.system(size: 13, weight: .medium))
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(isActive ? .white : .secondary)

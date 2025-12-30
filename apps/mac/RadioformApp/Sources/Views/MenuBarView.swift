@@ -43,25 +43,28 @@ struct MenuBarView: View {
                         
                     Spacer()
 
-                    Toggle("", isOn: Binding(
-                        get: { presetManager.isEnabled },
-                        set: { newValue in
-                            if presetManager.isEnabled != newValue {
-                                if newValue {
-                                    // Turning ON: if there's a preset selected, reapply it
-                                    if let preset = presetManager.currentPreset {
-                                        presetManager.isEnabled = true
-                                        presetManager.applyPreset(preset)
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { presetManager.isEnabled },
+                            set: { newValue in
+                                if presetManager.isEnabled != newValue {
+                                    if newValue {
+                                        // Turning ON: if there's a preset selected, reapply it
+                                        if let preset = presetManager.currentPreset {
+                                            presetManager.isEnabled = true
+                                            presetManager.applyPreset(preset)
+                                        } else {
+                                            presetManager.toggleEnabled()
+                                        }
                                     } else {
+                                        // Turning OFF: just toggle
                                         presetManager.toggleEnabled()
                                     }
-                                } else {
-                                    // Turning OFF: just toggle
-                                    presetManager.toggleEnabled()
                                 }
                             }
-                        }
-                    ))
+                        )
+                    )
                     .toggleStyle(.switch)
                     .labelsHidden()
                 }
@@ -100,6 +103,31 @@ struct MenuBarView: View {
                     QuitButton()
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
+                // 10-Band EQ
+                TenBandEQ()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+
+                // Control Center-style Preset Dropdown
+                PresetDropdown(isExpanded: $showPresets)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+
+                // Preset list (shown when expanded)
+                if showPresets {
+                    PresetList(
+                        presets: (presetManager.bundledPresets + presetManager.userPresets).filter {
+                            preset in
+                            preset.id != presetManager.currentPreset?.id
+                        },
+                        activeID: presetManager.currentPreset?.id,
+                        onSelect: { preset in
+                            presetManager.applyPreset(preset)
+                            showPresets = false
+                        }
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -122,16 +150,21 @@ struct PresetDropdown: View {
                 // Left circular icon with blue fill when active and enabled
                 ZStack {
                     Circle()
-                        .fill(presetManager.currentPreset != nil && presetManager.isEnabled ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.5))
+                        .fill(
+                            presetManager.currentPreset != nil && presetManager.isEnabled
+                                ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.5)
+                        )
                         .frame(width: 28, height: 28)
 
                     Image(systemName: "music.note")
                         .font(.system(size: 13, weight: .medium))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(presetManager.currentPreset != nil && presetManager.isEnabled ? .white : .secondary)
+                        .foregroundStyle(
+                            presetManager.currentPreset != nil && presetManager.isEnabled
+                                ? .white : .secondary)
                 }
 
-                Text(presetManager.currentPreset?.name ?? "No Preset")
+                Text(presetManager.currentPreset?.name ?? "Custom")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.primary)
 
@@ -184,7 +217,10 @@ struct MenuItemButton: View {
             HStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(isActive ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.4))
+                        .fill(
+                            isActive
+                                ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.4)
+                        )
                         .frame(width: 28, height: 28)
 
                     Image(systemName: "music.note")

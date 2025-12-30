@@ -124,9 +124,7 @@ struct EQVisualization: View {
                 }
             }
 
-            let lastBand = sortedBands[sortedBands.count - 1]
-            let endX = freqToX(lastBand.frequencyHz)
-            let endY = gainToY(lastBand.gainDb)
+            // Draw line to end of graph at center
             path.addLine(to: CGPoint(x: size.width - padding, y: centerY))
 
             // Fill under curve

@@ -9,6 +9,14 @@ import CoreGraphics
 struct RadioformApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        // Check for --reset-onboarding flag
+        if CommandLine.arguments.contains("--reset-onboarding") {
+            OnboardingState.reset()
+            print("🔄 Onboarding reset - will show on next launch")
+        }
+    }
+
     var body: some Scene {
         Settings {
             EmptyView()
@@ -26,14 +34,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Register custom font
         registerCustomFont()
         
+    var onboardingCoordinator: OnboardingCoordinator?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Check if onboarding is needed
+        if !OnboardingState.hasCompleted() {
+            showOnboarding()
+            return
+        }
+
         // Launch audio host if not already running
         launchHostIfNeeded()
 
+        // Set up menu bar UI
+        setupMenuBar()
+    }
+
+    func showOnboarding() {
+        // Switch to regular activation policy to show window properly
+        NSApp.setActivationPolicy(.regular)
+
+        // Create and show onboarding
+        onboardingCoordinator = OnboardingCoordinator()
+        onboardingCoordinator?.show(onComplete: { [weak self] in
+            print("📝 Onboarding completion callback called")
+            self?.launchHostIfNeeded()
+            self?.setupMenuBar()
+            print("✓ Host and menu bar setup complete")
+        })
+
+        print("✓ Showing onboarding")
+    }
+
+    func setupMenuBar() {
+        print("📝 setupMenuBar() called")
+
         // Hide from Dock (menu bar only)
         NSApp.setActivationPolicy(.accessory)
+        print("📝 Activation policy set to .accessory")
 
         // Create status bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        print("📝 Status bar item created: \(statusItem != nil)")
 
         if let button = statusItem?.button {
             // Load logo SVG and set as template for light/dark mode adaptation
@@ -46,11 +88,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             button.action = #selector(togglePopover)
             button.target = self
+            print("📝 Status bar button configured with waveform icon")
+        } else {
+            print("❌ Could not get status bar button!")
         }
 
         // Create popover with menu content
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: 340, height: 600) // Larger height to accommodate expanded presets
+        popover?.contentSize = NSSize(width: 340, height: 600)
         popover?.behavior = .transient
         popover?.contentViewController = NSHostingController(rootView: MenuBarView())
         
@@ -60,6 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.popover?.performClose(event)
             }
         }
+        print("✓ Menu bar setup complete - icon should be visible")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -154,11 +200,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func startHost() {
         // Find the host executable - try multiple possible locations
         let fileManager = FileManager.default
-        
-        // Get possible base paths
+        var possiblePaths: [String] = []
+
+        // PRIORITY 1: Check for embedded binary in .app bundle (for distribution)
+        if let executablePath = Bundle.main.executableURL?.deletingLastPathComponent().path {
+            let embeddedHost = "\(executablePath)/RadioformHost"
+            possiblePaths.append(embeddedHost)
+        }
+
+        // PRIORITY 2: Development builds - relative to app bundle
         var possibleBasePaths: [String] = []
-        
-        // Try to find relative to app bundle
+
         if let appPath = Bundle.main.bundlePath as String? {
             // If running from Xcode/build, go up to project root
             let appURL = URL(fileURLWithPath: appPath)
@@ -167,19 +219,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 possibleBasePaths.append(projectRoot.path)
             }
         }
-        
+
         // Try current working directory
         if let cwd = fileManager.currentDirectoryPath as String? {
             possibleBasePaths.append(cwd)
         }
-        
+
         // Try home directory
         if let homeDir = ProcessInfo.processInfo.environment["HOME"] {
             possibleBasePaths.append("\(homeDir)/radioform")
         }
-        
-        // Build possible paths
-        var possiblePaths: [String] = []
+
+        // Build development paths
         for basePath in possibleBasePaths {
             // Try release build (with architecture subdirectory)
             if let arch = getArchitecture() {
@@ -192,15 +243,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             possiblePaths.append("\(basePath)/packages/host/.build/debug/RadioformHost")
         }
-        
-        // Also try absolute path based on current user (most reliable)
+
+        // Also try absolute path based on current user
         if let homeDir = ProcessInfo.processInfo.environment["HOME"] {
             if let arch = getArchitecture() {
                 possiblePaths.append("\(homeDir)/radioform/packages/host/.build/\(arch)/release/RadioformHost")
             }
             possiblePaths.append("\(homeDir)/radioform/packages/host/.build/release/RadioformHost")
         }
-        
+
         // Try environment variable if set
         if let radioformRoot = ProcessInfo.processInfo.environment["RADIOFORM_ROOT"] {
             if let arch = getArchitecture() {

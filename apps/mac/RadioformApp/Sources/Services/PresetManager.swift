@@ -108,7 +108,7 @@ class PresetManager: ObservableObject {
                 "\(cwd)/Sources/Resources/Presets",
                 "\(cwd)/apps/mac/RadioformApp/Sources/Resources/Presets",
                 // Add home directory fallback for when launched from various locations
-                NSString(string: "~/radioform-1/apps/mac/RadioformApp/Sources/Resources/Presets").expandingTildeInPath,
+                NSString(string: "~/radioform/apps/mac/RadioformApp/Sources/Resources/Presets").expandingTildeInPath,
                 NSString(string: "~/radioform/apps/mac/RadioformApp/Sources/Resources/Presets").expandingTildeInPath
             ]
             for path in possiblePaths {

@@ -316,7 +316,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Try absolute path as last resort (development from repo root)
         if logoURL == nil {
             let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
-            let absolutePath = "\(homeDir)/radioform-1/apps/mac/RadioformApp/Sources/Resources/logo.svg"
+            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/Sources/Resources/logo.svg"
             if fileManager.fileExists(atPath: absolutePath) {
                 logoURL = URL(fileURLWithPath: absolutePath)
             }
@@ -367,7 +367,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Try absolute path as last resort (development from repo root)
         if fontPath == nil {
             let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
-            let absolutePath = "\(homeDir)/radioform-1/apps/mac/RadioformApp/Sources/Resources/fonts/SignPainterHouseScript.ttf"
+            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/Sources/Resources/fonts/SignPainterHouseScript.ttf"
             if fileManager.fileExists(atPath: absolutePath) {
                 fontPath = absolutePath
             }

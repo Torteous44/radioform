@@ -10,6 +10,7 @@ enum PresetError: Error {
 /// Manages loading, saving, and organizing presets
 class PresetManager: ObservableObject {
     static let shared = PresetManager()
+    static let customPresetName = "Custom"
 
     @Published var bundledPresets: [EQPreset] = []
     @Published var userPresets: [EQPreset] = []
@@ -21,10 +22,6 @@ class PresetManager: ObservableObject {
     @Published var isCustomPreset: Bool = false
     @Published var isEditingPresetName: Bool = false
     @Published var isSavingPreset: Bool = false
-    @Published var saveSucceeded: Bool = false
-    
-    /// Reserved name that cannot be used for saved presets
-    static let customPresetName = "Custom Preset"
 
     private let userPresetsURL: URL
     private let standardFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]

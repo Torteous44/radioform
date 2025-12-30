@@ -292,7 +292,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func loadLogoImage() -> NSImage? {
         var logoURL: URL?
         let fileManager = FileManager.default
-        
+
         // Try bundle resources first (production)
         if let resourcePath = Bundle.main.resourcePath {
             let bundlePath = (resourcePath as NSString).appendingPathComponent("Resources/logo.svg")
@@ -300,28 +300,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logoURL = URL(fileURLWithPath: bundlePath)
             }
         }
-        
-        // Fall back to source directory (development)
+
+        // Fall back to public directory (development)
         if logoURL == nil {
             if let executablePath = Bundle.main.executablePath {
                 let executableDir = (executablePath as NSString).deletingLastPathComponent
-                let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/logo.svg")
+                let sourcePath = (executableDir as NSString).appendingPathComponent("../../../public/logo.svg")
                 let normalizedPath = (sourcePath as NSString).standardizingPath
                 if fileManager.fileExists(atPath: normalizedPath) {
                     logoURL = URL(fileURLWithPath: normalizedPath)
                 }
             }
         }
-        
+
         // Try absolute path as last resort (development from repo root)
         if logoURL == nil {
             let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
-            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/Sources/Resources/logo.svg"
+            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/public/logo.svg"
             if fileManager.fileExists(atPath: absolutePath) {
                 logoURL = URL(fileURLWithPath: absolutePath)
             }
         }
-        
+
         guard let url = logoURL else {
             return nil
         }

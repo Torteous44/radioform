@@ -103,34 +103,8 @@ struct MenuBarView: View {
                     QuitButton()
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                // 10-Band EQ
-                TenBandEQ()
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-
-                // Control Center-style Preset Dropdown
-                PresetDropdown(isExpanded: $showPresets)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-
-                // Preset list (shown when expanded)
-                if showPresets {
-                    PresetList(
-                        presets: (presetManager.bundledPresets + presetManager.userPresets).filter {
-                            preset in
-                            preset.id != presetManager.currentPreset?.id
-                        },
-                        activeID: presetManager.currentPreset?.id,
-                        onSelect: { preset in
-                            presetManager.applyPreset(preset)
-                            showPresets = false
-                        }
-                    )
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 6)
                 }
             }
-            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(width: 340)
         .fixedSize(horizontal: false, vertical: true)

@@ -29,14 +29,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var popover: NSPopover?
     var hostProcess: Process?
     var eventMonitor: EventMonitor?
+    var onboardingCoordinator: OnboardingCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Register custom font
         registerCustomFont()
-        
-    var onboardingCoordinator: OnboardingCoordinator?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
         // Check if onboarding is needed
         if !OnboardingState.hasCompleted() {
             showOnboarding()

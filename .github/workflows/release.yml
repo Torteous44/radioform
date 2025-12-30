@@ -152,28 +152,23 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           DMG_NAME="Radioform-${VERSION}.dmg"
-          
-          # Create DMG
-          hdiutil create \
-            -volname "Radioform" \
-            -srcfolder dist/Radioform.app \
-            -ov \
-            -format UDZO \
-            "dist/${DMG_NAME}"
-          
+
+          # Use the create_dmg.sh script for proper layout (app + Applications symlink)
+          ./tools/create_dmg.sh "${VERSION}"
+
           # Sign the DMG
           IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
           codesign --force --sign "$IDENTITY" "dist/${DMG_NAME}"
-          
+
           # Notarize the DMG
           xcrun notarytool submit "dist/${DMG_NAME}" \
             --apple-id "${{ secrets.APPLE_ID }}" \
             --password "${{ secrets.APPLE_ID_PASSWORD }}" \
             --team-id "${{ secrets.APPLE_TEAM_ID }}" \
             --wait
-          
+
           xcrun stapler staple "dist/${DMG_NAME}"
-          
+
           echo "dmg_name=${DMG_NAME}" >> "$GITHUB_OUTPUT"
           echo "✓ DMG created: ${DMG_NAME}"
         id: dmg

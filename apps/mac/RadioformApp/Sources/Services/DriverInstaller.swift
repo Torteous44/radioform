@@ -180,11 +180,12 @@ class DriverInstaller: ObservableObject {
         """
 
         let appleScript = NSAppleScript(source: script)
-        var error: NSDictionary?
 
         // Run on main thread (AppleScript requires it)
-        await MainActor.run {
-            appleScript?.executeAndReturnError(&error)
+        let error = await MainActor.run { () -> NSDictionary? in
+            var errorDict: NSDictionary?
+            appleScript?.executeAndReturnError(&errorDict)
+            return errorDict
         }
 
         if let error = error {
@@ -205,11 +206,12 @@ class DriverInstaller: ObservableObject {
         let script = "do shell script \"cp -R '\(escapedSource)' '\(escapedDest)/'\" with administrator privileges"
 
         let appleScript = NSAppleScript(source: script)
-        var error: NSDictionary?
 
         // Run on main thread (AppleScript requires it)
-        await MainActor.run {
-            appleScript?.executeAndReturnError(&error)
+        let error = await MainActor.run { () -> NSDictionary? in
+            var errorDict: NSDictionary?
+            appleScript?.executeAndReturnError(&errorDict)
+            return errorDict
         }
 
         if let error = error {
@@ -227,10 +229,11 @@ class DriverInstaller: ObservableObject {
         let script = "do shell script \"chown -R root:wheel '\(escapedPath)' && chmod -R 755 '\(escapedPath)'\" with administrator privileges"
 
         let appleScript = NSAppleScript(source: script)
-        var error: NSDictionary?
 
-        await MainActor.run {
-            appleScript?.executeAndReturnError(&error)
+        let error = await MainActor.run { () -> NSDictionary? in
+            var errorDict: NSDictionary?
+            appleScript?.executeAndReturnError(&errorDict)
+            return errorDict
         }
 
         if let error = error {
@@ -245,10 +248,11 @@ class DriverInstaller: ObservableObject {
         let script = "do shell script \"killall coreaudiod\" with administrator privileges"
 
         let appleScript = NSAppleScript(source: script)
-        var error: NSDictionary?
 
-        await MainActor.run {
-            appleScript?.executeAndReturnError(&error)
+        let error = await MainActor.run { () -> NSDictionary? in
+            var errorDict: NSDictionary?
+            appleScript?.executeAndReturnError(&errorDict)
+            return errorDict
         }
 
         if let error = error {
@@ -268,11 +272,11 @@ class DriverInstaller: ObservableObject {
         let script = "do shell script \"rm -rf '\(escapedPath)'\" with administrator privileges"
 
         let appleScript = NSAppleScript(source: script)
-        var error: NSDictionary?
-        appleScript?.executeAndReturnError(&error)
+        var errorDict: NSDictionary?
+        appleScript?.executeAndReturnError(&errorDict)
 
-        if let error = error {
-            let errorMessage = error["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
+        if let errorDict = errorDict {
+            let errorMessage = errorDict["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
             throw DriverInstallError.uninstallFailed(errorMessage)
         }
 

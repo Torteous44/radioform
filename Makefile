@@ -1,7 +1,7 @@
 # Radioform Development Makefile
 # Shortcuts for building, testing, and running Radioform
 
-.PHONY: help clean build run dev reset bundle install-deps test sign verify release test-release quick rebuild
+.PHONY: help clean build run dev reset bundle install-deps test sign verify release test-release quick rebuild dmg full-release
 
 # Default target - show help
 help:
@@ -25,6 +25,10 @@ help:
 	@echo "    make sign         - Code sign the .app bundle"
 	@echo "    make verify       - Verify all code signatures"
 	@echo "    make test-release - Test the signed release build"
+	@echo ""
+	@echo "  Distribution:"
+	@echo "    make dmg          - Create DMG with drag-to-Applications layout"
+	@echo "    make full-release - Complete pipeline (build + sign + DMG)"
 	@echo ""
 	@echo "  Other:"
 	@echo "    make test         - Run DSP tests"
@@ -137,3 +141,17 @@ release: build bundle sign verify
 test-release:
 	@echo "🧪 Testing signed release build..."
 	@open dist/Radioform.app
+
+# Create DMG for distribution
+dmg:
+	@echo "💿 Creating DMG..."
+	@./tools/create_dmg.sh
+
+# Full release pipeline (build, sign, create DMG)
+full-release: build bundle sign verify dmg
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  ✅ Full Release Build Complete!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@ls -lh dist/*.dmg

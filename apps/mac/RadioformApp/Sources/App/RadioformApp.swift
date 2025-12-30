@@ -47,29 +47,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Create and show onboarding
         onboardingCoordinator = OnboardingCoordinator()
-        onboardingCoordinator?.show()
+        onboardingCoordinator?.show(onComplete: { [weak self] in
+            print("📝 Onboarding completion callback called")
+            self?.launchHostIfNeeded()
+            self?.setupMenuBar()
+            print("✓ Host and menu bar setup complete")
+        })
 
         print("✓ Showing onboarding")
     }
 
     func setupMenuBar() {
+        print("📝 setupMenuBar() called")
+
         // Hide from Dock (menu bar only)
         NSApp.setActivationPolicy(.accessory)
+        print("📝 Activation policy set to .accessory")
 
         // Create status bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        print("📝 Status bar item created: \(statusItem != nil)")
 
         if let button = statusItem?.button {
             button.image = NSImage(systemSymbolName: "waveform.circle.fill", accessibilityDescription: "Radioform")
             button.action = #selector(togglePopover)
             button.target = self
+            print("📝 Status bar button configured with waveform icon")
+        } else {
+            print("❌ Could not get status bar button!")
         }
 
         // Create popover with menu content
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: 340, height: 600) // Larger height to accommodate expanded presets
+        popover?.contentSize = NSSize(width: 340, height: 600)
         popover?.behavior = .transient
         popover?.contentViewController = NSHostingController(rootView: MenuBarView())
+        print("✓ Menu bar setup complete - icon should be visible")
     }
 
     func applicationWillTerminate(_ notification: Notification) {

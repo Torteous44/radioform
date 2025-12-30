@@ -21,7 +21,9 @@ jobs:
   build-and-release:
     name: Build, Sign, Notarize & Release
     runs-on: macos-14
-    
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

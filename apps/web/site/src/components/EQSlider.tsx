@@ -171,6 +171,7 @@ export default function EQSlider({
             top: `calc(${position}% - 12px)`,
             left: '50%',
             transform: 'translateX(-50%)',
+            transition: 'none',
           }}
           onMouseDown={(e) => {
             handleMouseDown(e);

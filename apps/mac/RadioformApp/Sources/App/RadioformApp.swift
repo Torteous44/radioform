@@ -1,6 +1,9 @@
 import SwiftUI
 import Foundation
 import Darwin
+import AppKit
+import CoreText
+import CoreGraphics
 
 @main
 struct RadioformApp: App {
@@ -25,6 +28,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
     var hostProcess: Process?
+    var eventMonitor: EventMonitor?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Register custom font
+        registerCustomFont()
+        
     var onboardingCoordinator: OnboardingCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -69,7 +78,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("📝 Status bar item created: \(statusItem != nil)")
 
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "waveform.circle.fill", accessibilityDescription: "Radioform")
+            // Load logo SVG and set as template for light/dark mode adaptation
+            if let logoImage = loadLogoImage() {
+                logoImage.isTemplate = true // Makes it adapt to light/dark mode
+                button.image = logoImage
+            } else {
+                // Fallback to system icon if logo fails to load
+                button.image = NSImage(systemSymbolName: "waveform.circle.fill", accessibilityDescription: "Radioform")
+            }
             button.action = #selector(togglePopover)
             button.target = self
             print("📝 Status bar button configured with waveform icon")
@@ -82,6 +98,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover?.contentSize = NSSize(width: 340, height: 600)
         popover?.behavior = .transient
         popover?.contentViewController = NSHostingController(rootView: MenuBarView())
+        
+        // Set up event monitor to dismiss popover when clicking outside
+        eventMonitor = EventMonitor(mask: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            if let popover = self?.popover, popover.isShown {
+                self?.popover?.performClose(event)
+            }
+        }
         print("✓ Menu bar setup complete - icon should be visible")
     }
 
@@ -281,6 +304,98 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
     
+    func loadLogoImage() -> NSImage? {
+        var logoURL: URL?
+        let fileManager = FileManager.default
+        
+        // Try bundle resources first (production)
+        if let resourcePath = Bundle.main.resourcePath {
+            let bundlePath = (resourcePath as NSString).appendingPathComponent("Resources/logo.svg")
+            if fileManager.fileExists(atPath: bundlePath) {
+                logoURL = URL(fileURLWithPath: bundlePath)
+            }
+        }
+        
+        // Fall back to source directory (development)
+        if logoURL == nil {
+            if let executablePath = Bundle.main.executablePath {
+                let executableDir = (executablePath as NSString).deletingLastPathComponent
+                let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/logo.svg")
+                let normalizedPath = (sourcePath as NSString).standardizingPath
+                if fileManager.fileExists(atPath: normalizedPath) {
+                    logoURL = URL(fileURLWithPath: normalizedPath)
+                }
+            }
+        }
+        
+        // Try absolute path as last resort (development from repo root)
+        if logoURL == nil {
+            let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
+            let absolutePath = "\(homeDir)/radioform-1/apps/mac/RadioformApp/Sources/Resources/logo.svg"
+            if fileManager.fileExists(atPath: absolutePath) {
+                logoURL = URL(fileURLWithPath: absolutePath)
+            }
+        }
+        
+        guard let url = logoURL else {
+            return nil
+        }
+        
+        // Load SVG (NSImage supports SVG on macOS 10.15+)
+        if let image = NSImage(contentsOf: url) {
+            // Resize to appropriate menu bar size (typically 18-22px)
+            let size = NSSize(width: 16, height: 16)
+            let resizedImage = NSImage(size: size)
+            resizedImage.lockFocus()
+            image.draw(in: NSRect(origin: .zero, size: size), from: NSRect(origin: .zero, size: image.size), operation: .sourceOver, fraction: 1.0)
+            resizedImage.unlockFocus()
+            return resizedImage
+        }
+        
+        return nil
+    }
+    
+    func registerCustomFont() {
+        var fontPath: String?
+        let fileManager = FileManager.default
+        
+        // Try bundle resources first (production)
+        if let resourcePath = Bundle.main.resourcePath {
+            let bundlePath = (resourcePath as NSString).appendingPathComponent("Resources/fonts/SignPainterHouseScript.ttf")
+            if fileManager.fileExists(atPath: bundlePath) {
+                fontPath = bundlePath
+            }
+        }
+        
+        // Fall back to source directory (development)
+        if fontPath == nil {
+            if let executablePath = Bundle.main.executablePath {
+                let executableDir = (executablePath as NSString).deletingLastPathComponent
+                let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/fonts/SignPainterHouseScript.ttf")
+                let normalizedPath = (sourcePath as NSString).standardizingPath
+                if fileManager.fileExists(atPath: normalizedPath) {
+                    fontPath = normalizedPath
+                }
+            }
+        }
+        
+        // Try absolute path as last resort (development from repo root)
+        if fontPath == nil {
+            let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
+            let absolutePath = "\(homeDir)/radioform-1/apps/mac/RadioformApp/Sources/Resources/fonts/SignPainterHouseScript.ttf"
+            if fileManager.fileExists(atPath: absolutePath) {
+                fontPath = absolutePath
+            }
+        }
+        
+        guard let path = fontPath, let url = URL(fileURLWithPath: path) as URL? else {
+            return
+        }
+        
+        var error: Unmanaged<CFError>?
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+    }
+    
     func showAlert(_ title: String, _ message: String) {
         let alert = NSAlert()
         alert.messageText = title
@@ -296,9 +411,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let popover = popover {
             if popover.isShown {
                 popover.performClose(nil)
+                eventMonitor?.stop()
             } else {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+                eventMonitor?.start()
             }
+        }
+    }
+}
+
+// EventMonitor to detect clicks outside the popover
+class EventMonitor {
+    private var monitor: Any?
+    private let mask: NSEvent.EventTypeMask
+    private let handler: (NSEvent?) -> Void
+
+    init(mask: NSEvent.EventTypeMask, handler: @escaping (NSEvent?) -> Void) {
+        self.mask = mask
+        self.handler = handler
+    }
+
+    deinit {
+        stop()
+    }
+
+    func start() {
+        monitor = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler)
+    }
+
+    func stop() {
+        if let monitor = monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
         }
     }
 }

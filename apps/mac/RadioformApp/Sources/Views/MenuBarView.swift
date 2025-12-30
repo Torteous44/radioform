@@ -3,6 +3,32 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject private var presetManager = PresetManager.shared
     @State private var showPresets = false
+    @State private var radioformFontSize: CGFloat = 22
+    
+    // Try to find the SignPainter font with fallback
+    func fontForRadioform(size: CGFloat) -> Font {
+        // Try the expected name first
+        if NSFont(name: "SignPainterHouseScript", size: size) != nil {
+            return .custom("SignPainterHouseScript", size: size)
+        }
+        
+        // Try variations
+        let possibleNames = [
+            "SignPainterHouseScript",
+            "SignPainter-HouseScript",
+            "SignPainter House Script",
+            "SignPainter"
+        ]
+        
+        for name in possibleNames {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        
+        // Fallback to system font
+        return .system(size: size, weight: .bold)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -12,8 +38,9 @@ struct MenuBarView: View {
             VStack(spacing: 0) {
                 // Header with toggle only (no title)
                 HStack {
-                    Text("Equalizer")
-                        .bold()
+                    Text("Radioform")
+                        .font(fontForRadioform(size: radioformFontSize))
+                        
                     Spacer()
 
                     Toggle(
@@ -44,6 +71,38 @@ struct MenuBarView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
 
+                // Only show EQ controls when enabled
+                if presetManager.isEnabled {
+                    // 10-Band EQ
+                    TenBandEQ()
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+
+                    // Control Center-style Preset Dropdown
+                    PresetDropdown(isExpanded: $showPresets)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+
+                    // Preset list (shown when expanded)
+                    if showPresets {
+                        PresetList(
+                            presets: (presetManager.bundledPresets + presetManager.userPresets).filter { preset in
+                                preset.id != presetManager.currentPreset?.id
+                            },
+                            activeID: presetManager.currentPreset?.id,
+                            onSelect: { preset in
+                                presetManager.applyPreset(preset)
+                                showPresets = false
+                            }
+                        )
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 6)
+                    }
+
+                    // Footer
+                    QuitButton()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
                 // 10-Band EQ
                 TenBandEQ()
                     .padding(.horizontal, 12)
@@ -70,11 +129,6 @@ struct MenuBarView: View {
                     .padding(.horizontal, 8)
                     .padding(.bottom, 6)
                 }
-
-                // Footer
-                QuitButton()
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
             }
             .fixedSize(horizontal: false, vertical: true)
         }

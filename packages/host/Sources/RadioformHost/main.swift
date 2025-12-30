@@ -631,12 +631,15 @@ func writeControlFile(_ devices: [PhysicalDevice]) {
 
 // Create shared memory for a specific device
 func createDeviceSharedMemory(uid: String) -> Bool {
+    print("[RadioformHost INFO] createDeviceSharedMemory() called for uid: \(uid)")
+
     // Sanitize UID for filename (replace : / space with _)
     let safeUID = uid.replacingOccurrences(of: ":", with: "_")
                      .replacingOccurrences(of: "/", with: "_")
                      .replacingOccurrences(of: " ", with: "_")
 
     let shmPath = "/tmp/radioform-\(safeUID)"
+    print("[RadioformHost INFO] Creating shared memory file: \(shmPath)")
 
     // Remove any existing file
     unlink(shmPath)
@@ -644,30 +647,40 @@ func createDeviceSharedMemory(uid: String) -> Bool {
     // Create new shared memory file with world read/write permissions
     let fd = open(shmPath, O_CREAT | O_RDWR, 0666)
     guard fd >= 0 else {
-        print("Failed to create shared memory for \(uid): \(String(cString: strerror(errno)))")
+        print("[RadioformHost ERROR] FAILED to create shared memory file: \(shmPath)")
+        print("[RadioformHost ERROR] Error: \(String(cString: strerror(errno)))")
         return false
     }
+
+    print("[RadioformHost DEBUG] File created successfully, fd=\(fd)")
 
     // Explicitly set permissions
     fchmod(fd, 0o666)
 
     let shmSize = rf_shared_audio_size(RING_CAPACITY_FRAMES)
+    print("[RadioformHost DEBUG] Shared memory size: \(shmSize) bytes")
 
     // Set size
     guard ftruncate(fd, Int64(shmSize)) == 0 else {
-        print("Failed to set file size for \(uid): \(String(cString: strerror(errno)))")
+        print("[RadioformHost ERROR] Failed to set file size for \(shmPath)")
+        print("[RadioformHost ERROR] Error: \(String(cString: strerror(errno)))")
         close(fd)
         return false
     }
+
+    print("[RadioformHost DEBUG] File size set successfully")
 
     // Map memory
     let mem = mmap(nil, shmSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
     close(fd)
 
     guard mem != MAP_FAILED else {
-        print("Failed to map shared memory for \(uid): \(String(cString: strerror(errno)))")
+        print("[RadioformHost ERROR] Failed to mmap shared memory for \(shmPath)")
+        print("[RadioformHost ERROR] Error: \(String(cString: strerror(errno)))")
         return false
     }
+
+    print("[RadioformHost DEBUG] Memory mapped at: \(mem!)")
 
     let sharedMem = mem!.assumingMemoryBound(to: RFSharedAudioV1.self)
 
@@ -677,14 +690,28 @@ func createDeviceSharedMemory(uid: String) -> Bool {
     // Store in map
     deviceSharedMemory[uid] = sharedMem
 
+    print("[RadioformHost INFO] SUCCESS: Shared memory created for device: \(uid)")
+    print("[RadioformHost INFO]   File: \(shmPath)")
+    print("[RadioformHost INFO]   Size: \(shmSize) bytes")
+    print("[RadioformHost INFO]   Driver can now access this file")
+
     return true
 }
 
 // Create shared memory for all devices
 func createAllDeviceSharedMemory(_ devices: [PhysicalDevice]) {
+    print("[RadioformHost INFO] createAllDeviceSharedMemory() creating shared memory for \(devices.count) devices")
+
     for device in devices {
-        _ = createDeviceSharedMemory(uid: device.uid)
+        let success = createDeviceSharedMemory(uid: device.uid)
+        if success {
+            print("[RadioformHost INFO] ✓ Created shared memory for: \(device.name) (\(device.uid))")
+        } else {
+            print("[RadioformHost ERROR] ✗ Failed to create shared memory for: \(device.name) (\(device.uid))")
+        }
     }
+
+    print("[RadioformHost INFO] Shared memory creation complete for all devices")
 }
 
 // Remove shared memory for a device
@@ -880,22 +907,36 @@ let renderCallback: AURenderCallback = { (
 }
 
 // Main
+print("[RadioformHost INFO] ===== RADIOFORM HOST STARTING =====")
+
 // 1. Discover physical devices
+print("[RadioformHost INFO] Step 1: Discovering physical audio devices...")
 deviceRegistry = enumeratePhysicalDevices()
 
 if deviceRegistry.isEmpty {
-    print("No physical output devices found")
+    print("[RadioformHost ERROR] No physical output devices found")
 } else {
-    print("Found \(deviceRegistry.count) physical output device(s)")
+    print("[RadioformHost INFO] Found \(deviceRegistry.count) physical output device(s):")
+    for device in deviceRegistry {
+        print("[RadioformHost INFO]   - \(device.name) (\(device.uid))")
+    }
 }
 
 // Register listeners for device changes
+print("[RadioformHost INFO] Registering device change listeners...")
 registerDeviceListeners()
 
 // 2. Create proxy infrastructure
-writeControlFile(deviceRegistry)
+// CRITICAL: Must create shared memory files BEFORE writing control file
+// to avoid race condition with driver loading!
+print("[RadioformHost INFO] Step 2: Creating shared memory files (BEFORE control file)...")
 createAllDeviceSharedMemory(deviceRegistry)
 
+print("[RadioformHost INFO] Step 3: Writing control file to notify driver...")
+writeControlFile(deviceRegistry)
+print("[RadioformHost INFO] Control file written: /tmp/radioform-devices.txt")
+
+print("[RadioformHost INFO] Proxy infrastructure ready - driver will load on next coreaudiod start")
 print("To activate proxies, restart coreaudiod: sudo killall coreaudiod")
 
 // 3. Create legacy shared memory for backward compatibility

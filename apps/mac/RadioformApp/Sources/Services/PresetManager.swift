@@ -10,12 +10,20 @@ enum PresetError: Error {
 /// Manages loading, saving, and organizing presets
 class PresetManager: ObservableObject {
     static let shared = PresetManager()
+    static let customPresetName = "Custom"
 
     @Published var bundledPresets: [EQPreset] = []
     @Published var userPresets: [EQPreset] = []
     @Published var currentPreset: EQPreset?
     @Published var isEnabled: Bool = true
     @Published var currentBands: [Float] = Array(repeating: 0, count: 10) // Current gain values for 10 bands
+    @Published var isEditingPresetName: Bool = false
+    @Published var isSavingPreset: Bool = false
+
+    /// True when user has modified EQ bands (custom unsaved state)
+    var isCustomPreset: Bool {
+        currentPreset == nil
+    }
 
     private let userPresetsURL: URL
     private let standardFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
@@ -231,5 +239,48 @@ class PresetManager: ObservableObject {
         }
 
         return safe.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Validate preset name
+    func validatePresetName(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        guard trimmed.count <= 64 else { return false }
+
+        // Check if name already exists
+        let allPresets = bundledPresets + userPresets
+        return !allPresets.contains { $0.name.lowercased() == trimmed.lowercased() }
+    }
+
+    /// Save current bands as a custom preset
+    func saveCustomPreset(name: String) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard validatePresetName(trimmed) else {
+            throw PresetError.invalidPreset
+        }
+
+        let bands: [EQBand] = standardFrequencies.enumerated().map { index, frequency in
+            let gain = currentBands[index]
+            return EQBand(
+                frequencyHz: frequency,
+                gainDb: gain,
+                qFactor: 1.0,
+                filterType: .peak,
+                enabled: abs(gain) > 0.01
+            )
+        }
+
+        let preset = EQPreset(
+            name: trimmed,
+            bands: bands,
+            preampDb: 0.0,
+            limiterEnabled: true,
+            limiterThresholdDb: -1.0
+        )
+
+        try savePreset(preset)
+
+        // Apply the newly saved preset
+        applyPreset(preset)
     }
 }

@@ -18,6 +18,7 @@ struct RadioformApp: App {
     }
 
     var body: some Scene {
+        // Menu bar apps don't need a scene - all UI is managed by AppDelegate
         Settings {
             EmptyView()
         }
@@ -37,9 +38,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Check if onboarding is needed
         if !OnboardingState.hasCompleted() {
+            // Will switch to .regular in showOnboarding()
             showOnboarding()
             return
         }
+
+        // Onboarding complete - run as menu bar app only
+        NSApp.setActivationPolicy(.accessory)
 
         // Launch audio host if not already running
         launchHostIfNeeded()

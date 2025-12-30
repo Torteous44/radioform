@@ -66,12 +66,12 @@ struct VerticalSlider: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
-                // Track background
+                // Track background - static, no animation
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color(NSColor.separatorColor))
                     .frame(width: 4)
 
-                // Center line (0 dB)
+                // Center line (0 dB) - static
                 let centerY = geometry.size.height / 2
                 Rectangle()
                     .fill(Color(NSColor.tertiaryLabelColor))

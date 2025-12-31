@@ -10,11 +10,13 @@
 #include "biquad.h"
 #include "smoothing.h"
 #include "limiter.h"
+#include "cpu_util.h"
 
 #include <cstring>
 #include <cmath>
 #include <atomic>
 #include <array>
+#include <chrono>
 
 using namespace radioform;
 
@@ -36,6 +38,14 @@ struct radioform_dsp_engine {
     // Parameter smoothing
     ParameterSmoother preamp_smoother;
 
+    // Per-band parameter smoothers (for freq, Q, gain)
+    struct BandSmoothers {
+        ParameterSmoother frequency;
+        ParameterSmoother q_factor;
+        ParameterSmoother gain;
+    };
+    std::array<BandSmoothers, RADIOFORM_MAX_BANDS> band_smoothers;
+
     // Limiter
     SoftLimiter limiter;
     bool limiter_enabled;
@@ -46,6 +56,9 @@ struct radioform_dsp_engine {
     // Statistics
     std::atomic<uint64_t> frames_processed;
     std::atomic<uint32_t> underrun_count;
+    std::atomic<float> cpu_load_percent;  // CPU load as percentage (0-100)
+    std::atomic<float> peak_left;         // Peak level left channel (linear, 0-1+)
+    std::atomic<float> peak_right;        // Peak level right channel (linear, 0-1+)
 
     // Constructor
     radioform_dsp_engine(uint32_t sr)
@@ -55,7 +68,14 @@ struct radioform_dsp_engine {
         , bypass(false)
         , frames_processed(0)
         , underrun_count(0)
+        , cpu_load_percent(0.0f)
+        , peak_left(0.0f)
+        , peak_right(0.0f)
     {
+        // Enable denormal suppression for performance
+        // This prevents denormal numbers from causing slowdowns
+        enable_denormal_suppression();
+
         // Initialize with flat preset
         radioform_dsp_preset_init_flat(&current_preset);
 
@@ -67,6 +87,13 @@ struct radioform_dsp_engine {
         // Initialize smoothers
         preamp_smoother.init(static_cast<float>(sample_rate), 10.0f); // 10ms ramp
         preamp_smoother.setValue(1.0f); // 0dB = gain of 1.0
+
+        // Initialize per-band parameter smoothers
+        for (auto& smoother : band_smoothers) {
+            smoother.frequency.init(static_cast<float>(sample_rate), 10.0f);
+            smoother.q_factor.init(static_cast<float>(sample_rate), 10.0f);
+            smoother.gain.init(static_cast<float>(sample_rate), 10.0f);
+        }
 
         // Initialize limiter
         limiter.init(-0.1f); // -0.1 dB threshold
@@ -138,6 +165,9 @@ void radioform_dsp_process_interleaved(
 ) {
     if (!engine || !input || !output || num_frames == 0) return;
 
+    // Start CPU timing
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     // Check bypass
     if (engine->bypass.load(std::memory_order_relaxed)) {
         // Passthrough
@@ -146,6 +176,10 @@ void radioform_dsp_process_interleaved(
         }
         return;
     }
+
+    // Peak detection
+    float buffer_peak_left = 0.0f;
+    float buffer_peak_right = 0.0f;
 
     // Process each frame
     for (uint32_t i = 0; i < num_frames; i++) {
@@ -171,10 +205,42 @@ void radioform_dsp_process_interleaved(
             engine->limiter.processSampleStereo(&left, &right);
         }
 
+        // Track peak levels
+        buffer_peak_left = std::max(buffer_peak_left, std::abs(left));
+        buffer_peak_right = std::max(buffer_peak_right, std::abs(right));
+
         // Interleave output
         output[i * 2] = left;
         output[i * 2 + 1] = right;
     }
+
+    // Update peak meters with exponential decay (ballistics)
+    constexpr float peak_decay = 0.9999f;  // Very slow decay for peak hold behavior
+    float current_peak_left = engine->peak_left.load(std::memory_order_relaxed);
+    float current_peak_right = engine->peak_right.load(std::memory_order_relaxed);
+
+    // Attack: instant rise to new peak
+    // Decay: exponential fall
+    float new_peak_left = std::max(buffer_peak_left, current_peak_left * peak_decay);
+    float new_peak_right = std::max(buffer_peak_right, current_peak_right * peak_decay);
+
+    engine->peak_left.store(new_peak_left, std::memory_order_relaxed);
+    engine->peak_right.store(new_peak_right, std::memory_order_relaxed);
+
+    // End CPU timing and calculate load
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end_time - start_time;
+
+    // Calculate available time for this buffer (in seconds)
+    double available_time = static_cast<double>(num_frames) / static_cast<double>(engine->sample_rate);
+
+    // Calculate CPU load as percentage
+    float instant_load = static_cast<float>((elapsed.count() / available_time) * 100.0);
+
+    // Apply exponential moving average (alpha = 0.1 for smoothing)
+    float current_load = engine->cpu_load_percent.load(std::memory_order_relaxed);
+    float smoothed_load = 0.9f * current_load + 0.1f * instant_load;
+    engine->cpu_load_percent.store(smoothed_load, std::memory_order_relaxed);
 
     // Update statistics
     engine->frames_processed.fetch_add(num_frames, std::memory_order_relaxed);
@@ -191,6 +257,9 @@ void radioform_dsp_process_planar(
     if (!engine || !input_left || !input_right || !output_left || !output_right || num_frames == 0) {
         return;
     }
+
+    // Start CPU timing
+    auto start_time = std::chrono::high_resolution_clock::now();
 
     // Check bypass
     if (engine->bypass.load(std::memory_order_relaxed)) {
@@ -236,6 +305,42 @@ void radioform_dsp_process_planar(
         engine->limiter.processBuffer(output_left, output_right, num_frames);
     }
 
+    // Peak detection
+    float buffer_peak_left = 0.0f;
+    float buffer_peak_right = 0.0f;
+    for (uint32_t i = 0; i < num_frames; i++) {
+        buffer_peak_left = std::max(buffer_peak_left, std::abs(output_left[i]));
+        buffer_peak_right = std::max(buffer_peak_right, std::abs(output_right[i]));
+    }
+
+    // Update peak meters with exponential decay (ballistics)
+    constexpr float peak_decay = 0.9999f;  // Very slow decay for peak hold behavior
+    float current_peak_left = engine->peak_left.load(std::memory_order_relaxed);
+    float current_peak_right = engine->peak_right.load(std::memory_order_relaxed);
+
+    // Attack: instant rise to new peak
+    // Decay: exponential fall
+    float new_peak_left = std::max(buffer_peak_left, current_peak_left * peak_decay);
+    float new_peak_right = std::max(buffer_peak_right, current_peak_right * peak_decay);
+
+    engine->peak_left.store(new_peak_left, std::memory_order_relaxed);
+    engine->peak_right.store(new_peak_right, std::memory_order_relaxed);
+
+    // End CPU timing and calculate load
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end_time - start_time;
+
+    // Calculate available time for this buffer (in seconds)
+    double available_time = static_cast<double>(num_frames) / static_cast<double>(engine->sample_rate);
+
+    // Calculate CPU load as percentage
+    float instant_load = static_cast<float>((elapsed.count() / available_time) * 100.0);
+
+    // Apply exponential moving average (alpha = 0.1 for smoothing)
+    float current_load = engine->cpu_load_percent.load(std::memory_order_relaxed);
+    float smoothed_load = 0.9f * current_load + 0.1f * instant_load;
+    engine->cpu_load_percent.store(smoothed_load, std::memory_order_relaxed);
+
     // Update statistics
     engine->frames_processed.fetch_add(num_frames, std::memory_order_relaxed);
 }
@@ -262,15 +367,25 @@ radioform_error_t radioform_dsp_apply_preset(
     std::memcpy(&engine->current_preset, preset, sizeof(radioform_preset_t));
     engine->num_active_bands = preset->num_bands;
 
-    // Update filter coefficients for each band
+    // Update filter coefficients and smoothers for each band
     for (uint32_t i = 0; i < preset->num_bands; i++) {
         const radioform_band_t& band = preset->bands[i];
 
         if (band.enabled) {
             engine->bands[i].setCoeffs(band, static_cast<float>(engine->sample_rate));
+
+            // Set smoother targets for this band
+            engine->band_smoothers[i].frequency.setTarget(band.frequency_hz);
+            engine->band_smoothers[i].q_factor.setTarget(band.q_factor);
+            engine->band_smoothers[i].gain.setTarget(band.gain_db);
         } else {
             // Disabled band - set to flat response
             engine->bands[i].setCoeffsFlat();
+
+            // Reset smoothers to neutral values
+            engine->band_smoothers[i].frequency.setValue(1000.0f);
+            engine->band_smoothers[i].q_factor.setValue(1.0f);
+            engine->band_smoothers[i].gain.setValue(0.0f);
         }
     }
 
@@ -326,7 +441,11 @@ void radioform_dsp_update_band_gain(
     // Update preset
     engine->current_preset.bands[band_index].gain_db = gain_db;
 
-    // Recalculate coefficients
+    // Set smoothing target (will be applied gradually)
+    engine->band_smoothers[band_index].gain.setTarget(gain_db);
+
+    // Also update coefficients immediately for instant response
+    // The smoother will handle gradual transitions on subsequent updates
     const radioform_band_t& band = engine->current_preset.bands[band_index];
     engine->bands[band_index].setCoeffs(band, static_cast<float>(engine->sample_rate));
 }
@@ -348,6 +467,48 @@ void radioform_dsp_update_preamp(
     engine->preamp_smoother.setTarget(target_gain);
 }
 
+void radioform_dsp_update_band_frequency(
+    radioform_dsp_engine_t* engine,
+    uint32_t band_index,
+    float frequency_hz
+) {
+    if (!engine || band_index >= engine->num_active_bands) return;
+
+    // Clamp frequency
+    frequency_hz = std::max(20.0f, std::min(20000.0f, frequency_hz));
+
+    // Update preset
+    engine->current_preset.bands[band_index].frequency_hz = frequency_hz;
+
+    // Set smoothing target (will be applied gradually)
+    engine->band_smoothers[band_index].frequency.setTarget(frequency_hz);
+
+    // Update coefficients immediately for instant response
+    const radioform_band_t& band = engine->current_preset.bands[band_index];
+    engine->bands[band_index].setCoeffs(band, static_cast<float>(engine->sample_rate));
+}
+
+void radioform_dsp_update_band_q(
+    radioform_dsp_engine_t* engine,
+    uint32_t band_index,
+    float q_factor
+) {
+    if (!engine || band_index >= engine->num_active_bands) return;
+
+    // Clamp Q factor
+    q_factor = std::max(0.1f, std::min(10.0f, q_factor));
+
+    // Update preset
+    engine->current_preset.bands[band_index].q_factor = q_factor;
+
+    // Set smoothing target (will be applied gradually)
+    engine->band_smoothers[band_index].q_factor.setTarget(q_factor);
+
+    // Update coefficients immediately for instant response
+    const radioform_band_t& band = engine->current_preset.bands[band_index];
+    engine->bands[band_index].setCoeffs(band, static_cast<float>(engine->sample_rate));
+}
+
 // ============================================================================
 // Diagnostics
 // ============================================================================
@@ -360,7 +521,28 @@ void radioform_dsp_get_stats(
 
     stats->frames_processed = engine->frames_processed.load(std::memory_order_relaxed);
     stats->underrun_count = engine->underrun_count.load(std::memory_order_relaxed);
-    stats->cpu_load_percent = 0.0f; // TODO: implement CPU load measurement
+    stats->cpu_load_percent = engine->cpu_load_percent.load(std::memory_order_relaxed);
     stats->bypass_active = engine->bypass.load(std::memory_order_relaxed);
     stats->sample_rate = engine->sample_rate;
+
+    // Convert peak levels from linear to dB (dBFS)
+    float peak_left_linear = engine->peak_left.load(std::memory_order_relaxed);
+    float peak_right_linear = engine->peak_right.load(std::memory_order_relaxed);
+
+    // Convert to dB (with floor at -120 dB to avoid log(0))
+    constexpr float min_db = -120.0f;
+    stats->peak_left_db = peak_left_linear > 0.0f
+        ? std::max(20.0f * std::log10(peak_left_linear), min_db)
+        : min_db;
+    stats->peak_right_db = peak_right_linear > 0.0f
+        ? std::max(20.0f * std::log10(peak_right_linear), min_db)
+        : min_db;
+}
+
+// ============================================================================
+// Performance Optimizations
+// ============================================================================
+
+void radioform_dsp_enable_denormal_suppression(void) {
+    enable_denormal_suppression();
 }

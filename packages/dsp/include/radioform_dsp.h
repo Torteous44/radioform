@@ -228,6 +228,38 @@ void radioform_dsp_update_preamp(
     float gain_db
 );
 
+/**
+ * @brief Update a band's frequency in realtime (REALTIME-SAFE)
+ *
+ * @param engine Engine instance (must not be NULL)
+ * @param band_index Band index (0 to num_bands-1)
+ * @param frequency_hz New center frequency in Hz (20.0 to 20000.0)
+ *
+ * @note REALTIME-SAFE: Changes are applied with smoothing to avoid clicks
+ * @note Safe to call from UI thread while audio is processing
+ */
+void radioform_dsp_update_band_frequency(
+    radioform_dsp_engine_t* engine,
+    uint32_t band_index,
+    float frequency_hz
+);
+
+/**
+ * @brief Update a band's Q factor in realtime (REALTIME-SAFE)
+ *
+ * @param engine Engine instance (must not be NULL)
+ * @param band_index Band index (0 to num_bands-1)
+ * @param q_factor New Q factor (0.1 to 10.0)
+ *
+ * @note REALTIME-SAFE: Changes are applied with smoothing to avoid clicks
+ * @note Safe to call from UI thread while audio is processing
+ */
+void radioform_dsp_update_band_q(
+    radioform_dsp_engine_t* engine,
+    uint32_t band_index,
+    float q_factor
+);
+
 // ============================================================================
 // Diagnostics
 // ============================================================================
@@ -251,6 +283,30 @@ void radioform_dsp_get_stats(
  * @return Version string (e.g., "1.0.0")
  */
 const char* radioform_dsp_get_version(void);
+
+// ============================================================================
+// Performance Optimizations
+// ============================================================================
+
+/**
+ * @brief Enable denormal number suppression on current thread
+ *
+ * Denormal (subnormal) floating-point numbers can cause severe performance
+ * degradation (10-100x slowdown) on some CPUs. This function enables
+ * hardware flush-to-zero (FTZ) and denormals-are-zero (DAZ) modes.
+ *
+ * @note This affects only the calling thread
+ * @note Automatically called in radioform_dsp_create(), but you should
+ *       also call this once from your audio thread for best performance
+ * @note REALTIME-SAFE: No allocations, just sets CPU flags
+ *
+ * Example usage:
+ * @code
+ * // In your audio thread initialization:
+ * radioform_dsp_enable_denormal_suppression();
+ * @endcode
+ */
+void radioform_dsp_enable_denormal_suppression(void);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,5 @@
-// Radioform HAL Driver
-// Minimal virtual audio device with shared memory transport
+// Radioform HAL Driver - Production Edition
+// Rock-solid virtual audio device with comprehensive error recovery
 
 #include <aspl/Driver.hpp>
 #include <CoreAudio/AudioServerPlugIn.h>
@@ -23,6 +23,7 @@
 #include <set>
 #include <sys/stat.h>
 #include <errno.h>
+#include <mutex>
 
 // Debug logging macros - use os_log for proper system logging
 static os_log_t rf_log = os_log_create("com.radioform.driver", "default");
@@ -39,19 +40,73 @@ constexpr UInt32 CHANNEL_COUNT = 2;
 
 // Shared memory config
 constexpr uint32_t RING_CAPACITY_FRAMES = RF_RING_DEFAULT_FRAMES;
-const char* SHM_FILE_PATH = "/tmp/radioform-audio-v1";
+
+// Health check intervals
+constexpr int HEALTH_CHECK_INTERVAL_SECONDS = 5;
+constexpr int STATS_LOG_INTERVAL_SECONDS = 30;
+
+// Device states
+enum class DeviceState {
+    Uninitialized,
+    Connecting,
+    Connected,
+    Error,
+    Disconnected
+};
+
+const char* DeviceStateToString(DeviceState state) {
+    switch (state) {
+        case DeviceState::Uninitialized: return "Uninitialized";
+        case DeviceState::Connecting: return "Connecting";
+        case DeviceState::Connected: return "Connected";
+        case DeviceState::Error: return "Error";
+        case DeviceState::Disconnected: return "Disconnected";
+    }
+    return "Unknown";
+}
+
+// Statistics tracker for monitoring health
+struct AudioStats {
+    std::atomic<uint64_t> total_writes{0};
+    std::atomic<uint64_t> failed_writes{0};
+    std::atomic<uint64_t> health_check_failures{0};
+    std::atomic<uint64_t> reconnection_attempts{0};
+    std::atomic<uint64_t> client_starts{0};
+    std::atomic<uint64_t> client_stops{0};
+
+    void LogPeriodic() {
+        static auto last_log = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_log).count();
+        if (elapsed >= STATS_LOG_INTERVAL_SECONDS) {
+            RF_LOG_INFO("=== Audio Stats (last %llds) ===", elapsed);
+            RF_LOG_INFO("  Total writes: %llu", total_writes.load());
+            RF_LOG_INFO("  Failed writes: %llu", failed_writes.load());
+            RF_LOG_INFO("  Health failures: %llu", health_check_failures.load());
+            RF_LOG_INFO("  Reconnection attempts: %llu", reconnection_attempts.load());
+            RF_LOG_INFO("  Client starts: %llu", client_starts.load());
+            RF_LOG_INFO("  Client stops: %llu", client_stops.load());
+            last_log = now;
+        }
+    }
+};
 
 // Request handler for audio I/O and control
 // Each device gets its own handler instance with unique shared memory
+// NOW WITH ROBUST CLIENT TRACKING AND ERROR RECOVERY!
 class RadioformHandler : public aspl::ControlRequestHandler, public aspl::IORequestHandler
 {
 public:
     RadioformHandler(const std::string& deviceUID)
         : shared_memory_(nullptr)
         , device_uid_(deviceUID)
+        , io_client_count_(0)
+        , state_(DeviceState::Uninitialized)
+        , last_health_check_(std::chrono::steady_clock::now())
+        , last_write_index_check_(0)
     {
         // Construct shared memory path based on device UID
-        // Replace invalid filename chars with underscores
         std::string safe_uid = deviceUID;
         for (char& c : safe_uid) {
             if (c == ':' || c == '/' || c == ' ') {
@@ -59,61 +114,122 @@ public:
             }
         }
         shm_file_path_ = "/tmp/radioform-" + safe_uid;
+
+        RF_LOG_INFO("RadioformHandler created for device: %s (shm: %s)",
+            device_uid_.c_str(), shm_file_path_.c_str());
     }
 
     ~RadioformHandler()
     {
+        RF_LOG_INFO("RadioformHandler destructor for device: %s", device_uid_.c_str());
         Disconnect();
     }
 
-    // Called when audio I/O starts - open shared memory connection
+    // Called when audio I/O starts - ROBUST with reference counting
     OSStatus OnStartIO() override
     {
-        RF_LOG_INFO("OnStartIO() called for device: %s", device_uid_.c_str());
+        std::lock_guard<std::mutex> lock(io_mutex_);
 
-        if (!shared_memory_) {
-            RF_LOG_INFO("Shared memory not open, attempting to open: %s", shm_file_path_.c_str());
+        int32_t count = ++io_client_count_;
+        stats_.client_starts++;
 
-            // Try to open with retries in case file is being created
-            const int MAX_RETRIES = 5;
-            const int RETRY_DELAY_MS = 100; // 100ms between retries
+        RF_LOG_INFO("OnStartIO() client #%d for device: %s (state: %s)",
+            count, device_uid_.c_str(), DeviceStateToString(state_.load()));
+
+        // Only connect for first client
+        if (count == 1) {
+            state_ = DeviceState::Connecting;
+
+            // Try to connect with exponential backoff
+            const int MAX_RETRIES = 10;
+            const int BASE_DELAY_MS = 50;
 
             for (int attempt = 1; attempt <= MAX_RETRIES && !shared_memory_; attempt++) {
-                RF_LOG_INFO("Attempt %d/%d to open shared memory...", attempt, MAX_RETRIES);
+                RF_LOG_INFO("Connection attempt %d/%d...", attempt, MAX_RETRIES);
+
                 OpenSharedMemory();
 
-                if (!shared_memory_ && attempt < MAX_RETRIES) {
-                    RF_LOG_INFO("Attempt %d failed, retrying in %dms...", attempt, RETRY_DELAY_MS);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS));
+                if (shared_memory_) {
+                    // Validate health before declaring success
+                    if (IsSharedMemoryHealthy()) {
+                        RF_LOG_INFO("✓ Successfully connected on attempt %d", attempt);
+                        state_ = DeviceState::Connected;
+                        break;
+                    } else {
+                        RF_LOG_ERROR("✗ Shared memory opened but failed health check");
+                        Disconnect();
+                        state_ = DeviceState::Error;
+                    }
+                }
+
+                if (attempt < MAX_RETRIES) {
+                    // Exponential backoff with cap
+                    int delay_ms = BASE_DELAY_MS * (1 << (attempt - 1));
+                    if (delay_ms > 1000) delay_ms = 1000;
+
+                    RF_LOG_INFO("Retry in %dms...", delay_ms);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
                 }
             }
         } else {
-            RF_LOG_DEBUG("Shared memory already open for device: %s", device_uid_.c_str());
+            // Additional client - verify existing connection is healthy
+            if (!IsSharedMemoryHealthy()) {
+                RF_LOG_ERROR("Existing connection unhealthy for additional client");
+                // Try to recover
+                Disconnect();
+                OpenSharedMemory();
+            }
         }
 
         if (!shared_memory_) {
-            RF_LOG_ERROR("CRITICAL: OnStartIO() failed after all retry attempts for device: %s", device_uid_.c_str());
-            RF_LOG_ERROR("  File path: %s", shm_file_path_.c_str());
-            RF_LOG_ERROR("  This will result in NO AUDIO OUTPUT!");
-            RF_LOG_ERROR("  Possible causes:");
-            RF_LOG_ERROR("    1. Host application not running");
-            RF_LOG_ERROR("    2. Shared memory file not created by host");
-            RF_LOG_ERROR("    3. Permission issues accessing /tmp/radioform-* files");
-            RF_LOG_ERROR("  Try: sudo killall coreaudiod (to restart audio system)");
+            // Failed - revert the client count
+            --io_client_count_;
+            state_ = DeviceState::Error;
+
+            RF_LOG_ERROR("╔════════════════════════════════════════╗");
+            RF_LOG_ERROR("║   OnStartIO FAILED - NO AUDIO FLOW!   ║");
+            RF_LOG_ERROR("╚════════════════════════════════════════╝");
+            RF_LOG_ERROR("  Device: %s", device_uid_.c_str());
+            RF_LOG_ERROR("  File: %s", shm_file_path_.c_str());
+            RF_LOG_ERROR("");
+            RF_LOG_ERROR("Troubleshooting:");
+            RF_LOG_ERROR("  1. Is the host application running?");
+            RF_LOG_ERROR("  2. Check: ls -la /tmp/radioform-*");
+            RF_LOG_ERROR("  3. Check: cat /tmp/radioform-devices.txt");
+            RF_LOG_ERROR("  4. Try: sudo killall coreaudiod");
+
             return kAudioHardwareUnspecifiedError;
         }
 
-        RF_LOG_INFO("OnStartIO() succeeded for device: %s - audio should now flow", device_uid_.c_str());
+        RF_LOG_INFO("OnStartIO succeeded - %d client(s) active", count);
         return kAudioHardwareNoError;
     }
 
-    // Called when audio I/O stops
+    // Called when audio I/O stops - ROBUST with reference counting
     void OnStopIO() override
     {
-        // Keep shared memory open for next start
+        std::lock_guard<std::mutex> lock(io_mutex_);
+
+        if (io_client_count_ == 0) {
+            RF_LOG_ERROR("OnStopIO() called but client count already 0!");
+            return;
+        }
+
+        int32_t count = --io_client_count_;
+        stats_.client_stops++;
+
+        RF_LOG_INFO("OnStopIO() remaining clients: %d for device: %s",
+            count, device_uid_.c_str());
+
+        // Only disconnect when last client stops
+        if (count == 0) {
+            RF_LOG_INFO("Last client stopped - disconnecting shared memory");
+            Disconnect();
+            state_ = DeviceState::Disconnected;
+        }
     }
 
-    // Called when system sends mixed audio to our device
+    // Called when system sends mixed audio to our device - ROBUST with health checks
     void OnWriteMixedOutput(
         const std::shared_ptr<aspl::Stream>& stream,
         Float64 zeroTimestamp,
@@ -121,23 +237,32 @@ public:
         const void* bytes,
         UInt32 bytesCount) override
     {
-        static uint64_t call_count = 0;
-        static uint64_t last_log_time = 0;
-        call_count++;
+        stats_.total_writes++;
 
-        // Log every 1000 calls (about once per second at 48kHz with 512 frame buffers)
-        uint64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
+        // Periodic health check (every N seconds)
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            now - last_health_check_).count();
 
-        if (current_time != last_log_time) {
-            RF_LOG_DEBUG("OnWriteMixedOutput() called %llu times in last second, bytesCount=%u",
-                call_count, bytesCount);
-            call_count = 0;
-            last_log_time = current_time;
+        if (elapsed >= HEALTH_CHECK_INTERVAL_SECONDS) {
+            if (!IsSharedMemoryHealthy() || !IsHostAlive()) {
+                stats_.health_check_failures++;
+                RF_LOG_ERROR("Health check failed - attempting recovery...");
+
+                std::lock_guard<std::mutex> lock(io_mutex_);
+                Disconnect();
+
+                if (io_client_count_ > 0) {
+                    stats_.reconnection_attempts++;
+                    OpenSharedMemory();
+                }
+            }
+            last_health_check_ = now;
         }
 
         if (!shared_memory_) {
-            RF_LOG_ERROR("OnWriteMixedOutput() called but shared_memory is NULL - NO AUDIO CAN FLOW!");
+            stats_.failed_writes++;
+            // Silent failure - already logged in health check
             return;
         }
 
@@ -147,16 +272,17 @@ public:
         if (fmt.mBytesPerFrame == 0 || fmt.mChannelsPerFrame != CHANNEL_COUNT) {
             static bool format_error_logged = false;
             if (!format_error_logged) {
-                RF_LOG_ERROR("Invalid audio format: bytesPerFrame=%u, channels=%u (expected 2 channels)",
+                RF_LOG_ERROR("Invalid audio format: bytesPerFrame=%u, channels=%u",
                     fmt.mBytesPerFrame, fmt.mChannelsPerFrame);
                 format_error_logged = true;
             }
+            stats_.failed_writes++;
             return;
         }
 
         UInt32 frameCount = bytesCount / fmt.mBytesPerFrame;
         if (frameCount == 0) {
-            RF_LOG_ERROR("frameCount is 0 - no audio data to process");
+            stats_.failed_writes++;
             return;
         }
 
@@ -165,7 +291,6 @@ public:
 
         // Handle different audio formats
         if (fmt.mFormatFlags & kAudioFormatFlagIsFloat) {
-            // Float32 format
             const float* input = static_cast<const float*>(bytes);
             if (fmt.mFormatFlags & kAudioFormatFlagIsNonInterleaved) {
                 // Non-interleaved: convert to interleaved
@@ -180,7 +305,7 @@ public:
                 std::memcpy(interleaved.data(), input, frameCount * 2 * sizeof(float));
             }
         } else if (fmt.mFormatFlags & kAudioFormatFlagIsSignedInteger) {
-            // Signed integer format - convert to float32 in range [-1.0, 1.0]
+            // Signed integer format - convert to float32
             if (fmt.mBitsPerChannel == 16) {
                 const int16_t* input = static_cast<const int16_t*>(bytes);
                 for (UInt32 i = 0; i < frameCount * 2; i++) {
@@ -192,7 +317,8 @@ public:
                     interleaved[i] = static_cast<float>(input[i]) / 2147483648.0f;
                 }
             } else {
-                return; // Unsupported bit depth
+                stats_.failed_writes++;
+                return;
             }
         } else {
             static bool format_error_logged = false;
@@ -200,78 +326,199 @@ public:
                 RF_LOG_ERROR("Unsupported audio format flags: 0x%x", fmt.mFormatFlags);
                 format_error_logged = true;
             }
-            return; // Unsupported format
+            stats_.failed_writes++;
+            return;
         }
 
         // Write to shared memory ring buffer
         size_t written = rf_ring_write(shared_memory_, interleaved.data(), frameCount);
 
-        // Log occasional writes to confirm audio is flowing
-        static uint64_t write_count = 0;
-        write_count++;
-        if (write_count % 1000 == 0) {
-            RF_LOG_DEBUG("Audio flowing: wrote %zu frames (total writes: %llu)", written, write_count);
+        if (written < frameCount) {
+            // This shouldn't happen since rf_ring_write drops old frames on overrun
+            RF_LOG_DEBUG("Partial write: %zu/%u frames", written, frameCount);
         }
+
+        // Periodic stats logging
+        stats_.LogPeriodic();
     }
 
 private:
-    void OpenSharedMemory()
+    // Health check: verify shared memory is valid
+    bool IsSharedMemoryHealthy() const
     {
-        RF_LOG_INFO("OpenSharedMemory() attempting to open: %s", shm_file_path_.c_str());
+        if (!shared_memory_) {
+            return false;
+        }
 
-        // Check if file exists first
+        // Check if file still exists
         struct stat st;
         if (stat(shm_file_path_.c_str(), &st) != 0) {
-            RF_LOG_ERROR("Shared memory file does NOT exist: %s (errno=%d: %s)",
+            RF_LOG_ERROR("Health check FAILED: file vanished: %s", shm_file_path_.c_str());
+            return false;
+        }
+
+        // Check protocol version
+        if (shared_memory_->protocol_version != RF_AUDIO_PROTOCOL_VERSION) {
+            RF_LOG_ERROR("Health check FAILED: protocol mismatch (expected 0x%x, got 0x%x)",
+                RF_AUDIO_PROTOCOL_VERSION, shared_memory_->protocol_version);
+            return false;
+        }
+
+        // Check for ring buffer corruption
+        uint64_t write_idx = atomic_load(&shared_memory_->write_index);
+        uint64_t read_idx = atomic_load(&shared_memory_->read_index);
+
+        if (write_idx < read_idx) {
+            RF_LOG_ERROR("Health check FAILED: corruption (write_idx=%llu < read_idx=%llu)",
+                write_idx, read_idx);
+            return false;
+        }
+
+        uint64_t used = write_idx - read_idx;
+        if (used > shared_memory_->ring_capacity_frames) {
+            RF_LOG_ERROR("Health check FAILED: overflow (used=%llu > capacity=%u)",
+                used, shared_memory_->ring_capacity_frames);
+            return false;
+        }
+
+        return true;
+    }
+
+    // Health check: verify host process is alive
+    bool IsHostAlive() const
+    {
+        if (!shared_memory_) {
+            return false;
+        }
+
+        // Check timestamp age - if too old, shared memory is stale
+        uint64_t now = (uint64_t)time(NULL);
+        uint64_t creation_time = shared_memory_->creation_timestamp;
+        uint64_t age_seconds = now - creation_time;
+
+        const uint64_t MAX_AGE_SECONDS = 24 * 60 * 60; // 24 hours
+        if (age_seconds > MAX_AGE_SECONDS) {
+            RF_LOG_ERROR("Host check FAILED: shared memory stale (age: %llu seconds)", age_seconds);
+            return false;
+        }
+
+        // Check if write_index is advancing (host is writing)
+        auto now_time = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            now_time - last_write_check_time_).count();
+
+        if (elapsed >= HEALTH_CHECK_INTERVAL_SECONDS) {
+            uint64_t current_write_idx = atomic_load(&shared_memory_->write_index);
+
+            // Note: We're the WRITER (driver), host is the READER
+            // So we check if our own writes are succeeding, not if host is writing
+            // A better check is to see if the device is still in the control file
+
+            // Check control file
+            std::ifstream file("/tmp/radioform-devices.txt");
+            if (!file.is_open()) {
+                RF_LOG_ERROR("Host check FAILED: control file missing");
+                return false;
+            }
+
+            std::string line;
+            bool found = false;
+            while (std::getline(file, line)) {
+                size_t separator = line.find('|');
+                if (separator != std::string::npos) {
+                    std::string uid = line.substr(separator + 1);
+                    if (uid == device_uid_) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!found) {
+                RF_LOG_ERROR("Host check FAILED: device not in control file");
+                return false;
+            }
+
+            last_write_check_time_ = now_time;
+        }
+
+        return true;
+    }
+
+    void OpenSharedMemory()
+    {
+        RF_LOG_INFO("OpenSharedMemory() attempting: %s", shm_file_path_.c_str());
+
+        // Check if file exists
+        struct stat st;
+        if (stat(shm_file_path_.c_str(), &st) != 0) {
+            RF_LOG_ERROR("File does not exist: %s (errno=%d: %s)",
                 shm_file_path_.c_str(), errno, strerror(errno));
-            RF_LOG_ERROR("  HOST MUST CREATE THIS FILE FIRST!");
             return;
         }
 
-        RF_LOG_DEBUG("Shared memory file exists, size=%lld bytes", (long long)st.st_size);
+        RF_LOG_DEBUG("File exists, size=%lld bytes", (long long)st.st_size);
 
-        // Open existing shared memory file (created by host)
+        // Open file
         int fd = open(shm_file_path_.c_str(), O_RDWR);
         if (fd == -1) {
-            RF_LOG_ERROR("Failed to open shared memory file: %s (errno=%d: %s)",
+            RF_LOG_ERROR("Failed to open: %s (errno=%d: %s)",
                 shm_file_path_.c_str(), errno, strerror(errno));
             return;
         }
 
-        RF_LOG_DEBUG("Successfully opened file descriptor: fd=%d", fd);
-
         size_t shm_size = rf_shared_audio_size(RING_CAPACITY_FRAMES);
-        RF_LOG_DEBUG("Expected shared memory size: %zu bytes", shm_size);
+        RF_LOG_DEBUG("Mapping %zu bytes...", shm_size);
 
         // Map memory
         void* mem = mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        int mmap_errno = errno;  // Save errno before close()
+        int mmap_errno = errno;
         close(fd);
 
         if (mem == MAP_FAILED) {
-            RF_LOG_ERROR("mmap() failed for file: %s (errno=%d: %s)",
+            RF_LOG_ERROR("mmap() failed: %s (errno=%d: %s)",
                 shm_file_path_.c_str(), mmap_errno, strerror(mmap_errno));
             return;
         }
 
         shared_memory_ = reinterpret_cast<RFSharedAudioV1*>(mem);
-        RF_LOG_INFO("SUCCESS: Shared memory opened and mapped at %p for device: %s",
-            mem, device_uid_.c_str());
+        RF_LOG_INFO("✓ Shared memory mapped at %p", mem);
+
+        // Log initial state
+        uint64_t write_idx = atomic_load(&shared_memory_->write_index);
+        uint64_t read_idx = atomic_load(&shared_memory_->read_index);
+        RF_LOG_INFO("Initial indices: write=%llu, read=%llu", write_idx, read_idx);
     }
 
     void Disconnect()
     {
         if (shared_memory_) {
+            RF_LOG_INFO("Disconnecting shared memory for device: %s", device_uid_.c_str());
             size_t shm_size = rf_shared_audio_size(RING_CAPACITY_FRAMES);
             munmap(shared_memory_, shm_size);
             shared_memory_ = nullptr;
         }
-        // Don't unlink - host owns the file
     }
 
+    // Member variables
     RFSharedAudioV1* shared_memory_;
     std::string device_uid_;
     std::string shm_file_path_;
+
+    // I/O client tracking (like eqMac)
+    std::atomic<int32_t> io_client_count_;
+    std::mutex io_mutex_;
+
+    // Device state
+    std::atomic<DeviceState> state_;
+
+    // Health monitoring
+    std::chrono::steady_clock::time_point last_health_check_;
+    mutable std::chrono::steady_clock::time_point last_write_check_time_;
+    mutable uint64_t last_write_index_check_;
+
+    // Statistics
+    AudioStats stats_;
 };
 
 // Global state for dynamic device management
@@ -291,10 +538,10 @@ std::shared_ptr<aspl::Device> CreateProxyDevice(
     const std::string& name,
     const std::string& uid)
 {
-    RF_LOG_INFO("CreateProxyDevice() called: name='%s', uid='%s'", name.c_str(), uid.c_str());
+    RF_LOG_INFO("CreateProxyDevice: name='%s', uid='%s'", name.c_str(), uid.c_str());
 
     if (!g_state) {
-        RF_LOG_ERROR("CreateProxyDevice() failed: g_state is NULL");
+        RF_LOG_ERROR("CreateProxyDevice failed: g_state is NULL");
         return nullptr;
     }
 
@@ -307,30 +554,17 @@ std::shared_ptr<aspl::Device> CreateProxyDevice(
     deviceParams.ChannelCount = CHANNEL_COUNT;
     deviceParams.EnableMixing = true;
 
-    RF_LOG_INFO("Creating device: name='%s', uid='%s', sampleRate=%u, channels=%u",
-        deviceParams.Name.c_str(), deviceParams.DeviceUID.c_str(),
-        SAMPLE_RATE, CHANNEL_COUNT);
-
-    // Note: Proxies are visible in Sound Settings
-    // This is intentional - auto-switching provides transparent UX
-    // Users can also manually select proxies if desired
-
     auto device = std::make_shared<aspl::Device>(g_state->context, deviceParams);
 
     // Add output stream
     device->AddStreamWithControlsAsync(aspl::Direction::Output);
 
-    // Set control and I/O handlers with device-specific shared memory
+    // Set handlers with device-specific shared memory
     auto handler = std::make_shared<RadioformHandler>(uid);
     device->SetControlHandler(handler);
     device->SetIOHandler(handler);
 
-    RF_LOG_INFO("Proxy device created successfully: '%s' -> '%s'",
-        name.c_str(), deviceParams.Name.c_str());
-
-    // TODO: Hide proxy device from Sound Settings UI
-    // device->SetIsHidden(true);
-    // Note: SetIsHidden prevents programmatic enumeration, need different approach
+    RF_LOG_INFO("✓ Proxy device created: '%s'", deviceParams.Name.c_str());
 
     return device;
 }
@@ -356,6 +590,8 @@ void AddDevice(const std::string& name, const std::string& uid)
     // Add to plugin
     g_state->plugin->AddDevice(device);
     g_state->devices[uid] = device;
+
+    RF_LOG_INFO("Device added to plugin: %s", uid.c_str());
 }
 
 // Remove a device from the plugin
@@ -372,6 +608,8 @@ void RemoveDevice(const std::string& uid)
 
     g_state->plugin->RemoveDevice(it->second);
     g_state->devices.erase(it);
+
+    RF_LOG_INFO("Device removed from plugin: %s", uid.c_str());
 }
 
 // Parse control file and return device map
@@ -379,11 +617,9 @@ std::map<std::string, std::string> ParseControlFile()
 {
     std::map<std::string, std::string> devices; // UID -> Name
 
-    RF_LOG_DEBUG("ParseControlFile() reading /tmp/radioform-devices.txt");
-
     std::ifstream file("/tmp/radioform-devices.txt");
     if (!file.is_open()) {
-        RF_LOG_ERROR("ParseControlFile() failed: could not open /tmp/radioform-devices.txt");
+        // Don't log error - file might not exist yet
         return devices;
     }
 
@@ -392,19 +628,15 @@ std::map<std::string, std::string> ParseControlFile()
         // Format: NAME|UID
         size_t separator = line.find('|');
         if (separator == std::string::npos) {
-            RF_LOG_DEBUG("ParseControlFile() skipping malformed line: %s", line.c_str());
             continue;
         }
 
         std::string name = line.substr(0, separator);
         std::string uid = line.substr(separator + 1);
         devices[uid] = name;
-        RF_LOG_DEBUG("ParseControlFile() found device: name='%s', uid='%s'",
-            name.c_str(), uid.c_str());
     }
 
     file.close();
-    RF_LOG_INFO("ParseControlFile() found %zu devices", devices.size());
     return devices;
 }
 
@@ -412,11 +644,8 @@ std::map<std::string, std::string> ParseControlFile()
 void SyncDevices()
 {
     if (!g_state) {
-        RF_LOG_ERROR("SyncDevices() failed: g_state is NULL");
         return;
     }
-
-    RF_LOG_DEBUG("SyncDevices() synchronizing devices with control file");
 
     // Read desired devices from control file
     auto desired_devices = ParseControlFile();
@@ -424,8 +653,7 @@ void SyncDevices()
     // Find devices to add
     for (const auto& [uid, name] : desired_devices) {
         if (g_state->devices.find(uid) == g_state->devices.end()) {
-            RF_LOG_INFO("SyncDevices() adding new device: name='%s', uid='%s'",
-                name.c_str(), uid.c_str());
+            RF_LOG_INFO("Adding device: '%s' (%s)", name.c_str(), uid.c_str());
             AddDevice(name, uid);
         }
     }
@@ -439,16 +667,16 @@ void SyncDevices()
     }
 
     for (const auto& uid : to_remove) {
-        RF_LOG_INFO("SyncDevices() removing device: uid='%s'", uid.c_str());
+        RF_LOG_INFO("Removing device: %s", uid.c_str());
         RemoveDevice(uid);
     }
-
-    RF_LOG_INFO("SyncDevices() complete: %zu devices active", g_state->devices.size());
 }
 
 // Background thread that monitors control file
 void MonitorControlFile()
 {
+    RF_LOG_INFO("Monitor thread started");
+
     while (!g_state->should_stop) {
         SyncDevices();
 
@@ -457,41 +685,35 @@ void MonitorControlFile()
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
-}
 
-// Read device list from control file and create proxies (initial load)
-void LoadDevicesFromControlFile()
-{
-    RF_LOG_INFO("LoadDevicesFromControlFile() performing initial device load");
-    SyncDevices();
-    RF_LOG_INFO("LoadDevicesFromControlFile() complete");
+    RF_LOG_INFO("Monitor thread stopped");
 }
 
 std::shared_ptr<aspl::Driver> CreateRadioformDriver()
 {
-    RF_LOG_INFO("===== RADIOFORM DRIVER STARTING =====");
-    RF_LOG_INFO("CreateRadioformDriver() initializing...");
+    RF_LOG_INFO("╔═══════════════════════════════════════╗");
+    RF_LOG_INFO("║   RADIOFORM DRIVER - PRODUCTION v2    ║");
+    RF_LOG_INFO("╚═══════════════════════════════════════╝");
 
     // Initialize global state
     g_state = new RadioformGlobalState();
     g_state->context = std::make_shared<aspl::Context>();
     g_state->plugin = std::make_shared<aspl::Plugin>(g_state->context);
 
-    RF_LOG_INFO("Driver context and plugin initialized");
+    RF_LOG_INFO("Context and plugin initialized");
 
-    // Load devices from control file (created by host)
-    RF_LOG_INFO("Loading devices from control file...");
-    LoadDevicesFromControlFile();
+    // Initial device load
+    SyncDevices();
 
-    // Start background thread to monitor control file for changes
-    RF_LOG_INFO("Starting monitor thread for device hot-plugging...");
+    // Start monitor thread
+    RF_LOG_INFO("Starting monitor thread...");
     g_state->monitor_thread = std::thread(MonitorControlFile);
 
     // Create driver
     g_state->driver = std::make_shared<aspl::Driver>(g_state->context, g_state->plugin);
 
-    RF_LOG_INFO("Radioform driver initialization complete - driver ready");
-    RF_LOG_INFO("=====================================");
+    RF_LOG_INFO("✓ Driver ready - %zu devices loaded", g_state->devices.size());
+    RF_LOG_INFO("Features: Client tracking, Health checks, Auto-recovery");
 
     return g_state->driver;
 }
@@ -504,12 +726,11 @@ extern "C" void* RadioformDriverPluginFactory(CFAllocatorRef allocator, CFUUIDRe
     RF_LOG_INFO("RadioformDriverPluginFactory() called");
 
     if (!CFEqual(typeUUID, kAudioServerPlugInTypeUUID)) {
-        RF_LOG_ERROR("RadioformDriverPluginFactory() wrong UUID - rejecting");
+        RF_LOG_ERROR("Wrong UUID - rejecting");
         return nullptr;
     }
 
     static std::shared_ptr<aspl::Driver> driver = CreateRadioformDriver();
 
-    RF_LOG_INFO("RadioformDriverPluginFactory() returning driver reference");
     return driver->GetReference();
 }

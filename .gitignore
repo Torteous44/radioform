@@ -1,9 +1,5 @@
 # Planning documents (internal)
-ROADMAP.md
-PHASE2_PLAN.md
-PHASE2_STATUS.md
-TESTING.md
-docs/ARCHITECTURE.md
+packages/driver/UNIVERSAL_DRIVER_GUIDE.md
 
 # macOS
 .DS_Store

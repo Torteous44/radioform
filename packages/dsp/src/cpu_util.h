@@ -8,6 +8,12 @@
 
 #include <cstdint>
 
+// Include platform-specific headers at file scope
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    #include <xmmintrin.h>  // SSE
+    #include <pmmintrin.h>  // SSE3 for DAZ
+#endif
+
 namespace radioform {
 
 /**
@@ -23,9 +29,6 @@ namespace radioform {
 inline void enable_denormal_suppression() {
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
     // x86/x86_64: Use SSE control register
-    #include <xmmintrin.h>  // SSE
-    #include <pmmintrin.h>  // SSE3 for DAZ
-
     // Flush-to-zero (FTZ): underflow results become zero
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 
@@ -56,9 +59,6 @@ inline void enable_denormal_suppression() {
  */
 inline void disable_denormal_suppression() {
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-    #include <xmmintrin.h>
-    #include <pmmintrin.h>
-
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_OFF);
     _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_OFF);
 

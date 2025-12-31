@@ -16,15 +16,17 @@ class PresetManager: ObservableObject {
     @Published var userPresets: [EQPreset] = []
     @Published var currentPreset: EQPreset?
     @Published var isEnabled: Bool = true
-    @Published var currentBands: [Float] = Array(repeating: 0, count: 10) // Current gain values for 10 bands
-    
+    @Published var currentBands: [Float] = Array(repeating: 0, count: 10)  // Current gain values for 10 bands
+
     // Custom preset state
     @Published var isCustomPreset: Bool = false
     @Published var isEditingPresetName: Bool = false
     @Published var isSavingPreset: Bool = false
 
     private let userPresetsURL: URL
-    private let standardFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+    private let standardFrequencies: [Float] = [
+        32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
+    ]
 
     private init() {
         // Get user presets directory
@@ -33,7 +35,8 @@ class PresetManager: ObservableObject {
             in: .userDomainMask
         ).first!
 
-        userPresetsURL = appSupport
+        userPresetsURL =
+            appSupport
             .appendingPathComponent("Radioform")
             .appendingPathComponent("Presets")
 
@@ -47,7 +50,7 @@ class PresetManager: ObservableObject {
 
         // Load current preset from IPC
         currentPreset = IPCController.shared.getCurrentPreset()
-        
+
         // If no preset is loaded, default to "Flat"
         if currentPreset == nil {
             if let flatPreset = bundledPresets.first(where: { $0.name == "Flat" }) {
@@ -65,7 +68,7 @@ class PresetManager: ObservableObject {
     /// Load bundled presets from app Resources
     private func loadBundledPresets() -> [EQPreset] {
         var presetsPath: String?
-        
+
         // Debug info
         print("[PresetManager] Looking for bundled presets...")
         print("[PresetManager] Bundle.main.resourcePath: \(Bundle.main.resourcePath ?? "nil")")
@@ -86,9 +89,10 @@ class PresetManager: ObservableObject {
         if presetsPath == nil {
             if let executablePath = Bundle.main.executablePath {
                 let executableDir = (executablePath as NSString).deletingLastPathComponent
-                
+
                 // For .build/debug/RadioformApp -> Sources/Resources/Presets
-                let debugPath = (executableDir as NSString).appendingPathComponent("../../Sources/Resources/Presets")
+                let debugPath = (executableDir as NSString).appendingPathComponent(
+                    "../../Sources/Resources/Presets")
                 let normalizedDebugPath = (debugPath as NSString).standardizingPath
                 print("[PresetManager] Trying debug path: \(normalizedDebugPath)")
                 if FileManager.default.fileExists(atPath: normalizedDebugPath) {
@@ -97,7 +101,7 @@ class PresetManager: ObservableObject {
                 }
             }
         }
-        
+
         // Try finding based on current working directory
         if presetsPath == nil {
             let cwd = FileManager.default.currentDirectoryPath
@@ -105,8 +109,10 @@ class PresetManager: ObservableObject {
                 "\(cwd)/Sources/Resources/Presets",
                 "\(cwd)/apps/mac/RadioformApp/Sources/Resources/Presets",
                 // Add home directory fallback for when launched from various locations
-                NSString(string: "~/radioform/apps/mac/RadioformApp/Sources/Resources/Presets").expandingTildeInPath,
-                NSString(string: "~/radioform/apps/mac/RadioformApp/Sources/Resources/Presets").expandingTildeInPath
+                NSString(string: "~/radioform/apps/mac/RadioformApp/Sources/Resources/Presets")
+                    .expandingTildeInPath,
+                NSString(string: "~/radioform/apps/mac/RadioformApp/Sources/Resources/Presets")
+                    .expandingTildeInPath,
             ]
             for path in possiblePaths {
                 print("[PresetManager] Trying CWD path: \(path)")
@@ -122,7 +128,7 @@ class PresetManager: ObservableObject {
             print("[PresetManager] ✗ Presets directory not found anywhere!")
             return []
         }
-        
+
         print("[PresetManager] Loading presets from: \(finalPath)")
 
         let fileManager = FileManager.default
@@ -130,11 +136,12 @@ class PresetManager: ObservableObject {
             print("[PresetManager] ✗ Failed to read presets directory")
             return []
         }
-        
+
         let jsonFiles = files.filter { $0.hasSuffix(".json") }
         print("[PresetManager] Found \(jsonFiles.count) JSON files: \(jsonFiles)")
 
-        let presets = jsonFiles
+        let presets =
+            jsonFiles
             .compactMap { filename -> EQPreset? in
                 let url = URL(fileURLWithPath: finalPath).appendingPathComponent(filename)
                 do {
@@ -145,28 +152,32 @@ class PresetManager: ObservableObject {
                 }
             }
             .sorted { $0.name < $1.name }
-        
-        print("[PresetManager] ✓ Loaded \(presets.count) bundled presets: \(presets.map { $0.name })")
+
+        print(
+            "[PresetManager] ✓ Loaded \(presets.count) bundled presets: \(presets.map { $0.name })")
         return presets
     }
 
     /// Load user presets from Application Support
     private func loadUserPresets() -> [EQPreset] {
         print("[PresetManager] Loading user presets from: \(userPresetsURL.path)")
-        
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: userPresetsURL,
-            includingPropertiesForKeys: nil
-        ) else {
+
+        guard
+            let files = try? FileManager.default.contentsOfDirectory(
+                at: userPresetsURL,
+                includingPropertiesForKeys: nil
+            )
+        else {
             print("[PresetManager] No user presets directory or empty")
             return []
         }
 
-        let presets = files
+        let presets =
+            files
             .filter { $0.pathExtension == "json" }
             .compactMap { try? loadPreset(from: $0) }
             .sorted { $0.name < $1.name }
-        
+
         print("[PresetManager] ✓ Loaded \(presets.count) user presets: \(presets.map { $0.name })")
         return presets
     }
@@ -286,26 +297,28 @@ class PresetManager: ObservableObject {
                 var sweeteningBands: [EQBand] = []
 
                 // Warmth: Low shelf at 80Hz (+1.2dB)
-                sweeteningBands.append(EQBand(
-                    frequencyHz: 80,
-                    gainDb: 1.2,
-                    qFactor: 0.707,
-                    filterType: .lowShelf,
-                    enabled: true
-                ))
+                sweeteningBands.append(
+                    EQBand(
+                        frequencyHz: 80,
+                        gainDb: 1.2,
+                        qFactor: 0.707,
+                        filterType: .lowShelf,
+                        enabled: true
+                    ))
 
                 // Air: High shelf at 12kHz (+1.8dB)
-                sweeteningBands.append(EQBand(
-                    frequencyHz: 12000,
-                    gainDb: 1.8,
-                    qFactor: 0.707,
-                    filterType: .highShelf,
-                    enabled: true
-                ))
+                sweeteningBands.append(
+                    EQBand(
+                        frequencyHz: 12000,
+                        gainDb: 1.8,
+                        qFactor: 0.707,
+                        filterType: .highShelf,
+                        enabled: true
+                    ))
 
                 // Combine sweetening + original preset bands (limit to 10 total)
                 modifiedPreset.bands = (sweeteningBands + preset.bands).prefix(10).map { $0 }
-                modifiedPreset.preampDb += 2.5  // Add +2.5dB preamp sweetening
+                modifiedPreset.preampDb += 1.25  // Add +2.5dB preamp sweetening
             }
 
             try IPCController.shared.applyPreset(modifiedPreset)
@@ -345,22 +358,24 @@ class PresetManager: ObservableObject {
         // Add invisible sweetening bands when enabled (applied first in processing chain)
         if isEnabled {
             // Warmth: Low shelf at 80Hz (+1.2dB)
-            bands.append(EQBand(
-                frequencyHz: 80,
-                gainDb: 1.2,
-                qFactor: 0.707,  // Butterworth Q for smooth shelf
-                filterType: .lowShelf,
-                enabled: true
-            ))
+            bands.append(
+                EQBand(
+                    frequencyHz: 80,
+                    gainDb: 1.2,
+                    qFactor: 0.707,  // Butterworth Q for smooth shelf
+                    filterType: .lowShelf,
+                    enabled: true
+                ))
 
             // Air: High shelf at 12kHz (+1.8dB)
-            bands.append(EQBand(
-                frequencyHz: 12000,
-                gainDb: 1.8,
-                qFactor: 0.707,
-                filterType: .highShelf,
-                enabled: true
-            ))
+            bands.append(
+                EQBand(
+                    frequencyHz: 12000,
+                    gainDb: 1.8,
+                    qFactor: 0.707,
+                    filterType: .highShelf,
+                    enabled: true
+                ))
         }
 
         // Add user's visible EQ bands (only first 8 to stay within 10-band limit)
@@ -379,7 +394,7 @@ class PresetManager: ObservableObject {
         let customPreset = EQPreset(
             name: "Custom",
             bands: bands,
-            preampDb: isEnabled ? 2.5 : 0.0,  // +2.5dB sweetening when enabled
+            preampDb: isEnabled ? 1.25 : 0.0,  // +2.5dB sweetening when enabled
             limiterEnabled: true,
             limiterThresholdDb: -1.0
         )
@@ -400,59 +415,59 @@ class PresetManager: ObservableObject {
         isEnabled.toggle()
         applyCurrentState()
     }
-    
+
     // MARK: - Custom Preset Management
-    
+
     /// Validate preset name for saving
     func validatePresetName(_ name: String) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        
+
         // Check not empty
         guard !trimmed.isEmpty else { return false }
-        
+
         // Check not too long
         guard trimmed.count <= 64 else { return false }
-        
+
         // Check not reserved name
         guard trimmed != Self.customPresetName else { return false }
-        
+
         return true
     }
-    
+
     /// Generate a unique preset name by appending numbers if needed
     func generateUniqueName(_ baseName: String) -> String {
         let allPresetNames = Set((bundledPresets + userPresets).map { $0.name })
-        
+
         // If name doesn't exist, return as-is
         if !allPresetNames.contains(baseName) {
             return baseName
         }
-        
+
         // Find next available number
         var counter = 2
         var candidateName = "\(baseName) \(counter)"
-        
+
         while allPresetNames.contains(candidateName) {
             counter += 1
             candidateName = "\(baseName) \(counter)"
         }
-        
+
         return candidateName
     }
-    
+
     /// Save current EQ state as a custom preset
     @MainActor
     func saveCustomPreset(name: String) async throws {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
-        
+
         // Validate
         guard validatePresetName(trimmedName) else {
             throw PresetError.invalidPreset
         }
-        
+
         // Generate unique name if needed
         let finalName = generateUniqueName(trimmedName)
-        
+
         // Build preset from current bands
         let bands: [EQBand] = standardFrequencies.enumerated().map { index, frequency in
             let gain = currentBands[index]
@@ -464,7 +479,7 @@ class PresetManager: ObservableObject {
                 enabled: abs(gain) > 0.01
             )
         }
-        
+
         let newPreset = EQPreset(
             name: finalName,
             bands: bands,
@@ -472,16 +487,16 @@ class PresetManager: ObservableObject {
             limiterEnabled: true,
             limiterThresholdDb: -1.0
         )
-        
+
         // Save to disk
         try savePreset(newPreset)
-        
+
         // Set as current preset
         currentPreset = newPreset
         isCustomPreset = false
         isEditingPresetName = false
     }
-    
+
     /// Cancel editing mode
     func cancelEditing() {
         isEditingPresetName = false

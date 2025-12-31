@@ -280,8 +280,32 @@ class PresetManager: ObservableObject {
         do {
             // Create a modified preset with sweetening boost when enabled
             var modifiedPreset = preset
+
             if isEnabled {
-                modifiedPreset.preampDb += 2.5  // Add +2.5dB sweetening
+                // Add invisible sweetening bands at the beginning
+                var sweeteningBands: [EQBand] = []
+
+                // Warmth: Low shelf at 80Hz (+1.2dB)
+                sweeteningBands.append(EQBand(
+                    frequencyHz: 80,
+                    gainDb: 1.2,
+                    qFactor: 0.707,
+                    filterType: .lowShelf,
+                    enabled: true
+                ))
+
+                // Air: High shelf at 12kHz (+1.8dB)
+                sweeteningBands.append(EQBand(
+                    frequencyHz: 12000,
+                    gainDb: 1.8,
+                    qFactor: 0.707,
+                    filterType: .highShelf,
+                    enabled: true
+                ))
+
+                // Combine sweetening + original preset bands (limit to 10 total)
+                modifiedPreset.bands = (sweeteningBands + preset.bands).prefix(10).map { $0 }
+                modifiedPreset.preampDb += 2.5  // Add +2.5dB preamp sweetening
             }
 
             try IPCController.shared.applyPreset(modifiedPreset)
@@ -316,7 +340,31 @@ class PresetManager: ObservableObject {
 
     /// Apply current state (either enabled with current bands, or disabled with all zeros)
     func applyCurrentState() {
-        let bands: [EQBand] = standardFrequencies.enumerated().map { index, frequency in
+        var bands: [EQBand] = []
+
+        // Add invisible sweetening bands when enabled (applied first in processing chain)
+        if isEnabled {
+            // Warmth: Low shelf at 80Hz (+1.2dB)
+            bands.append(EQBand(
+                frequencyHz: 80,
+                gainDb: 1.2,
+                qFactor: 0.707,  // Butterworth Q for smooth shelf
+                filterType: .lowShelf,
+                enabled: true
+            ))
+
+            // Air: High shelf at 12kHz (+1.8dB)
+            bands.append(EQBand(
+                frequencyHz: 12000,
+                gainDb: 1.8,
+                qFactor: 0.707,
+                filterType: .highShelf,
+                enabled: true
+            ))
+        }
+
+        // Add user's visible EQ bands (only first 8 to stay within 10-band limit)
+        let userBands = standardFrequencies.prefix(8).enumerated().map { index, frequency in
             let gain = isEnabled ? currentBands[index] : 0.0
             return EQBand(
                 frequencyHz: frequency,
@@ -326,6 +374,7 @@ class PresetManager: ObservableObject {
                 enabled: abs(gain) > 0.01
             )
         }
+        bands.append(contentsOf: userBands)
 
         let customPreset = EQPreset(
             name: "Custom",

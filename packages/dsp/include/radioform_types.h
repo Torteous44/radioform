@@ -79,6 +79,8 @@ typedef struct {
     float cpu_load_percent;         // Estimated CPU load (0.0 - 100.0)
     bool bypass_active;             // Currently in bypass mode
     uint32_t sample_rate;           // Current sample rate
+    float peak_left_db;             // Current peak level left channel (dBFS)
+    float peak_right_db;            // Current peak level right channel (dBFS)
 } radioform_stats_t;
 
 #ifdef __cplusplus

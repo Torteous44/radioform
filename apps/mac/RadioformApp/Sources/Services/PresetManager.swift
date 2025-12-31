@@ -190,7 +190,7 @@ class PresetManager: ObservableObject {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(preset)
-        try data.write(to: url)
+        try data.write(to: url, options: .atomic)
 
         loadAllPresets()
     }
@@ -204,29 +204,102 @@ class PresetManager: ObservableObject {
         loadAllPresets()
     }
 
+    /// Map preset bands to standard 10-band UI frequencies
+    /// Returns: (mapped band values, warning messages)
+    private func mapPresetToStandardBands(_ preset: EQPreset) -> ([Float], [String]) {
+        var mappedBands: [Float] = Array(repeating: 0, count: 10)
+        var warnings: [String] = []
+        var usedBandIndices = Set<Int>()
+
+        // Use logarithmic distance for frequency matching (more accurate for audio)
+        func logDistance(_ f1: Float, _ f2: Float) -> Float {
+            return abs(log10(f1) - log10(f2))
+        }
+
+        // Only consider enabled bands
+        let enabledBands = preset.bands.enumerated().filter { $0.element.enabled }
+
+        // For each standard frequency, find best matching preset band
+        for i in 0..<10 {
+            let targetFreq = standardFrequencies[i]
+
+            // Find closest unused band
+            var bestMatch: (index: Int, band: EQBand, distance: Float)?
+
+            for (presetIdx, band) in enabledBands {
+                // Skip if this band was already used
+                if usedBandIndices.contains(presetIdx) {
+                    continue
+                }
+
+                let distance = logDistance(band.frequencyHz, targetFreq)
+
+                if bestMatch == nil || distance < bestMatch!.distance {
+                    bestMatch = (presetIdx, band, distance)
+                }
+            }
+
+            // Apply match if found and within reasonable tolerance
+            if let match = bestMatch {
+                // Tolerance: 1 octave = log distance of 0.301 (log10(2))
+                // Use 0.5 octaves as max tolerance (more permissive than before)
+                let maxToleranceOctaves: Float = 0.5
+                let maxLogDistance = maxToleranceOctaves * log10(2)
+
+                if match.distance <= maxLogDistance {
+                    mappedBands[i] = match.band.gainDb
+                    usedBandIndices.insert(match.index)
+                } else {
+                    // Band exists but too far away
+                    let octaveDiff = match.distance / log10(2)
+                    warnings.append(
+                        "Band at \(Int(match.band.frequencyHz))Hz is \(String(format: "%.1f", octaveDiff)) octaves from \(Int(targetFreq))Hz slider - setting to 0dB"
+                    )
+                    mappedBands[i] = 0
+                }
+            } else {
+                // No band available for this frequency
+                mappedBands[i] = 0
+            }
+        }
+
+        // Check for unmapped preset bands
+        for (presetIdx, band) in enabledBands {
+            if !usedBandIndices.contains(presetIdx) {
+                warnings.append(
+                    "Band at \(Int(band.frequencyHz))Hz (\(String(format: "%.1f", band.gainDb))dB) has no matching slider - ignored"
+                )
+            }
+        }
+
+        return (mappedBands, warnings)
+    }
+
     /// Apply preset via IPC
     func applyPreset(_ preset: EQPreset) {
         do {
-            try IPCController.shared.applyPreset(preset)
-            currentPreset = preset
-            
+            // Create a modified preset with sweetening boost when enabled
+            var modifiedPreset = preset
+            if isEnabled {
+                modifiedPreset.preampDb += 2.5  // Add +2.5dB sweetening
+            }
+
+            try IPCController.shared.applyPreset(modifiedPreset)
+            currentPreset = preset  // Store original preset without boost
+
             // Reset custom preset state
             isCustomPreset = false
             isEditingPresetName = false
 
-            // Update currentBands from preset
-            for i in 0..<10 {
-                let targetFreq = standardFrequencies[i]
-                if let closestBand = preset.bands
-                    .filter({ $0.enabled })
-                    .min(by: { abs($0.frequencyHz - targetFreq) < abs($1.frequencyHz - targetFreq) }) {
-                    if abs(closestBand.frequencyHz - targetFreq) < targetFreq * 0.7 {
-                        currentBands[i] = closestBand.gainDb
-                    } else {
-                        currentBands[i] = 0
-                    }
-                } else {
-                    currentBands[i] = 0
+            // Update currentBands from preset with improved mapping
+            let (mappedBands, warnings) = mapPresetToStandardBands(preset)
+            currentBands = mappedBands
+
+            // Log any mapping issues
+            if !warnings.isEmpty {
+                print("[PresetManager] Preset '\(preset.name)' mapping warnings:")
+                for warning in warnings {
+                    print("  - \(warning)")
                 }
             }
         } catch {
@@ -257,7 +330,7 @@ class PresetManager: ObservableObject {
         let customPreset = EQPreset(
             name: "Custom",
             bands: bands,
-            preampDb: 0.0,
+            preampDb: isEnabled ? 2.5 : 0.0,  // +2.5dB sweetening when enabled
             limiterEnabled: true,
             limiterThresholdDb: -1.0
         )

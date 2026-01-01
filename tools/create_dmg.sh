@@ -6,8 +6,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 APP_BUNDLE="$PROJECT_ROOT/dist/Radioform.app"
-VERSION="${1:-1.0.0}"
-DMG_NAME="Radioform-${VERSION}.dmg"
+DMG_NAME="Radioform.dmg"
 DMG_PATH="$PROJECT_ROOT/dist/${DMG_NAME}"
 
 # Colors

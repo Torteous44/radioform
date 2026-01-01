@@ -34,18 +34,18 @@ echo "📁 Creating temporary DMG staging directory..."
 mkdir -p "$PROJECT_ROOT/dist/dmg_temp"
 
 # Copy app bundle
-echo "📦 Copying Radioform.app..."
+echo " Copying Radioform.app..."
 cp -R "$APP_BUNDLE" "$PROJECT_ROOT/dist/dmg_temp/Radioform.app"
 
 # Create Applications symlink
-echo "🔗 Creating Applications symlink..."
+echo " Creating Applications symlink..."
 ln -s /Applications "$PROJECT_ROOT/dist/dmg_temp/Applications"
 
 # Remove any existing DMG
 rm -f "$DMG_PATH"
 
 # Create DMG
-echo "💿 Creating DMG..."
+echo " Creating DMG..."
 hdiutil create \
     -volname "Radioform" \
     -srcfolder "$PROJECT_ROOT/dist/dmg_temp" \
@@ -55,11 +55,11 @@ hdiutil create \
     "$DMG_PATH"
 
 # Clean up temp directory
-echo "🧹 Cleaning up..."
+echo " Cleaning up..."
 rm -rf "$PROJECT_ROOT/dist/dmg_temp"
 
 echo ""
-echo -e "${GREEN}✅ DMG created successfully!${NC}"
+echo -e "${GREEN} DMG created successfully!${NC}"
 echo ""
 echo "Location: $DMG_PATH"
 echo "Size: $(du -h "$DMG_PATH" | cut -f1)"

@@ -4,6 +4,14 @@ import AudioToolbox
 import CRadioformAudio
 import CRadioformDSP
 
+// MARK: - V2 Configuration
+
+// V2 Protocol defaults
+let DEFAULT_SAMPLE_RATE: UInt32 = 48000
+let DEFAULT_CHANNELS: UInt32 = 2
+let DEFAULT_FORMAT = RF_FORMAT_FLOAT32
+let DEFAULT_DURATION_MS: UInt32 = 40  // 40ms buffer
+
 // MARK: - Device Discovery
 
 struct PhysicalDevice {
@@ -202,7 +210,6 @@ func transportTypeName(_ type: UInt32) -> String {
     case kAudioDeviceTransportTypeThunderbolt:
         return "Thunderbolt"
     default:
-        // Show both ASCII (if printable) and hex for unknown types
         let chars = [
             UInt8((type >> 24) & 0xFF),
             UInt8((type >> 16) & 0xFF),
@@ -255,15 +262,13 @@ let deviceListChangedCallback: AudioObjectPropertyListenerProc = { (
     // Handle added devices
     for device in addedDevices {
         print("Device added: \(device.name) (\(transportTypeName(device.transportType)))")
-        // Create shared memory for new device
-        _ = createDeviceSharedMemory(uid: device.uid)
+        _ = createDeviceSharedMemoryV2(uid: device.uid)
     }
 
     // Handle removed devices
     for device in removedDevices {
         print("Device removed: \(device.name) (\(transportTypeName(device.transportType)))")
-        // Remove shared memory
-        removeDeviceSharedMemory(uid: device.uid)
+        removeDeviceSharedMemoryV2(uid: device.uid)
     }
 
     // Update registry and control file
@@ -631,14 +636,31 @@ func registerDeviceListeners() {
     )
 }
 
-// MARK: - Proxy Management
+// MARK: - Proxy Management (V2)
 
 let CONTROL_FILE_PATH = "/tmp/radioform-devices.txt"
 let PRESET_FILE_PATH = "/tmp/radioform-preset.json"
-let RING_CAPACITY_FRAMES: UInt32 = 1440
 
-// Map of device UID -> shared memory pointer
-var deviceSharedMemory: [String: UnsafeMutablePointer<RFSharedAudioV1>] = [:]
+// Map of device UID -> V2 shared memory pointer
+var deviceSharedMemoryV2: [String: UnsafeMutablePointer<RFSharedAudioV2>] = [:]
+
+// Heartbeat management
+var heartbeatTimer: DispatchSourceTimer?
+
+// Start heartbeat for all devices
+func startHeartbeat() {
+    heartbeatTimer = DispatchSource.makeTimerSource(queue: .global())
+    heartbeatTimer?.schedule(deadline: .now(), repeating: 1.0)  // Every second
+
+    heartbeatTimer?.setEventHandler {
+        for (_, mem) in deviceSharedMemoryV2 {
+            rf_update_host_heartbeat(mem)
+        }
+    }
+
+    heartbeatTimer?.resume()
+    print("[Heartbeat] Started - updating every second")
+}
 
 // MARK: - Preset Management
 
@@ -674,7 +696,7 @@ struct BandJSON: Codable {
     }
 }
 
-// Add file monitoring (reuse device pattern)
+// Add file monitoring
 func monitorPresetFile() {
     let queue = DispatchQueue(label: "com.radioform.preset-monitor")
 
@@ -691,7 +713,7 @@ func monitorPresetFile() {
                 }
             }
 
-            Thread.sleep(forTimeInterval: 0.5) // Check every 500ms
+            Thread.sleep(forTimeInterval: 0.5)
         }
     }
 }
@@ -707,17 +729,17 @@ func loadAndApplyPreset() {
 
         preset.num_bands = UInt32(min(presetJSON.bands.count, 10))
 
-        // Copy name (strncpy equivalent in Swift)
+        // Copy name
         let nameBytes = Array(presetJSON.name.utf8.prefix(63))
         withUnsafeMutableBytes(of: &preset.name) { ptr in
             let buffer = ptr.baseAddress!.assumingMemoryBound(to: CChar.self)
             for (i, byte) in nameBytes.enumerated() {
                 buffer[i] = CChar(bitPattern: byte)
             }
-            buffer[min(nameBytes.count, 63)] = 0  // Null terminator
+            buffer[min(nameBytes.count, 63)] = 0
         }
 
-        // Copy bands (use withUnsafeMutablePointer for tuple access)
+        // Copy bands
         for (i, band) in presetJSON.bands.prefix(10).enumerated() {
             withUnsafeMutablePointer(to: &preset.bands) { bandsPtr in
                 let bandPtr = UnsafeMutableRawPointer(bandsPtr)
@@ -760,98 +782,103 @@ func writeControlFile(_ devices: [PhysicalDevice]) {
     }
 }
 
-// Create shared memory for a specific device
-func createDeviceSharedMemory(uid: String) -> Bool {
-    print("[RadioformHost INFO] createDeviceSharedMemory() called for uid: \(uid)")
+// Create V2 shared memory for a specific device
+func createDeviceSharedMemoryV2(uid: String) -> Bool {
+    print("[RadioformHost V2] Creating shared memory for: \(uid)")
 
-    // Sanitize UID for filename (replace : / space with _)
+    // Sanitize UID for filename
     let safeUID = uid.replacingOccurrences(of: ":", with: "_")
                      .replacingOccurrences(of: "/", with: "_")
                      .replacingOccurrences(of: " ", with: "_")
 
     let shmPath = "/tmp/radioform-\(safeUID)"
-    print("[RadioformHost INFO] Creating shared memory file: \(shmPath)")
+    print("[RadioformHost V2] File: \(shmPath)")
 
     // Remove any existing file
     unlink(shmPath)
 
-    // Create new shared memory file with world read/write permissions
+    // Create new shared memory file
     let fd = open(shmPath, O_CREAT | O_RDWR, 0666)
     guard fd >= 0 else {
-        print("[RadioformHost ERROR] FAILED to create shared memory file: \(shmPath)")
-        print("[RadioformHost ERROR] Error: \(String(cString: strerror(errno)))")
+        print("[RadioformHost V2] ERROR: Failed to create file: \(String(cString: strerror(errno)))")
         return false
     }
 
-    print("[RadioformHost DEBUG] File created successfully, fd=\(fd)")
-
-    // Explicitly set permissions
     fchmod(fd, 0o666)
 
-    let shmSize = rf_shared_audio_size(RING_CAPACITY_FRAMES)
-    print("[RadioformHost DEBUG] Shared memory size: \(shmSize) bytes")
+    // Calculate size for V2 protocol
+    let frames = rf_frames_for_duration(DEFAULT_SAMPLE_RATE, DEFAULT_DURATION_MS)
+    let bytesPerSample = rf_bytes_per_sample(DEFAULT_FORMAT)
+    let shmSize = rf_shared_audio_v2_size(frames, DEFAULT_CHANNELS, bytesPerSample)
+
+    print("[RadioformHost V2] Size: \(shmSize) bytes (\(frames) frames @ \(DEFAULT_SAMPLE_RATE)Hz)")
 
     // Set size
     guard ftruncate(fd, Int64(shmSize)) == 0 else {
-        print("[RadioformHost ERROR] Failed to set file size for \(shmPath)")
-        print("[RadioformHost ERROR] Error: \(String(cString: strerror(errno)))")
+        print("[RadioformHost V2] ERROR: Failed to set size: \(String(cString: strerror(errno)))")
         close(fd)
         return false
     }
-
-    print("[RadioformHost DEBUG] File size set successfully")
 
     // Map memory
     let mem = mmap(nil, shmSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
     close(fd)
 
     guard mem != MAP_FAILED else {
-        print("[RadioformHost ERROR] Failed to mmap shared memory for \(shmPath)")
-        print("[RadioformHost ERROR] Error: \(String(cString: strerror(errno)))")
+        print("[RadioformHost V2] ERROR: mmap failed: \(String(cString: strerror(errno)))")
         return false
     }
 
-    print("[RadioformHost DEBUG] Memory mapped at: \(mem!)")
+    let sharedMem = mem!.assumingMemoryBound(to: RFSharedAudioV2.self)
 
-    let sharedMem = mem!.assumingMemoryBound(to: RFSharedAudioV1.self)
-
-    // Initialize the shared memory structure
-    rf_shared_audio_init(sharedMem, RING_CAPACITY_FRAMES)
+    // Initialize V2 structure
+    rf_shared_audio_v2_init(
+        sharedMem,
+        DEFAULT_SAMPLE_RATE,
+        DEFAULT_CHANNELS,
+        DEFAULT_FORMAT,
+        DEFAULT_DURATION_MS
+    )
 
     // Store in map
-    deviceSharedMemory[uid] = sharedMem
+    deviceSharedMemoryV2[uid] = sharedMem
 
-    print("[RadioformHost INFO] SUCCESS: Shared memory created for device: \(uid)")
-    print("[RadioformHost INFO]   File: \(shmPath)")
-    print("[RadioformHost INFO]   Size: \(shmSize) bytes")
-    print("[RadioformHost INFO]   Driver can now access this file")
+    print("[RadioformHost V2] ✓ SUCCESS")
+    print("[RadioformHost V2]   Protocol: V2")
+    print("[RadioformHost V2]   Format: \(DEFAULT_SAMPLE_RATE)Hz, \(DEFAULT_CHANNELS)ch, float32")
+    print("[RadioformHost V2]   Buffer: \(DEFAULT_DURATION_MS)ms (\(frames) frames)")
+    print("[RadioformHost V2]   Capabilities: Multi-rate, Multi-format, Heartbeat")
 
     return true
 }
 
-// Create shared memory for all devices
-func createAllDeviceSharedMemory(_ devices: [PhysicalDevice]) {
-    print("[RadioformHost INFO] createAllDeviceSharedMemory() creating shared memory for \(devices.count) devices")
+// Create V2 shared memory for all devices
+func createAllDeviceSharedMemoryV2(_ devices: [PhysicalDevice]) {
+    print("[RadioformHost V2] Creating shared memory for \(devices.count) devices")
 
     for device in devices {
-        let success = createDeviceSharedMemory(uid: device.uid)
-        if success {
-            print("[RadioformHost INFO] ✓ Created shared memory for: \(device.name) (\(device.uid))")
+        if createDeviceSharedMemoryV2(uid: device.uid) {
+            print("[RadioformHost V2] ✓ \(device.name)")
         } else {
-            print("[RadioformHost ERROR] ✗ Failed to create shared memory for: \(device.name) (\(device.uid))")
+            print("[RadioformHost V2] ✗ \(device.name)")
         }
     }
 
-    print("[RadioformHost INFO] Shared memory creation complete for all devices")
+    print("[RadioformHost V2] Complete")
 }
 
-// Remove shared memory for a device
-func removeDeviceSharedMemory(uid: String) {
-    guard let sharedMem = deviceSharedMemory[uid] else { return }
+// Remove V2 shared memory for a device
+func removeDeviceSharedMemoryV2(uid: String) {
+    guard let sharedMem = deviceSharedMemoryV2[uid] else { return }
 
-    let shmSize = rf_shared_audio_size(RING_CAPACITY_FRAMES)
+    let shmSize = rf_shared_audio_v2_size(
+        sharedMem.pointee.ring_capacity_frames,
+        sharedMem.pointee.channels,
+        sharedMem.pointee.bytes_per_sample
+    )
+
     munmap(sharedMem, shmSize)
-    deviceSharedMemory.removeValue(forKey: uid)
+    deviceSharedMemoryV2.removeValue(forKey: uid)
 
     // Remove file
     let safeUID = uid.replacingOccurrences(of: ":", with: "_")
@@ -861,58 +888,9 @@ func removeDeviceSharedMemory(uid: String) {
     unlink(shmPath)
 }
 
-// Trigger driver to reload (requires coreaudiod restart)
+// Trigger driver to reload
 func reloadDriver() {
     print("Driver reload required - restart coreaudiod with: sudo killall coreaudiod")
-}
-
-// MARK: - Shared Memory
-
-// Legacy shared memory path (for backward compatibility)
-let SHM_FILE_PATH = "/tmp/radioform-audio-v1"
-
-// Global shared memory pointer (for backward compatibility)
-var sharedMemory: UnsafeMutablePointer<RFSharedAudioV1>?
-
-// Create shared memory file (host creates, driver opens)
-func createSharedMemory() -> Bool {
-    // Remove any existing file
-    unlink(SHM_FILE_PATH)
-
-    // Create new shared memory file with world read/write permissions
-    let fd = open(SHM_FILE_PATH, O_CREAT | O_RDWR, 0666)
-    guard fd >= 0 else {
-        print("Failed to create shared memory file: \(String(cString: strerror(errno)))")
-        return false
-    }
-
-    // Explicitly set permissions (umask may interfere)
-    fchmod(fd, 0o666)
-
-    let shmSize = rf_shared_audio_size(RING_CAPACITY_FRAMES)
-
-    // Set size
-    guard ftruncate(fd, Int64(shmSize)) == 0 else {
-        print("Failed to set file size: \(String(cString: strerror(errno)))")
-        close(fd)
-        return false
-    }
-
-    // Map memory
-    let mem = mmap(nil, shmSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
-    close(fd)
-
-    guard mem != MAP_FAILED else {
-        print("Failed to map shared memory: \(String(cString: strerror(errno)))")
-        return false
-    }
-
-    sharedMemory = mem!.assumingMemoryBound(to: RFSharedAudioV1.self)
-
-    // Initialize the shared memory structure
-    rf_shared_audio_init(sharedMemory, RING_CAPACITY_FRAMES)
-
-    return true
 }
 
 // Find first physical output device
@@ -978,7 +956,7 @@ func findPhysicalDevice() -> AudioDeviceID {
     return 0
 }
 
-// Audio render callback - reads from ring buffer, applies EQ, outputs to device
+// Audio render callback - reads from V2 ring buffer
 let renderCallback: AURenderCallback = { (
     inRefCon,
     ioActionFlags,
@@ -990,13 +968,13 @@ let renderCallback: AURenderCallback = { (
 
     guard let bufferList = ioData else { return noErr }
 
-    // Get shared memory for active proxy device
-    let sharedMem: UnsafeMutablePointer<RFSharedAudioV1>?
+    // Get V2 shared memory for active proxy device
+    let sharedMem: UnsafeMutablePointer<RFSharedAudioV2>?
     if let activeUID = activeProxyUID {
-        sharedMem = deviceSharedMemory[activeUID]
+        sharedMem = deviceSharedMemoryV2[activeUID]
     } else {
-        // Fallback to legacy single device
-        sharedMem = sharedMemory
+        // Use first device if no active proxy
+        sharedMem = deviceSharedMemoryV2.values.first
     }
 
     guard let mem = sharedMem else {
@@ -1010,16 +988,16 @@ let renderCallback: AURenderCallback = { (
         return noErr
     }
 
-    // Read interleaved audio from ring buffer
+    // Read interleaved audio from V2 ring buffer (always outputs float32)
     var tempBuffer = [Float](repeating: 0, count: Int(inNumberFrames) * 2)
-    let framesRead = rf_ring_read(mem, &tempBuffer, inNumberFrames)
+    let framesRead = rf_ring_read_v2(mem, &tempBuffer, inNumberFrames)
 
     // Apply EQ processing if engine is available
     if let engine = dspEngine {
         radioform_dsp_process_interleaved(engine, tempBuffer, &tempBuffer, inNumberFrames)
     }
 
-    // Deinterleave to output buffers (left/right channels)
+    // Deinterleave to output buffers
     let leftBuffer = bufferList.pointee.mBuffers.mData!.assumingMemoryBound(to: Float.self)
     let rightBuffer = UnsafeMutableAudioBufferListPointer(bufferList)[1].mData!.assumingMemoryBound(to: Float.self)
 
@@ -1038,55 +1016,52 @@ let renderCallback: AURenderCallback = { (
 }
 
 // Main
-print("[RadioformHost INFO] ===== RADIOFORM HOST STARTING =====")
+print("╔════════════════════════════════════════════════════╗")
+print("║   RADIOFORM HOST V2 - UNIVERSAL AUDIO DRIVER      ║")
+print("╚════════════════════════════════════════════════════╝")
 
 // 1. Discover physical devices
-print("[RadioformHost INFO] Step 1: Discovering physical audio devices...")
+print("[Step 1] Discovering physical audio devices...")
 deviceRegistry = enumeratePhysicalDevices()
 
 if deviceRegistry.isEmpty {
-    print("[RadioformHost ERROR] No physical output devices found")
+    print("[ERROR] No physical output devices found")
+    exit(1)
 } else {
-    print("[RadioformHost INFO] Found \(deviceRegistry.count) physical output device(s):")
+    print("[✓] Found \(deviceRegistry.count) physical output device(s)")
     for device in deviceRegistry {
-        print("[RadioformHost INFO]   - \(device.name) (\(device.uid))")
+        print("    - \(device.name) (\(device.uid))")
     }
 }
 
 // Register listeners for device changes
-print("[RadioformHost INFO] Registering device change listeners...")
+print("[Step 2] Registering device change listeners...")
 registerDeviceListeners()
 
-// 2. Create proxy infrastructure
-// CRITICAL: Must create shared memory files BEFORE writing control file
-// to avoid race condition with driver loading!
-print("[RadioformHost INFO] Step 2: Creating shared memory files (BEFORE control file)...")
-createAllDeviceSharedMemory(deviceRegistry)
+// 2. Create V2 proxy infrastructure
+print("[Step 3] Creating V2 shared memory files...")
+createAllDeviceSharedMemoryV2(deviceRegistry)
 
-print("[RadioformHost INFO] Step 3: Writing control file to notify driver...")
+print("[Step 4] Writing control file...")
 writeControlFile(deviceRegistry)
-print("[RadioformHost INFO] Control file written: /tmp/radioform-devices.txt")
+print("    ✓ Control file: /tmp/radioform-devices.txt")
 
-print("[RadioformHost INFO] Proxy infrastructure ready - driver will load on next coreaudiod start")
-print("To activate proxies, restart coreaudiod: sudo killall coreaudiod")
+print("[Step 5] Starting heartbeat monitor...")
+startHeartbeat()
 
 // Wait for driver to create proxy devices
-print("[RadioformHost INFO] Step 4: Waiting for driver to create proxy devices...")
+print("[Step 6] Waiting for driver to create proxy devices...")
 Thread.sleep(forTimeInterval: 2.0)
 
-// Automatically switch to proxy for current default device
-print("[RadioformHost INFO] Step 5: Auto-selecting proxy device...")
+// Automatically switch to proxy
+print("[Step 7] Auto-selecting proxy device...")
 autoSelectProxyOnStartup()
 
-// 3. Create legacy shared memory for backward compatibility
-guard createSharedMemory() else {
-    exit(1)
-}
-
-// 4. Initialize DSP engine with bass boost preset
+// 3. Initialize DSP engine
+print("[Step 8] Initializing DSP engine...")
 dspEngine = radioform_dsp_create(48000)
 guard dspEngine != nil else {
-    print("Failed to create DSP engine")
+    print("[ERROR] Failed to create DSP engine")
     exit(1)
 }
 
@@ -1102,7 +1077,7 @@ preset.bands.0.q_factor = 0.707
 preset.bands.0.type = RADIOFORM_FILTER_LOW_SHELF
 preset.bands.0.enabled = true
 
-// Band 2: Peak at 60Hz, +3dB boost (sub-bass)
+// Band 2: Peak at 60Hz, +3dB boost
 preset.bands.1.frequency_hz = 60
 preset.bands.1.gain_db = 3.0
 preset.bands.1.q_factor = 1.0
@@ -1113,21 +1088,24 @@ preset.preamp_db = 0.0
 preset.limiter_enabled = true
 preset.limiter_threshold_db = -1.0
 
-// Apply the preset
 if radioform_dsp_apply_preset(dspEngine, &preset) != RADIOFORM_OK {
-    print("Failed to apply EQ preset")
+    print("[ERROR] Failed to apply EQ preset")
     exit(1)
 }
 
-print("Bass boost EQ enabled: +6dB @ 100Hz, +3dB @ 60Hz")
+print("    ✓ Bass boost EQ: +6dB @ 100Hz, +3dB @ 60Hz")
 
-// 5. Find physical output device for current routing
+// 4. Find physical output device
+print("[Step 9] Finding physical output device...")
 let outputDeviceID = findPhysicalDevice()
 guard outputDeviceID != 0 else {
+    print("[ERROR] No physical device found")
     exit(1)
 }
+print("    ✓ Using device ID: \(outputDeviceID)")
 
 // 5. Create audio unit
+print("[Step 10] Creating audio unit...")
 var componentDesc = AudioComponentDescription(
     componentType: kAudioUnitType_Output,
     componentSubType: kAudioUnitSubType_HALOutput,
@@ -1137,13 +1115,13 @@ var componentDesc = AudioComponentDescription(
 )
 
 guard let component = AudioComponentFindNext(nil, &componentDesc) else {
-    print("Failed to find output component")
+    print("[ERROR] Failed to find output component")
     exit(1)
 }
 
 var status = AudioComponentInstanceNew(component, &outputUnit)
 guard status == noErr, let unit = outputUnit else {
-    print("Failed to create audio unit")
+    print("[ERROR] Failed to create audio unit")
     exit(1)
 }
 
@@ -1159,7 +1137,7 @@ status = AudioUnitSetProperty(
 )
 
 guard status == noErr else {
-    print("Failed to set output device")
+    print("[ERROR] Failed to set output device")
     exit(1)
 }
 
@@ -1186,7 +1164,7 @@ status = AudioUnitSetProperty(
 )
 
 guard status == noErr else {
-    print("Failed to set format")
+    print("[ERROR] Failed to set format")
     exit(1)
 }
 
@@ -1206,33 +1184,45 @@ status = AudioUnitSetProperty(
 )
 
 guard status == noErr else {
-    print("Failed to set render callback")
+    print("[ERROR] Failed to set render callback")
     exit(1)
 }
 
 // 9. Initialize and start
 status = AudioUnitInitialize(unit)
 guard status == noErr else {
-    print("Failed to initialize audio unit")
+    print("[ERROR] Failed to initialize audio unit")
     exit(1)
 }
 
 status = AudioOutputUnitStart(unit)
 guard status == noErr else {
-    print("Failed to start audio unit")
+    print("[ERROR] Failed to start audio unit")
     exit(1)
 }
 
-print("Host running")
+print("")
+print("╔════════════════════════════════════════════════════╗")
+print("║            HOST V2 RUNNING - UNIVERSAL             ║")
+print("║  Features: Multi-rate, Multi-format, Heartbeat    ║")
+print("╚════════════════════════════════════════════════════╝")
+print("")
 
 // Start preset monitoring
 monitorPresetFile()
 
 // Cleanup function
 func cleanup() {
-    print("[Cleanup] Starting cleanup process...")
+    print("\n[Cleanup] Starting cleanup process...")
 
-    // 1. Restore default device to physical device (if currently on proxy)
+    // Stop heartbeat
+    heartbeatTimer?.cancel()
+    heartbeatTimer = nil
+
+    // Note: We don't need to mark as disconnected manually
+    // The heartbeat stopping will signal disconnection to driver
+
+    // Restore to physical device (same logic as before)
     var propertyAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDefaultOutputDevice,
         mScope: kAudioObjectPropertyScopeGlobal,
@@ -1250,7 +1240,6 @@ func cleanup() {
         &dataSize,
         &currentDeviceID
     ) == noErr {
-        // Get current device name
         var nameAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyDeviceNameCFString,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -1263,11 +1252,9 @@ func cleanup() {
         if AudioObjectGetPropertyData(currentDeviceID, &nameAddress, 0, nil, &nameSize, &deviceName) == noErr {
             let name = deviceName as String
 
-            // If currently on a Radioform proxy, switch back to physical device
             if name.contains("Radioform") {
-                print("[Cleanup] Currently on proxy device: \(name)")
+                print("[Cleanup] Restoring to physical device...")
 
-                // Get proxy UID
                 var uidAddress = AudioObjectPropertyAddress(
                     mSelector: kAudioDevicePropertyDeviceUID,
                     mScope: kAudioObjectPropertyScopeGlobal,
@@ -1280,12 +1267,8 @@ func cleanup() {
                 if AudioObjectGetPropertyData(currentDeviceID, &uidAddress, 0, nil, &uidSize, &proxyUID) == noErr {
                     let proxyUIDStr = proxyUID as String
 
-                    // Extract physical device UID (remove "-radioform" suffix)
                     if let physicalUID = proxyUIDStr.components(separatedBy: "-radioform").first {
-                        // Find matching physical device
                         if let physicalDevice = deviceRegistry.first(where: { $0.uid == physicalUID }) {
-                            print("[Cleanup] Restoring default device to: \(physicalDevice.name)")
-
                             var physicalDeviceID = physicalDevice.id
                             let result = AudioObjectSetPropertyData(
                                 AudioObjectID(kAudioObjectSystemObject),
@@ -1298,23 +1281,16 @@ func cleanup() {
 
                             if result == noErr {
                                 print("[Cleanup] ✓ Restored to \(physicalDevice.name)")
-                                // Give system time to switch
                                 Thread.sleep(forTimeInterval: 0.5)
-                            } else {
-                                print("[Cleanup] ⚠️  Failed to restore device (error \(result))")
                             }
-                        } else {
-                            print("[Cleanup] ⚠️  Could not find physical device with UID: \(physicalUID)")
                         }
                     }
                 }
-            } else {
-                print("[Cleanup] Already on physical device: \(name)")
             }
         }
     }
 
-    // 2. Stop audio unit
+    // Stop audio unit
     if let unit = outputUnit {
         print("[Cleanup] Stopping audio unit...")
         AudioOutputUnitStop(unit)
@@ -1322,27 +1298,27 @@ func cleanup() {
         AudioComponentInstanceDispose(unit)
     }
 
-    // 3. Remove control file - driver will detect and remove proxies automatically
+    // Remove control file
     print("[Cleanup] Removing control file...")
     unlink(CONTROL_FILE_PATH)
 
-    // 4. Wait for driver to remove devices (driver checks every 1 second)
-    print("[Cleanup] Waiting for driver to remove proxy devices...")
     Thread.sleep(forTimeInterval: 1.2)
 
-    // 5. Unmap all shared memory
-    print("[Cleanup] Unmapping shared memory...")
-    if let mem = sharedMemory {
-        munmap(mem, rf_shared_audio_size(RING_CAPACITY_FRAMES))
-    }
-    for (_, mem) in deviceSharedMemory {
-        munmap(mem, rf_shared_audio_size(RING_CAPACITY_FRAMES))
+    // Unmap V2 shared memory
+    print("[Cleanup] Unmapping V2 shared memory...")
+    for (_, mem) in deviceSharedMemoryV2 {
+        let size = rf_shared_audio_v2_size(
+            mem.pointee.ring_capacity_frames,
+            mem.pointee.channels,
+            mem.pointee.bytes_per_sample
+        )
+        munmap(mem, size)
     }
 
-    print("[Cleanup] ✓ Cleanup complete - proxy devices removed")
+    print("[Cleanup] ✓ Complete")
 }
 
-// Set up signal handlers using DispatchSource (proper Swift way)
+// Set up signal handlers
 let sigintSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
 sigintSource.setEventHandler {
     print("\n[Signal] Received SIGINT (Ctrl+C)")
@@ -1353,16 +1329,15 @@ sigintSource.resume()
 
 let sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 sigtermSource.setEventHandler {
-    print("\n[Signal] Received SIGTERM (terminate)")
+    print("\n[Signal] Received SIGTERM")
     cleanup()
     exit(0)
 }
 sigtermSource.resume()
 
-// Prevent default signal handlers from running
 signal(SIGINT, SIG_IGN)
 signal(SIGTERM, SIG_IGN)
 
-print("[Signal] Handlers installed for SIGINT and SIGTERM")
+print("[Signal] Handlers installed")
 
 RunLoop.current.run()

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Uninstall Radioform driver (for testing)
 
-echo "🗑️  Uninstalling Radioform driver..."
+echo "  Uninstalling Radioform driver..."
 
 osascript -e 'do shell script "rm -rf /Library/Audio/Plug-Ins/HAL/RadioformDriver.driver && killall coreaudiod" with administrator privileges'
 

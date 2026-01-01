@@ -49,13 +49,15 @@ class PresetManager: ObservableObject {
         loadAllPresets()
 
         // Load current preset from IPC
-        currentPreset = IPCController.shared.getCurrentPreset()
+        let loadedPreset = IPCController.shared.getCurrentPreset()
 
-        // If no preset is loaded, default to "Flat"
-        if currentPreset == nil {
-            if let flatPreset = bundledPresets.first(where: { $0.name == "Flat" }) {
-                applyPreset(flatPreset)
-            }
+        // Apply the loaded preset (ensures UI sync + sweetening), or default to "Flat"
+        if let preset = loadedPreset {
+            // Strip any existing sweetening to avoid double-application
+            let originalPreset = stripSweetening(preset)
+            applyPreset(originalPreset)  // Syncs UI state and applies fresh sweetening
+        } else if let flatPreset = bundledPresets.first(where: { $0.name == "Flat" }) {
+            applyPreset(flatPreset)
         }
     }
 
@@ -213,6 +215,29 @@ class PresetManager: ObservableObject {
         try FileManager.default.removeItem(at: url)
 
         loadAllPresets()
+    }
+
+    /// Remove invisible sweetening bands from a preset (if present)
+    /// Returns the preset with sweetening bands stripped
+    private func stripSweetening(_ preset: EQPreset) -> EQPreset {
+        var strippedPreset = preset
+
+        // Sweetening consists of first 2 bands: Warmth (80Hz) and Air (12kHz)
+        // Check if first band matches Warmth characteristics
+        if preset.bands.count >= 2,
+           preset.bands[0].frequencyHz == 80,
+           preset.bands[0].filterType == .lowShelf,
+           abs(preset.bands[0].gainDb - 1.2) < 0.1,
+           preset.bands[1].frequencyHz == 12000,
+           preset.bands[1].filterType == .highShelf,
+           abs(preset.bands[1].gainDb - 1.8) < 0.1 {
+            // Remove first 2 bands (sweetening)
+            strippedPreset.bands = Array(preset.bands.dropFirst(2))
+            // Remove sweetening preamp boost
+            strippedPreset.preampDb -= 1.25
+        }
+
+        return strippedPreset
     }
 
     /// Map preset bands to standard 10-band UI frequencies

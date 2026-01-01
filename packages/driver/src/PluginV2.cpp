@@ -1,5 +1,5 @@
-// Radioform HAL Driver - ULTIMATE EDITION
-// Universal audio driver that works with ANY format, sample rate, or device
+// Radioform HAL Driver
+// Universal audio driver
 
 #include <aspl/Driver.hpp>
 #include <CoreAudio/AudioServerPlugIn.h>
@@ -359,7 +359,7 @@ private:
 
         shared_memory_ = reinterpret_cast<RFSharedAudioV2*>(mem);
 
-        RF_LOG_INFO("✓ Mapped at %p (size: %zu)", mem, st.st_size);
+        RF_LOG_INFO("✓ Mapped at %p (size: %lld)", mem, (long long)st.st_size);
         RF_LOG_INFO("  Format: %uHz, %uch, format=%u",
             shared_memory_->sample_rate,
             shared_memory_->channels,

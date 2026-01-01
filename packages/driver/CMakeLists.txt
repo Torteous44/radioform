@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(RadioformDriver VERSION 1.0.0 LANGUAGES CXX)
+project(RadioformDriver VERSION 2.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,9 +17,9 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -fsanitize=address")
 # libASPL
 add_subdirectory(vendor/libASPL)
 
-# Radioform Driver sources
+# Radioform Driver sources - V2 (Universal)
 set(DRIVER_SOURCES
-    src/Plugin.cpp
+    src/PluginV2.cpp
 )
 
 # Create the driver bundle
@@ -53,6 +53,9 @@ set_target_properties(RadioformDriver PROPERTIES
 #     BUNDLE DESTINATION "/Library/Audio/Plug-Ins/HAL"
 # )
 
-message(STATUS "Radioform HAL Driver configured")
+message(STATUS "Radioform HAL Driver V2 (Universal) configured")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "  Multi-format: YES (int16/24/32, float32/64)")
+message(STATUS "  Multi-rate: YES (44.1-192 kHz)")
+message(STATUS "  Multi-channel: YES (1-8 channels)")
 message(STATUS "  Install manually to: /Library/Audio/Plug-Ins/HAL/")

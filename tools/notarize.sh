@@ -8,7 +8,7 @@ APP_PATH="dist/Radioform.app"
 ZIP_PATH="dist/Radioform.zip"
 
 echo ""
-echo "📤 Notarizing Radioform.app..."
+echo " Notarizing Radioform.app..."
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Checking Prerequisites"
@@ -131,4 +131,3 @@ echo ""
 
 # Clean up zip
 rm -f "$ZIP_PATH"
-

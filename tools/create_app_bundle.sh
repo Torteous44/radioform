@@ -59,7 +59,7 @@ chmod +x "$APP_PATH/Contents/MacOS/RadioformApp"
 echo "✓ RadioformApp executable copied"
 
 # Copy RadioformHost
-echo "📦 Copying RadioformHost..."
+echo "Copying RadioformHost..."
 HOST_EXECUTABLE="$PROJECT_ROOT/packages/host/.build/$SWIFT_ARCH/release/RadioformHost"
 
 if [ ! -f "$HOST_EXECUTABLE" ]; then
@@ -78,11 +78,11 @@ chmod +x "$APP_PATH/Contents/MacOS/RadioformHost"
 echo "✓ RadioformHost copied"
 
 # Copy RadioformDriver.driver
-echo "📦 Copying RadioformDriver.driver..."
+echo " Copying RadioformDriver.driver..."
 DRIVER_BUNDLE="$PROJECT_ROOT/packages/driver/build/RadioformDriver.driver"
 
 if [ ! -d "$DRIVER_BUNDLE" ]; then
-    echo "⚠️  RadioformDriver.driver not found - will need to be installed separately"
+    echo " RadioformDriver.driver not found - will need to be installed separately"
     echo "   Note: Driver installation will be handled during onboarding"
     echo "   For development, build with: cd packages/driver && ./install.sh"
 else
@@ -91,21 +91,21 @@ else
 fi
 
 # Copy presets
-echo "📦 Copying presets..."
+echo "   Copying presets..."
 PRESETS_DIR="$PROJECT_ROOT/apps/mac/RadioformApp/Sources/Resources/Presets"
 
 if [ -d "$PRESETS_DIR" ]; then
     cp -R "$PRESETS_DIR"/* "$APP_PATH/Contents/Resources/Presets/"
     echo "✓ Presets copied ($(ls -1 "$PRESETS_DIR" | wc -l | tr -d ' ') files)"
 else
-    echo "⚠️  No presets directory found at $PRESETS_DIR"
+    echo "  No presets directory found at $PRESETS_DIR"
 fi
 
 # Create PkgInfo file
 echo "APPL????" > "$APP_PATH/Contents/PkgInfo"
 
 echo ""
-echo "✅ Radioform.app bundle created successfully!"
+echo " Radioform.app bundle created successfully!"
 echo "   Location: $APP_PATH"
 echo ""
 echo "Bundle contents:"

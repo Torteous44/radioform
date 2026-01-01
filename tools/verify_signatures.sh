@@ -17,7 +17,7 @@ NC='\033[0m'
 
 error() { echo -e "${RED}❌ $1${NC}" >&2; }
 success() { echo -e "${GREEN}✓ $1${NC}"; }
-warn() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+warn() { echo -e "${YELLOW}  $1${NC}"; }
 info() { echo -e "${BLUE}ℹ $1${NC}"; }
 
 section() {

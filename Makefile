@@ -39,13 +39,13 @@ help:
 # Start from scratch - full developer workflow with onboarding
 dev: reset build bundle
 	@echo ""
-	@echo "🚀 Starting Radioform with onboarding..."
+	@echo "Starting Radioform with onboarding..."
 	@echo ""
 	@open dist/Radioform.app
 
 # Run app normally without resetting onboarding
 run:
-	@echo "🚀 Starting Radioform..."
+	@echo "Starting Radioform..."
 	@if [ -d "dist/Radioform.app" ]; then \
 		open dist/Radioform.app; \
 	else \
@@ -55,17 +55,17 @@ run:
 
 # Build all components
 build:
-	@echo "🔨 Building all components..."
+	@echo "Building all components..."
 	@./tools/build_release.sh
 
 # Create .app bundle
 bundle:
-	@echo "📦 Creating .app bundle..."
+	@echo "Creating .app bundle..."
 	@./tools/create_app_bundle.sh
 
 # Clean all build artifacts
 clean:
-	@echo "🧹 Cleaning build artifacts..."
+	@echo "Cleaning build artifacts..."
 	@rm -rf packages/dsp/build
 	@rm -rf packages/driver/build
 	@rm -rf packages/host/.build
@@ -75,9 +75,9 @@ clean:
 
 # Reset onboarding and uninstall driver (for testing onboarding flow)
 reset:
-	@echo "🔄 Resetting Radioform for fresh start..."
+	@echo "Resetting Radioform for fresh start..."
 	@pkill -f "RadioformApp|RadioformHost" 2>/dev/null || true
-	@./tools/uninstall_driver.sh || echo "⚠️  No driver to uninstall (this is fine)"
+	@./tools/uninstall_driver.sh || echo "No driver to uninstall (this is fine)"
 	@defaults delete com.radioform.menubar hasCompletedOnboarding 2>/dev/null || true
 	@defaults delete com.radioform.menubar onboardingVersion 2>/dev/null || true
 	@defaults delete com.radioform.menubar driverInstallDate 2>/dev/null || true
@@ -86,14 +86,14 @@ reset:
 
 # Install build dependencies
 install-deps:
-	@echo "📥 Checking build dependencies..."
+	@echo "Checking build dependencies..."
 	@which cmake > /dev/null || (echo "❌ CMake not found. Install with: brew install cmake" && exit 1)
 	@which swift > /dev/null || (echo "❌ Swift not found. Install Xcode." && exit 1)
 	@echo "✓ All dependencies installed"
 
 # Run DSP tests
 test:
-	@echo "🧪 Running DSP tests..."
+	@echo "Running DSP tests..."
 	@cd packages/dsp && \
 	mkdir -p build && \
 	cd build && \
@@ -103,7 +103,7 @@ test:
 
 # Quick rebuild (for when you only changed Swift code)
 quick:
-	@echo "⚡ Quick rebuild (Swift only)..."
+	@echo "Quick rebuild (Swift only)..."
 	@cd apps/mac/RadioformApp && swift build -c release
 	@cd packages/host && swift build -c release
 	@./tools/create_app_bundle.sh
@@ -115,18 +115,18 @@ rebuild: clean build bundle
 
 # Code signing targets
 sign:
-	@echo "🔐 Code signing Radioform.app..."
+	@echo "Code signing Radioform.app..."
 	@./tools/codesign.sh
 
 verify:
-	@echo "🔍 Verifying signatures..."
+	@echo "Verifying signatures..."
 	@./tools/verify_signatures.sh
 
 # Build and sign (for release)
 release: build bundle sign verify
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  ✅ Release Build Complete!"
+	@echo "     Release Build Complete!"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
 	@echo "Signed app: dist/Radioform.app"
@@ -139,19 +139,19 @@ release: build bundle sign verify
 
 # Test the signed release build
 test-release:
-	@echo "🧪 Testing signed release build..."
+	@echo " Testing signed release build..."
 	@open dist/Radioform.app
 
 # Create DMG for distribution
 dmg:
-	@echo "💿 Creating DMG..."
+	@echo "Creating DMG..."
 	@./tools/create_dmg.sh
 
 # Full release pipeline (build, sign, create DMG)
 full-release: build bundle sign verify dmg
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  ✅ Full Release Build Complete!"
+	@echo "  Full Release Build Complete!"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
 	@ls -lh dist/*.dmg

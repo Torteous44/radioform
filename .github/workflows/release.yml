@@ -150,11 +150,10 @@ jobs:
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       - name: Create DMG
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          DMG_NAME="Radioform-${VERSION}.dmg"
+          DMG_NAME="Radioform.dmg"
 
           # Use the create_dmg.sh script for proper layout (app + Applications symlink)
-          ./tools/create_dmg.sh "${VERSION}"
+          ./tools/create_dmg.sh
 
           # Sign the DMG
           IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')

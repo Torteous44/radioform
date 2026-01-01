@@ -21,25 +21,25 @@ class OnboardingCoordinator: ObservableObject {
 
         self.currentWindow = window
 
-        print("✓ Onboarding window shown")
+        print("Onboarding window shown")
     }
 
     /// Close the onboarding window
     func close() {
         currentWindow?.close()
         currentWindow = nil
-        print("✓ Onboarding window closed")
+        print("Onboarding window closed")
     }
 
     /// Handle onboarding completion
     func complete() {
-        print("📝 OnboardingCoordinator.complete() called")
+        print("OnboardingCoordinator.complete() called")
         OnboardingState.markCompleted()
         close()
 
         // Call completion handler to notify app
-        print("📝 Calling onComplete handler...")
+        print("Calling onComplete handler...")
         onComplete?()
-        print("✓ Onboarding completed")
+        print("Onboarding completed")
     }
 }

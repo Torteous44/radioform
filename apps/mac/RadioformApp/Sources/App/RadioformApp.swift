@@ -43,25 +43,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create and show onboarding
         onboardingCoordinator = OnboardingCoordinator()
         onboardingCoordinator?.show(onComplete: { [weak self] in
-            print("📝 Onboarding completion callback called")
+            print("Onboarding completion callback called")
             self?.launchHostIfNeeded()
             self?.setupMenuBar()
-            print("✓ Host and menu bar setup complete")
+            print("Host and menu bar setup complete")
         })
 
-        print("✓ Showing onboarding")
+        print("Showing onboarding")
     }
 
     func setupMenuBar() {
-        print("📝 setupMenuBar() called")
+        print("setupMenuBar() called")
 
         // Hide from Dock (menu bar only)
         NSApp.setActivationPolicy(.accessory)
-        print("📝 Activation policy set to .accessory")
+        print("Activation policy set to .accessory")
 
         // Create status bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        print("📝 Status bar item created: \(statusItem != nil)")
+        print("Status bar item created: \(statusItem != nil)")
 
         if let button = statusItem?.button {
             // Load logo SVG and set as template for light/dark mode adaptation
@@ -74,9 +74,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             button.action = #selector(togglePopover)
             button.target = self
-            print("📝 Status bar button configured with waveform icon")
+            print("Status bar button configured with waveform icon")
         } else {
-            print("❌ Could not get status bar button!")
+            print("ERROR: Could not get status bar button!")
         }
 
         // Create popover with menu content
@@ -91,7 +91,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.popover?.performClose(event)
             }
         }
-        print("✓ Menu bar setup complete - icon should be visible")
+        print("Menu bar setup complete - icon should be visible")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -198,14 +198,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                 )
 
                                 if result == noErr {
-                                    logger("[Cleanup] ✓ Restored to physical device")
+                                    logger("[Cleanup] Restored to physical device")
                                     // Give system time to switch
                                     Thread.sleep(forTimeInterval: 0.3)
                                 } else {
-                                    logger("[Cleanup] ⚠️  Failed to restore device (error \(result))")
+                                    logger("[Cleanup] WARNING: Failed to restore device (error \(result))")
                                 }
                             } else {
-                                logger("[Cleanup] ⚠️  Could not find physical device with UID: \(physicalUID)")
+                                logger("[Cleanup] WARNING: Could not find physical device with UID: \(physicalUID)")
                             }
                         }
                     }
@@ -224,7 +224,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger("[Cleanup] Waiting for driver to remove proxy devices...")
         Thread.sleep(forTimeInterval: 1.5)
 
-        logger("[Cleanup] ✓ Cleanup complete")
+        logger("[Cleanup] Cleanup complete")
     }
 
     func findDeviceByUID(_ targetUID: String) -> AudioDeviceID? {
@@ -284,11 +284,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func checkAndLoadDriverIfNeeded() {
         // Check if Radioform driver is already loaded
         if isDriverLoaded() {
-            print("✓ Radioform driver already loaded, no need to restart coreaudiod")
+            print("Radioform driver already loaded, no need to restart coreaudiod")
             return
         }
 
-        print("⚠️  Radioform driver not detected, attempting to load...")
+        print("WARNING: Radioform driver not detected, attempting to load...")
 
         // Check if driver is installed
         let driverPath = "/Library/Audio/Plug-Ins/HAL/RadioformDriver.driver"
@@ -311,7 +311,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("Failed to restart coreaudiod: \(error)")
             showAlert("Driver Load Failed", "Could not restart coreaudiod. You may need to manually run:\nsudo killall coreaudiod")
         } else {
-            print("✓ coreaudiod restarted successfully")
+            print("coreaudiod restarted successfully")
             // Wait a bit for coreaudiod to restart
             Thread.sleep(forTimeInterval: 2.0)
         }
@@ -473,95 +473,180 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func loadLogoImage() -> NSImage? {
-        var logoURL: URL?
         let fileManager = FileManager.default
+        var logoURL: URL?
 
-        // Try bundle resources first (production)
-        if let resourcePath = Bundle.main.resourcePath {
-            let bundlePath = (resourcePath as NSString).appendingPathComponent("Resources/logo.svg")
-            if fileManager.fileExists(atPath: bundlePath) {
-                logoURL = URL(fileURLWithPath: bundlePath)
+        // PRIORITY 1: Try using Bundle's resource API (works across bundle structures)
+        // First try to find the resource bundle
+        if let resourceBundleURL = Bundle.main.url(forResource: "RadioformApp_RadioformApp", withExtension: "bundle"),
+           let resourceBundle = Bundle(url: resourceBundleURL),
+           let logoPath = resourceBundle.url(forResource: "logo", withExtension: "svg") {
+            print("Found logo via resource bundle API: \(logoPath.path)")
+            logoURL = logoPath
+        }
+
+        // PRIORITY 2: Try SwiftPM resource bundle (production builds)
+        // SwiftPM creates a separate bundle named "<Target>_<Target>.bundle"
+        if logoURL == nil, let executableURL = Bundle.main.executableURL {
+            let bundleName = "RadioformApp_RadioformApp.bundle"
+            let resourceBundleURL = executableURL
+                .deletingLastPathComponent()
+                .appendingPathComponent(bundleName)
+                .appendingPathComponent("Resources/logo.svg")
+
+            if fileManager.fileExists(atPath: resourceBundleURL.path) {
+                print("Found logo in SwiftPM bundle: \(resourceBundleURL.path)")
+                logoURL = resourceBundleURL
             }
         }
 
-        // Fall back to public directory (development)
-        if logoURL == nil {
-            if let executablePath = Bundle.main.executablePath {
-                let executableDir = (executablePath as NSString).deletingLastPathComponent
-                let sourcePath = (executableDir as NSString).appendingPathComponent("../../../public/logo.svg")
-                let normalizedPath = (sourcePath as NSString).standardizingPath
-                if fileManager.fileExists(atPath: normalizedPath) {
-                    logoURL = URL(fileURLWithPath: normalizedPath)
+        // PRIORITY 3: Try main bundle's built-in resource lookup
+        if logoURL == nil, let mainBundleURL = Bundle.main.url(forResource: "logo", withExtension: "svg") {
+            print("Found logo via main bundle: \(mainBundleURL.path)")
+            logoURL = mainBundleURL
+        }
+
+        // PRIORITY 4: Try main bundle resources (alternative bundle structure)
+        if logoURL == nil, let resourcePath = Bundle.main.resourcePath {
+            let possiblePaths = [
+                "\(resourcePath)/Resources/logo.svg",
+                "\(resourcePath)/logo.svg"
+            ]
+
+            for path in possiblePaths {
+                if fileManager.fileExists(atPath: path) {
+                    print("Found logo in main bundle: \(path)")
+                    logoURL = URL(fileURLWithPath: path)
+                    break
                 }
             }
         }
 
-        // Try absolute path as last resort (development from repo root)
+        // PRIORITY 5: Development - relative to executable
+        if logoURL == nil, let executablePath = Bundle.main.executablePath {
+            let executableDir = (executablePath as NSString).deletingLastPathComponent
+            let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/logo.svg")
+            let normalizedPath = (sourcePath as NSString).standardizingPath
+            if fileManager.fileExists(atPath: normalizedPath) {
+                print("Found logo in development Sources: \(normalizedPath)")
+                logoURL = URL(fileURLWithPath: normalizedPath)
+            }
+        }
+
+        // PRIORITY 6: Development - absolute path from repo root
         if logoURL == nil {
             let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
-            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/public/logo.svg"
+            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/Sources/Resources/logo.svg"
             if fileManager.fileExists(atPath: absolutePath) {
+                print("Found logo at absolute path: \(absolutePath)")
                 logoURL = URL(fileURLWithPath: absolutePath)
             }
         }
 
         guard let url = logoURL else {
+            print("Failed to find logo.svg in any location")
             return nil
         }
-        
+
         // Load SVG (NSImage supports SVG on macOS 10.15+)
-        if let image = NSImage(contentsOf: url) {
-            // Resize to appropriate menu bar size (typically 18-22px)
-            let size = NSSize(width: 16, height: 16)
-            let resizedImage = NSImage(size: size)
-            resizedImage.lockFocus()
-            image.draw(in: NSRect(origin: .zero, size: size), from: NSRect(origin: .zero, size: image.size), operation: .sourceOver, fraction: 1.0)
-            resizedImage.unlockFocus()
-            return resizedImage
+        guard let image = NSImage(contentsOf: url) else {
+            print("Failed to load image from: \(url.path)")
+            return nil
         }
-        
-        return nil
+
+        // Resize to appropriate menu bar size (typically 18-22px)
+        let size = NSSize(width: 16, height: 16)
+        let resizedImage = NSImage(size: size)
+        resizedImage.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size), from: NSRect(origin: .zero, size: image.size), operation: .sourceOver, fraction: 1.0)
+        resizedImage.unlockFocus()
+
+        print("Successfully loaded and resized logo")
+        return resizedImage
     }
     
     func registerCustomFont() {
-        var fontPath: String?
         let fileManager = FileManager.default
-        
-        // Try bundle resources first (production)
-        if let resourcePath = Bundle.main.resourcePath {
-            let bundlePath = (resourcePath as NSString).appendingPathComponent("Resources/fonts/SignPainterHouseScript.ttf")
-            if fileManager.fileExists(atPath: bundlePath) {
-                fontPath = bundlePath
+        var fontURL: URL?
+
+        // PRIORITY 1: Try using Bundle's resource API (works across bundle structures)
+        if let resourceBundleURL = Bundle.main.url(forResource: "RadioformApp_RadioformApp", withExtension: "bundle"),
+           let resourceBundle = Bundle(url: resourceBundleURL),
+           let fontPath = resourceBundle.url(forResource: "fonts/SignPainterHouseScript", withExtension: "ttf") {
+            print("Found font via resource bundle API: \(fontPath.path)")
+            fontURL = fontPath
+        }
+
+        // PRIORITY 2: Try SwiftPM resource bundle (production builds)
+        if fontURL == nil, let executableURL = Bundle.main.executableURL {
+            let bundleName = "RadioformApp_RadioformApp.bundle"
+            let resourceBundleURL = executableURL
+                .deletingLastPathComponent()
+                .appendingPathComponent(bundleName)
+                .appendingPathComponent("Resources/fonts/SignPainterHouseScript.ttf")
+
+            if fileManager.fileExists(atPath: resourceBundleURL.path) {
+                print("Found font in SwiftPM bundle: \(resourceBundleURL.path)")
+                fontURL = resourceBundleURL
             }
         }
-        
-        // Fall back to source directory (development)
-        if fontPath == nil {
-            if let executablePath = Bundle.main.executablePath {
-                let executableDir = (executablePath as NSString).deletingLastPathComponent
-                let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/fonts/SignPainterHouseScript.ttf")
-                let normalizedPath = (sourcePath as NSString).standardizingPath
-                if fileManager.fileExists(atPath: normalizedPath) {
-                    fontPath = normalizedPath
+
+        // PRIORITY 3: Try main bundle's built-in resource lookup
+        if fontURL == nil, let mainBundleURL = Bundle.main.url(forResource: "fonts/SignPainterHouseScript", withExtension: "ttf") {
+            print("Found font via main bundle: \(mainBundleURL.path)")
+            fontURL = mainBundleURL
+        }
+
+        // PRIORITY 4: Try main bundle resources (alternative bundle structure)
+        if fontURL == nil, let resourcePath = Bundle.main.resourcePath {
+            let possiblePaths = [
+                "\(resourcePath)/Resources/fonts/SignPainterHouseScript.ttf",
+                "\(resourcePath)/fonts/SignPainterHouseScript.ttf"
+            ]
+
+            for path in possiblePaths {
+                if fileManager.fileExists(atPath: path) {
+                    print("Found font in main bundle: \(path)")
+                    fontURL = URL(fileURLWithPath: path)
+                    break
                 }
             }
         }
-        
-        // Try absolute path as last resort (development from repo root)
-        if fontPath == nil {
+
+        // PRIORITY 5: Development - relative to executable
+        if fontURL == nil, let executablePath = Bundle.main.executablePath {
+            let executableDir = (executablePath as NSString).deletingLastPathComponent
+            let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/fonts/SignPainterHouseScript.ttf")
+            let normalizedPath = (sourcePath as NSString).standardizingPath
+            if fileManager.fileExists(atPath: normalizedPath) {
+                print("Found font in development Sources: \(normalizedPath)")
+                fontURL = URL(fileURLWithPath: normalizedPath)
+            }
+        }
+
+        // PRIORITY 6: Development - absolute path from repo root
+        if fontURL == nil {
             let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
             let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/Sources/Resources/fonts/SignPainterHouseScript.ttf"
             if fileManager.fileExists(atPath: absolutePath) {
-                fontPath = absolutePath
+                print("Found font at absolute path: \(absolutePath)")
+                fontURL = URL(fileURLWithPath: absolutePath)
             }
         }
-        
-        guard let path = fontPath, let url = URL(fileURLWithPath: path) as URL? else {
+
+        guard let url = fontURL else {
+            print("Failed to find SignPainterHouseScript.ttf in any location")
             return
         }
-        
+
         var error: Unmanaged<CFError>?
-        CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+        let result = CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+
+        if result {
+            print("Successfully registered custom font")
+        } else if let error = error {
+            print("Failed to register font: \(error.takeRetainedValue())")
+        }
     }
     
     func showAlert(_ title: String, _ message: String) {
@@ -621,7 +706,7 @@ extension AppDelegate {
         // Check for --reset-onboarding flag
         if CommandLine.arguments.contains("--reset-onboarding") {
             OnboardingState.reset()
-            print("🔄 Onboarding reset - will show on next launch")
+            print("Onboarding reset - will show on next launch")
         }
 
         // Launch the app

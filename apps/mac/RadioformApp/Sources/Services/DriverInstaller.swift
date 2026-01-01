@@ -102,15 +102,15 @@ class DriverInstaller: ObservableObject {
         }
 
         if !loaded {
-            print("⚠️ Driver installed but not verified in system_profiler")
+            print("WARNING: Driver installed but not verified in system_profiler")
             print("   This may be normal - driver might need code signing or system restart")
             // Don't throw error - driver is installed, just not verified
         } else {
-            print("✓ Driver verified in system_profiler")
+            print("Driver verified in system_profiler")
         }
 
         await MainActor.run { state = .complete; progress = 1.0 }
-        print("✓ Driver installed successfully")
+        print("Driver installed successfully")
     }
 
     /// Check if driver is currently loaded
@@ -159,7 +159,7 @@ class DriverInstaller: ObservableObject {
             return resourcePath
         }
 
-        print("⚠️ Driver bundle not found in app resources")
+        print("WARNING: Driver bundle not found in app resources")
         return nil
     }
 
@@ -194,7 +194,7 @@ class DriverInstaller: ObservableObject {
             throw DriverInstallError.copyFailed(errorMessage)
         }
 
-        print("✓ Driver installed and coreaudiod restarted")
+        print("Driver installed and coreaudiod restarted")
     }
 
     /// Copy driver using AppleScript with admin privileges
@@ -261,7 +261,7 @@ class DriverInstaller: ObservableObject {
             throw DriverInstallError.audioRestartFailed(errorMessage)
         }
 
-        print("✓ coreaudiod restarted")
+        print("coreaudiod restarted")
     }
 
     /// Uninstall driver (for testing)
@@ -280,7 +280,7 @@ class DriverInstaller: ObservableObject {
             throw DriverInstallError.uninstallFailed(errorMessage)
         }
 
-        print("✓ Driver uninstalled")
+        print("Driver uninstalled")
     }
 }
 

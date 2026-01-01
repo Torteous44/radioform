@@ -1,0 +1,36 @@
+{
+  "name": "Bright",
+  "bands": [
+    {
+      "frequency_hz": 2000.0,
+      "gain_db": -0.73,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 4000.0,
+      "gain_db": 0.73,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 8000.0,
+      "gain_db": 2.9,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 16000.0,
+      "gain_db": 2.17,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    }
+  ],
+  "preamp_db": -2.5,
+  "limiter_enabled": true,
+  "limiter_threshold_db": -1.0
+}

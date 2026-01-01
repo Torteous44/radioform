@@ -19,7 +19,7 @@ struct OnboardingState {
         UserDefaults.standard.set(true, forKey: OnboardingKey.hasCompletedOnboarding)
         UserDefaults.standard.set(Date(), forKey: OnboardingKey.driverInstallDate)
         UserDefaults.standard.set(1, forKey: OnboardingKey.onboardingVersion)
-        print("✓ Onboarding marked as completed")
+        print("Onboarding marked as completed")
     }
 
     /// Reset onboarding state (for testing)
@@ -27,7 +27,7 @@ struct OnboardingState {
         UserDefaults.standard.removeObject(forKey: OnboardingKey.hasCompletedOnboarding)
         UserDefaults.standard.removeObject(forKey: OnboardingKey.driverInstallDate)
         UserDefaults.standard.removeObject(forKey: OnboardingKey.onboardingVersion)
-        print("✓ Onboarding state cleared")
+        print("Onboarding state cleared")
     }
 
     /// Get the date when driver was installed (if available)

@@ -1,0 +1,43 @@
+{
+  "name": "Deep",
+  "bands": [
+    {
+      "frequency_hz": 32.0,
+      "gain_db": 4.34,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 64.0,
+      "gain_db": 4.53,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 125.0,
+      "gain_db": 1.81,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 250.0,
+      "gain_db": 0.88,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": false
+    },
+    {
+      "frequency_hz": 500.0,
+      "gain_db": -0.61,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    }
+  ],
+  "preamp_db": -4.5,
+  "limiter_enabled": true,
+  "limiter_threshold_db": -1.0
+}

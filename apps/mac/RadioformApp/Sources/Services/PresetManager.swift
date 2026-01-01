@@ -83,7 +83,7 @@ class PresetManager: ObservableObject {
             print("[PresetManager] Trying bundle path: \(bundlePath)")
             if FileManager.default.fileExists(atPath: bundlePath) {
                 presetsPath = bundlePath
-                print("[PresetManager] ✓ Found at bundle path")
+                print("[PresetManager] Found at bundle path")
             }
         }
 
@@ -99,7 +99,7 @@ class PresetManager: ObservableObject {
                 print("[PresetManager] Trying debug path: \(normalizedDebugPath)")
                 if FileManager.default.fileExists(atPath: normalizedDebugPath) {
                     presetsPath = normalizedDebugPath
-                    print("[PresetManager] ✓ Found at debug path")
+                    print("[PresetManager] Found at debug path")
                 }
             }
         }
@@ -120,14 +120,14 @@ class PresetManager: ObservableObject {
                 print("[PresetManager] Trying CWD path: \(path)")
                 if FileManager.default.fileExists(atPath: path) {
                     presetsPath = path
-                    print("[PresetManager] ✓ Found at CWD path")
+                    print("[PresetManager] Found at CWD path")
                     break
                 }
             }
         }
 
         guard let finalPath = presetsPath else {
-            print("[PresetManager] ✗ Presets directory not found anywhere!")
+            print("[PresetManager] ERROR: Presets directory not found anywhere!")
             return []
         }
 
@@ -135,7 +135,7 @@ class PresetManager: ObservableObject {
 
         let fileManager = FileManager.default
         guard let files = try? fileManager.contentsOfDirectory(atPath: finalPath) else {
-            print("[PresetManager] ✗ Failed to read presets directory")
+            print("[PresetManager] ERROR: Failed to read presets directory")
             return []
         }
 
@@ -149,14 +149,14 @@ class PresetManager: ObservableObject {
                 do {
                     return try loadPreset(from: url)
                 } catch {
-                    print("[PresetManager] ✗ Failed to load \(filename): \(error)")
+                    print("[PresetManager] ERROR: Failed to load \(filename): \(error)")
                     return nil
                 }
             }
             .sorted { $0.name < $1.name }
 
         print(
-            "[PresetManager] ✓ Loaded \(presets.count) bundled presets: \(presets.map { $0.name })")
+            "[PresetManager] Loaded \(presets.count) bundled presets: \(presets.map { $0.name })")
         return presets
     }
 
@@ -180,7 +180,7 @@ class PresetManager: ObservableObject {
             .compactMap { try? loadPreset(from: $0) }
             .sorted { $0.name < $1.name }
 
-        print("[PresetManager] ✓ Loaded \(presets.count) user presets: \(presets.map { $0.name })")
+        print("[PresetManager] Loaded \(presets.count) user presets: \(presets.map { $0.name })")
         return presets
     }
 
@@ -513,11 +513,17 @@ class PresetManager: ObservableObject {
             limiterThresholdDb: -1.0
         )
 
-        // Save to disk
+        // Save to disk (this reloads all presets, creating new instances)
         try savePreset(newPreset)
 
-        // Set as current preset
-        currentPreset = newPreset
+        // Find the newly loaded version of the preset from userPresets
+        // (savePreset reloads all presets with new UUIDs, so we need to find by name)
+        if let reloadedPreset = userPresets.first(where: { $0.name == finalName }) {
+            currentPreset = reloadedPreset
+        } else {
+            currentPreset = newPreset  // Fallback (shouldn't happen)
+        }
+
         isCustomPreset = false
         isEditingPresetName = false
     }

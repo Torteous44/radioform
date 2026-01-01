@@ -1,30 +1,30 @@
 {
-  "name": "Classical",
+  "name": "Balanced",
   "bands": [
     {
       "frequency_hz": 32.0,
       "gain_db": 0.0,
       "q_factor": 1.0,
       "filter_type": 0,
-      "enabled": true
+      "enabled": false
     },
     {
       "frequency_hz": 64.0,
-      "gain_db": 0.0,
+      "gain_db": 2.17,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 125.0,
-      "gain_db": 0.0,
+      "gain_db": 1.45,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 250.0,
-      "gain_db": 0.0,
+      "gain_db": -0.73,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
@@ -34,45 +34,45 @@
       "gain_db": 0.0,
       "q_factor": 1.0,
       "filter_type": 0,
-      "enabled": true
+      "enabled": false
     },
     {
       "frequency_hz": 1000.0,
-      "gain_db": 0.0,
+      "gain_db": 0.73,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 2000.0,
-      "gain_db": -2.0,
+      "gain_db": 0.0,
       "q_factor": 1.0,
       "filter_type": 0,
-      "enabled": true
+      "enabled": false
     },
     {
       "frequency_hz": 4000.0,
-      "gain_db": -2.0,
+      "gain_db": 0.0,
       "q_factor": 1.0,
       "filter_type": 0,
-      "enabled": true
+      "enabled": false
     },
     {
       "frequency_hz": 8000.0,
-      "gain_db": -1.0,
+      "gain_db": 1.45,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 16000.0,
-      "gain_db": -1.0,
+      "gain_db": 0.73,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     }
   ],
-  "preamp_db": 0.0,
-  "limiter_enabled": false,
+  "preamp_db": -2.0,
+  "limiter_enabled": true,
   "limiter_threshold_db": -1.0
 }

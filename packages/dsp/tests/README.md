@@ -1,53 +1,35 @@
 # packages/dsp/tests/
 
-Unit tests for DSP library correctness.
+Test suite for DSP library correctness.
 
-## Purpose
+## Test Coverage
 
-Validate that DSP processing behaves correctly across platforms and configurations.
-
-## Test Categories
-
-### Filter Accuracy
-- Coefficient generation correctness
-- Frequency response matches expected curves
-- Q factor and gain applied correctly
-- Shelf and peak filter types
-
-### Signal Processing
-- Impulse response (verify filter order, ringing)
-- Step response (check overshoot, settling time)
-- White noise / pink noise (validate frequency response)
-- DC offset handling
-
-### Parameter Smoothing
-- No zipper noise on parameter changes
-- Smooth interpolation over time
-- Edge cases (instant change vs slow ramp)
-
-### Numerical Stability
-- Denormal handling (very quiet signals)
-- NaN detection and recovery
-- Clipping behavior
-- Float vs double precision accuracy
-
-### Performance
-- Benchmark processing speed (samples/sec)
-- SIMD vs scalar comparison
-- Memory footprint validation
+33 tests across:
+- Preset validation
+- Biquad filter accuracy
+- Parameter smoothing
+- Engine integration
+- Frequency response
+- THD+N measurement
 
 ## Framework
 
-Uses standard C++ testing (Catch2, Google Test, or similar).
+Custom lightweight test framework (test_utils.h) with signal generation and analysis utilities.
 
-Run via:
+## Running Tests
+
 ```bash
-mkdir build && cd build
+cd packages/dsp
+mkdir -p build && cd build
 cmake ..
-make
-ctest
+cmake --build .
+./tests/radioform_dsp_tests
 ```
 
-## Continuous Integration
+## Test Files
 
-These tests run on every commit via `tools/ci/` workflows.
+- `test_preset.cpp` - Preset validation
+- `test_biquad.cpp` - Filter coefficient correctness
+- `test_smoothing.cpp` - Parameter smoothing and zipper noise
+- `test_engine.cpp` - Engine integration
+- `test_frequency_response.cpp` - Frequency response accuracy

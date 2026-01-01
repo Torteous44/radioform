@@ -1,31 +1,18 @@
 # packages/dsp/include/
 
-Public C/C++ headers for the Radioform DSP library.
+Public C API headers for the Radioform DSP library.
 
-## Purpose
+## Files
 
-Stable, template-free API that can be safely consumed by:
-- C code
-- Objective-C++
-- Swift (via C bridging)
+- `radioform_dsp.h` - Engine lifecycle, parameter control, audio processing
+- `radioform_types.h` - POD types, enums, structs
 
-## Files to Implement
+## Design
 
-- `radioform_dsp.h`: Main API surface
-  - Engine lifecycle (create, destroy, reset)
-  - Parameter application (preset upload, realtime updates)
-  - Process function (audio buffers in → out)
+Stable C ABI for cross-language compatibility:
+- No C++ templates or exceptions
+- POD types only
+- Explicit array sizes
+- Thread-safety documented per function
 
-- `radioform_types.h`: POD types
-  - Filter coefficients
-  - Band configurations
-  - Preset structures
-
-## Design Constraints
-
-- **No C++ templates** in public headers
-- **No exceptions** (compile with `-fno-exceptions` friendly)
-- **Explicit sizes** (no `std::vector`, use fixed arrays or explicit count params)
-- **ABI stability** (design for minor version compatibility)
-
-This is the contract. The implementation can use modern C++ internally, but the API surface stays simple and portable.
+Safe for consumption from C, Objective-C++, and Swift.

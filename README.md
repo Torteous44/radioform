@@ -1,79 +1,56 @@
-# Radioform
+<div align="center">
+  <h1>Radioform</h1>
+  <p><em>A system equalizer for macOS.</em></p>
+</div>
 
-**Radioform** is a free, open-source, macOS-native system equalizer designed around one simple promise: **audio that just works**.
+## Radioform
 
-## Quick Start for Developers
+Radioform is a free, open-source system equalizer for macOS.  
+It applies a clean, precise 10-band parametric EQ across everything you play.
 
-### First Time Setup
+## Design
 
-```bash
-# Clone the repository
-git clone https://github.com/torteous44/radioform.git
-cd radioform
+Radioform is built as a small set of focused components, each doing one job well:
 
-# Initialize submodules
-git submodule update --init --recursive
+- **DSP Engine (C++)**  
+  Real-time safe processing with a 10-band parametric EQ, preamp, and limiter.
 
-# Install dependencies (requires Homebrew)
-make install-deps
+- **Audio Driver (CoreAudio)**  
+  A system output device that integrates directly with macOS.
 
-# Start with full onboarding flow
-make dev
-```
+- **Audio Host (Swift)**  
+  Handles device management, shared-memory audio transfer, and DSP execution.
 
-### Development Commands
+- **Menu Bar App (SwiftUI)**  
+  A lightweight control surface that can quit and relaunch without interrupting sound.
 
-```bash
-# Start from scratch (reset onboarding + build + run)
-make dev
 
-# Run app normally (keeps existing state)
-make run
+## What You Can Do
 
-# Build all components
-make build
+- Apply system-wide EQ across all apps
+- Shape sound with a 10-band parametric equalizer
+- Keep levels safe with limiter and preamp guard rails
+- Load bundled or custom presets (JSON), safely validated
+- Switch devices without breaking your audio flow
 
-# Create .app bundle
-make bundle
+## Performance
 
-# Clean build artifacts
-make clean
+Radioform is designed to be invisible:
 
-# Reset onboarding and uninstall driver
-make reset
+- Under 1% CPU usage on Apple Silicon
+- Zero added latency in the signal path
+- Clean, transparent audio with extremely low distortion
 
-# Run DSP tests
-make test
+## Getting Started
 
-# See all available commands
-make help
-```
+- Download the latest release from the  
+  [Releases page](https://github.com/torteous44/radioform/releases)
+- Select the **Radioform** output that matches your speakers or headphones
+- Adjust, save, and forget about it
 
-## Project Structure
+For development details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```
-radioform/
-├── apps/
-│   └── mac/RadioformApp/     # macOS menu bar app (Swift/SwiftUI)
-├── packages/
-│   ├── dsp/                  # DSP library (C++17)
-│   ├── driver/               # HAL audio driver (C++17)
-│   └── host/                 # Audio processing host (Swift)
-└── tools/                    # Build scripts and utilities
-```
+## License
 
-## Requirements
-
-- macOS 13.0 or later
-- Xcode 15+
-- Swift 5.9+
-- CMake 3.20+
-
-## Architecture
-
-Radioform consists of four main components:
-
-1. **DSP Library** (`packages/dsp`) - Core audio processing with parametric EQ
-2. **HAL Driver** (`packages/driver`) - CoreAudio HAL plugin using libASPL
-3. **Audio Host** (`packages/host`) - Swift process managing audio routing and DSP
-4. **Menu Bar App** (`apps/mac/RadioformApp`) - SwiftUI interface with onboarding
+Radioform is released under the GNU General Public License v3.0.  
+See `LICENSE` for details.

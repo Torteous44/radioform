@@ -3,8 +3,6 @@
   <p><em>A system equalizer for macOS.</em></p>
 </div>
 
-## Radioform
-
 Radioform is a free, open-source system equalizer for macOS.  
 It applies a clean, precise 10-band parametric EQ across everything you play.
 

@@ -3,6 +3,7 @@
   <p><em>A system equalizer for macOS.</em></p>
 </div>
 
+
 Radioform is a free, open-source system equalizer for macOS.  
 It applies a clean, precise 10-band parametric EQ across everything you play.
 
@@ -41,8 +42,7 @@ Radioform is designed to be invisible:
 
 ## Getting Started
 
-- Download the latest release from the  
-  [Releases page](https://github.com/torteous44/radioform/releases)
+- Download the latest release from the [Releases page](https://github.com/torteous44/radioform/releases)
 - Select the **Radioform** output that matches your speakers or headphones
 - Adjust, save, and forget about it
 

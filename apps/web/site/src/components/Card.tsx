@@ -13,9 +13,10 @@ export default function Card({ className = "", onClick }: CardProps) {
       className={`relative w-full max-w-[480px] aspect-[1/1.414] p-6 ${onClick ? "cursor-pointer" : ""} ${className}`}
       onClick={onClick}
       style={{
-        backgroundColor: "#fff",
+        backgroundColor: "#ffffff",
         boxShadow: "0 2px 16px rgba(0,0,0,0.1)",
         fontFamily: '"Courier New", Courier, monospace',
+        opacity: 1,
       }}
     >
       {/* Polaroid attached to top right */}

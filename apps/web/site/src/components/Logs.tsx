@@ -48,12 +48,14 @@ export default function Logs({ className = "", onClick }: LogsProps) {
           drop-shadow(0px 2px 4px rgba(0,0,0,0.08))
           drop-shadow(0px 4px 8px rgba(0,0,0,0.06))
         `,
+        opacity: 1,
       }}
     >
       {/* Base paper with grid */}
       <div
         className="relative bg-white pl-10 pr-5 py-5 h-full flex flex-col"
         style={{
+          backgroundColor: "#ffffff",
           backgroundImage: `
             linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)

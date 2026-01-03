@@ -4,116 +4,107 @@ import { useState } from "react";
 import Folder from "@/components/Folder";
 import Card from "@/components/Card";
 import Logs from "@/components/Logs";
+import Instructions from "@/components/Instructions";
 
-// Card scale controls  
-const CARD_SCALE_DEFAULT = 1; // Scale when card is tucked in folder (smaller to fit behind folder)
-const CARD_SCALE_EXPANDED = 1.05; // Scale when card is expanded
-const CARD_ROTATION = -8; // Rotation angle when tucked (negative = counter-clockwise, in degrees)
+// CONFIG
+const C = {
+  expandOffset: 440,
+  instructionsExpandOffset: 600, // Larger offset when instructions are expanded to move folder down more
 
-// Folder position controls
-const FOLDER_EXPANDED_OFFSET = 480; // How far down folder moves when expanded (in px)
-const DEFAULT_Y_OFFSET = 100; // How much to push everything down in default state (in px)
+  folder:       { bottom: -260, z: 10 },
+  card:         { bottom: 40, z: 5 },
+  logs:         { top: 20, x: 24, rotation: 12, scale: 0.85, scaleExp: 1.3, z: 4 },
+  instructions: { top: 24, x: 164, rotation: -12, scale: 0.65, scaleExp: 1.2, z: 4 },
+};
 
-// Logs position controls
-const LOGS_PEEK_AMOUNT = 80; // How much of the logs is visible when tucked (in px)
-const LOGS_ROTATION = 12; // Rotation angle when tucked (clockwise, in degrees)
-const LOGS_RIGHT_OFFSET = -40; // Distance from right edge of folder (in px, negative = closer to folder)
-const LOGS_TOP_OFFSET = -40; // Distance from top of folder (in px)
-const LOGS_SCALE_DEFAULT = 0.85; // Scale when logs is tucked
-const LOGS_SCALE_EXPANDED = 1.3; // Scale when logs is expanded
-
-type ExpandedState = null | "card" | "logs";
+type Expanded = null | "card" | "logs" | "instructions";
 
 export default function Home() {
-  const [expanded, setExpanded] = useState<ExpandedState>(null);
+  const [exp, setExp] = useState<Expanded>(null);
+  const anyExp = exp !== null;
+  const offset = anyExp 
+    ? (exp === "instructions" ? C.instructionsExpandOffset : C.expandOffset)
+    : 0;
 
-  const isCardExpanded = expanded === "card";
-  const isLogsExpanded = expanded === "logs";
-  const isAnyExpanded = expanded !== null;
-
-  const handleNavigation = (state: 1 | 2 | 3) => {
-    if (state === 1) {
-      setExpanded(null);
-    } else if (state === 2) {
-      setExpanded("card");
-    } else if (state === 3) {
-      setExpanded("logs");
-    }
-  };
-
-  const currentState: 1 | 2 | 3 = isCardExpanded ? 2 : isLogsExpanded ? 3 : 1;
+  const nav = (n: 1 | 2 | 3 | 4) => setExp({ 1: null, 2: "card", 3: "logs", 4: "instructions" }[n] as Expanded);
+  const current = exp === "card" ? 2 : exp === "logs" ? 3 : exp === "instructions" ? 4 : 1;
 
   return (
     <div className="h-screen w-screen paper-texture relative overflow-hidden">
-      {/* Navigation */}
+      {/* Nav */}
       <div className="absolute top-4 left-4 z-30 flex flex-col gap-1">
-        {[1, 2, 3].map((num) => {
-          const isActive = currentState === num;
-          const showBack = isActive && num !== 1;
-          return (
-            <button
-              key={num}
-              onClick={() => showBack ? handleNavigation(1) : handleNavigation(num as 1 | 2 | 3)}
-              className="text-xs font-mono transition-all duration-300 ease-out cursor-pointer text-left w-8"
-              style={{
-                color: isActive ? "#000" : "#999",
-                fontFamily: '"Courier New", Courier, monospace',
-              }}
-            >
-              <span className="inline-block transition-all duration-300 ease-out">
-                {showBack ? "<-" : num}
-              </span>
-            </button>
-          );
-        })}
+        {[1, 2, 3, 4].map((n) => (
+          <button
+            key={n}
+            onClick={() => nav(current === n && n !== 1 ? 1 : n as 1 | 2 | 3 | 4)}
+            className="text-xs font-mono transition-all duration-300 cursor-pointer text-left w-8"
+            style={{ color: current === n ? "#000" : "#999", fontFamily: '"Courier New", monospace' }}
+          >
+            {current === n && n !== 1 ? "<-" : n}
+          </button>
+        ))}
       </div>
 
-      {/* Card - peeking out of folder */}
+      {/* Card */}
       <div
-        className="fixed left-1/2 origin-bottom transition-all duration-300 ease-out card-hover z-[5]"
-        data-expanded={isCardExpanded || undefined}
+        className="fixed left-1/2 transition-all duration-300 card-hover"
+        data-expanded={exp === "card" || undefined}
         style={{
-          top: isCardExpanded ? "50%" : undefined,
-          bottom: isCardExpanded ? undefined : `${128 - DEFAULT_Y_OFFSET}px`,
-          "--card-scale": isCardExpanded ? CARD_SCALE_EXPANDED : CARD_SCALE_DEFAULT,
-          "--folder-offset": isLogsExpanded ? `${FOLDER_EXPANDED_OFFSET}px` : "0px",
-          transform: isCardExpanded
-            ? `translate(-50%, -50%) rotate(0deg) scale(var(--card-scale))`
-            : `translateX(-50%) translateY(calc(var(--hover-y, 0px) + var(--folder-offset))) rotate(${CARD_ROTATION}deg) scale(var(--card-scale))`,
-          pointerEvents: isLogsExpanded ? "none" : "auto",
-        } as React.CSSProperties & { "--card-scale": number; "--hover-y"?: string; "--folder-offset": string }}
+          zIndex: C.card.z,
+          top: exp === "card" ? "50%" : undefined,
+          bottom: exp === "card" ? undefined : C.card.bottom,
+          transform: exp === "card"
+            ? "translate(-50%, -50%)"
+            : `translateX(-50%) translateY(${anyExp ? offset : 0}px)`,
+          transformOrigin: "bottom center",
+          pointerEvents: anyExp && exp !== "card" ? "none" : "auto",
+        }}
       >
-        <Card onClick={() => !isAnyExpanded && setExpanded("card")} />
+        <Card onClick={() => !anyExp && setExp("card")} />
       </div>
 
-      {/* Logs - peeking from top right */}
+      {/* Logs */}
       <div
-        className="fixed left-2/5 transition-all duration-300 ease-out logs-hover z-[4]"
-        data-expanded={isLogsExpanded || undefined}
+        className="fixed left-1/2 transition-all duration-300 logs-hover"
+        data-expanded={exp === "logs" || undefined}
         style={{
-          // When expanded: center of screen
-          // When tucked: top right corner, rotated
-          top: isLogsExpanded ? "50%" : `calc(50% - 296px + ${LOGS_TOP_OFFSET + DEFAULT_Y_OFFSET}px)`,
-          "--folder-offset": isCardExpanded ? `${FOLDER_EXPANDED_OFFSET}px` : "0px",
-          transform: isLogsExpanded
-            ? `translate(calc(10vw - 50%), -50%) rotate(0deg) scale(${LOGS_SCALE_EXPANDED})`
-            : `translateX(calc(50% + ${100 + LOGS_RIGHT_OFFSET}px - ${LOGS_PEEK_AMOUNT}px)) translateY(calc(var(--logs-hover-y, 0px) + var(--folder-offset))) rotate(${LOGS_ROTATION}deg) scale(${LOGS_SCALE_DEFAULT})`,
-          transformOrigin: isLogsExpanded ? "center" : "top right",
-          pointerEvents: isCardExpanded ? "none" : "auto",
-        } as React.CSSProperties & { "--logs-hover-y"?: string; "--folder-offset": string }}
+          zIndex: C.logs.z,
+          top: exp === "logs" ? "50%" : C.logs.top,
+          transform: exp === "logs"
+            ? `translate(-50%, -50%) scale(${C.logs.scaleExp})`
+            : `translateX(${C.logs.x}px) translateY(${anyExp ? offset : 0}px) rotate(${C.logs.rotation}deg) scale(${C.logs.scale})`,
+          transformOrigin: exp === "logs" ? "center" : "top left",
+          pointerEvents: anyExp && exp !== "logs" ? "none" : "auto",
+        }}
       >
-        <Logs onClick={() => !isAnyExpanded && setExpanded("logs")} />
+        <Logs onClick={() => !anyExp && setExp("logs")} />
+      </div>
+
+      {/* Instructions */}
+      <div
+        className="fixed right-1/2 transition-all duration-300 instructions-hover"
+        data-expanded={exp === "instructions" || undefined}
+        style={{
+          zIndex: C.instructions.z,
+          top: exp === "instructions" ? "50%" : C.instructions.top,
+          transform: exp === "instructions"
+            ? `translate(50%, -50%) scale(${C.instructions.scaleExp})`
+            : `translateX(${C.instructions.x}px) translateY(${anyExp ? offset : 0}px) rotate(${C.instructions.rotation}deg) scale(${C.instructions.scale})`,
+          transformOrigin: exp === "instructions" ? "center" : "top right",
+          pointerEvents: anyExp && exp !== "instructions" ? "none" : "auto",
+        }}
+      >
+        <Instructions onClick={() => !anyExp && setExp("instructions")} />
       </div>
 
       {/* Folder */}
       <Folder
-        onClick={isAnyExpanded ? () => setExpanded(null) : undefined}
-        className="absolute left-1/2 transition-transform duration-300 ease-out z-10"
+        onClick={anyExp ? () => setExp(null) : undefined}
+        className="absolute left-1/2 transition-transform duration-300"
         style={{
-          bottom: `${-164 - DEFAULT_Y_OFFSET}px`,
-          transform: isAnyExpanded
-            ? `translateX(-50%) translateY(${FOLDER_EXPANDED_OFFSET}px)`
-            : "translateX(-50%)",
+          zIndex: C.folder.z,
+          bottom: C.folder.bottom,
+          transform: `translateX(-50%) translateY(${offset}px)`,
         }}
       />
     </div>

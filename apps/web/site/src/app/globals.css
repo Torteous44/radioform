@@ -72,3 +72,11 @@ body {
   --logs-hover-y: -20px;
 }
 
+.instructions-hover {
+  --instructions-hover-y: 0px;
+}
+
+.instructions-hover:not([data-expanded]):hover {
+  --instructions-hover-y: -20px;
+}
+

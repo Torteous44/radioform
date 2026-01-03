@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Polaroid from "./Polaroid";
 
 interface CardProps {
@@ -22,9 +23,11 @@ export default function Card({ className = "", onClick }: CardProps) {
       {/* Polaroid attached to top right */}
       <div className="absolute top-[-32px] right-[-48px] z-20">
         {/* Paperclip on top */}
-        <img
+        <Image
           src="/paperclip.png"
           alt="Paperclip"
+          width={64}
+          height={64}
           className="absolute top-[12px] left-9/12 -translate-x-1/2 rotate-[-50deg] z-30 w-16 h-auto"
         />
         <Polaroid
@@ -72,9 +75,9 @@ export default function Card({ className = "", onClick }: CardProps) {
         {/* Body */}
         <div className="text-left space-y-3 text-[12px] leading-relaxed flex-1">
           <p>
-            We know you've bought that new stereo system or headphones. We know
-            you're excited. But it's time to take it to the next level. The level
-            where your music starts to warm your ears like a hot shower. So let's
+            We know you&apos;ve bought that new stereo system or headphones. We know
+            you&apos;re excited. But it&apos;s time to take it to the next level. The level
+            where your music starts to warm your ears like a hot shower. So let&apos;s
             make that happen.
           </p>
 
@@ -86,7 +89,7 @@ export default function Card({ className = "", onClick }: CardProps) {
           </p>
 
           <p>
-            We built this project to be fully open sourced, so you know what you're
+            We built this project to be fully open sourced, so you know what you&apos;re
             getting into. Natively built in Swift, this app is a performant,
             lightweight way to enjoy your music the way it was meant to be.
             Seriously, give it a go.
@@ -114,9 +117,11 @@ export default function Card({ className = "", onClick }: CardProps) {
 
         {/* Logo at bottom - stamp style */}
         <div className="flex justify-end -mt-24">
-          <img
+          <Image
             src="/pavlos.svg"
             alt="Logo"
+            width={124}
+            height={124}
             className="h-18 w-auto"
             style={{
               height: "124px",

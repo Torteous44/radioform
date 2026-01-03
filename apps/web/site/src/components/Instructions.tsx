@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 interface InstructionsProps {
   className?: string;
   onClick?: () => void;
@@ -120,9 +122,11 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
           {instructions.map((instruction, index) => (
             <div key={index} className="flex flex-col flex-1">
               <div className="relative mb-3 aspect-square">
-                <img
+                <Image
                   src={instruction.image}
                   alt={`Step ${index + 1}`}
+                  width={200}
+                  height={200}
                   className="w-full h-full object-cover rounded-sm"
                   style={{
                     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",

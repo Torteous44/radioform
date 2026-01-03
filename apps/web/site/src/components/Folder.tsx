@@ -24,6 +24,7 @@ export default function Folder({ className = "", onClick, style }: FolderProps) 
       }}
     >
       {/* Base: Folder SVG background */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/folder.svg"
         alt="Manila folder"
@@ -222,13 +223,13 @@ export default function Folder({ className = "", onClick, style }: FolderProps) 
       {/* Layer 9: Text content */}
       <div className="absolute top-0 left-0 w-full h-full pt-[120px] px-[50px] pb-[40px] flex flex-col font-[family-name:var(--font-special-elite)] tracking-[0.05em] text-[#2a2318] pointer-events-none z-[9]">
         <p className="text-center text-[14px] mb-1">INTRODUCING</p>
-        <h1 className="text-center text-[42px] font-normal m-0 mb-1">"RADIOFORM"</h1>
+        <h1 className="text-center text-[42px] font-normal m-0 mb-1">&quot;RADIOFORM&quot;</h1>
         <p className="text-center text-[14px] mb-1">BY</p>
         <p className="text-center text-[16px] mb-8">THE PAVLOS COMPANY RSA</p>
 
         <hr className="border border-t-0 border-[#2a2318]" />
 
-        <p className="text-center text-[18px] mt-4 mb-3">AN EQ MACOS APP THAT "JUST WORKS"</p>
+        <p className="text-center text-[18px] mt-4 mb-3">AN EQ MACOS APP THAT &quot;JUST WORKS&quot;</p>
 
         <hr className="border border-t-0 border-[#2a2318] mb-2" />
 

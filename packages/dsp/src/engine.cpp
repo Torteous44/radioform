@@ -10,6 +10,7 @@
 #include "biquad.h"
 #include "smoothing.h"
 #include "limiter.h"
+#include "dc_blocker.h"
 #include "cpu_util.h"
 
 #include <cstring>
@@ -49,6 +50,9 @@ struct radioform_dsp_engine {
     // Limiter
     SoftLimiter limiter;
     bool limiter_enabled;
+
+    // DC Blocker (prevents DC offset buildup)
+    StereoDCBlocker dc_blocker;
 
     // Bypass (atomic for lock-free realtime control)
     std::atomic<bool> bypass;
@@ -97,6 +101,9 @@ struct radioform_dsp_engine {
 
         // Initialize limiter
         limiter.init(-0.1f); // -0.1 dB threshold
+
+        // Initialize DC blocker (5Hz high-pass)
+        dc_blocker.init(static_cast<float>(sample_rate), 5.0f);
     }
 };
 
@@ -130,6 +137,9 @@ void radioform_dsp_reset(radioform_dsp_engine_t* engine) {
         bq.reset();
     }
 
+    // Reset DC blocker
+    engine->dc_blocker.reset();
+
     // Reset statistics
     engine->frames_processed.store(0);
     engine->underrun_count.store(0);
@@ -148,6 +158,9 @@ radioform_error_t radioform_dsp_set_sample_rate(
 
     // Reinitialize smoothers with new sample rate
     engine->preamp_smoother.init(static_cast<float>(sample_rate), 10.0f);
+
+    // Reinitialize DC blocker with new sample rate
+    engine->dc_blocker.init(static_cast<float>(sample_rate), 5.0f);
 
     // Recalculate filter coefficients
     return radioform_dsp_apply_preset(engine, &engine->current_preset);
@@ -199,6 +212,9 @@ void radioform_dsp_process_interleaved(
                 engine->bands[band].processSample(left, right, &left, &right);
             }
         }
+
+        // Remove DC offset (prevents buildup from cascaded filters)
+        engine->dc_blocker.processStereo(left, right, &left, &right);
 
         // Apply limiter if enabled
         if (engine->limiter_enabled) {
@@ -299,6 +315,13 @@ void radioform_dsp_process_planar(
             );
         }
     }
+
+    // Remove DC offset (prevents buildup from cascaded filters)
+    engine->dc_blocker.processBuffer(
+        output_left, output_right,
+        output_left, output_right,
+        num_frames
+    );
 
     // Apply limiter if enabled
     if (engine->limiter_enabled) {

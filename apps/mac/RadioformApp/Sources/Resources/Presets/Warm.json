@@ -10,28 +10,28 @@
     },
     {
       "frequency_hz": 64.0,
-      "gain_db": 0.88,
+      "gain_db": 1.14,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 125.0,
-      "gain_db": 2.6,
+      "gain_db": 3.38,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 250.0,
-      "gain_db": 1.74,
+      "gain_db": 2.26,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 500.0,
-      "gain_db": 0.88,
+      "gain_db": 1.14,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
@@ -45,21 +45,21 @@
     },
     {
       "frequency_hz": 2000.0,
-      "gain_db": -0.88,
+      "gain_db": -1.14,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 4000.0,
-      "gain_db": -0.88,
+      "gain_db": -1.14,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 8000.0,
-      "gain_db": -0.88,
+      "gain_db": -1.14,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
@@ -72,7 +72,7 @@
       "enabled": false
     }
   ],
-  "preamp_db": -2.4,
+  "preamp_db": 0.0,
   "limiter_enabled": true,
   "limiter_threshold_db": -1.2
 }

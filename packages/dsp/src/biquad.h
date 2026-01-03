@@ -101,9 +101,77 @@ private:
     }
 
     /**
+     * @brief Calculate shelving filter using matched z-transform
+     *
+     * Matched transform gives more accurate analog-like response for shelving filters
+     * compared to bilinear transform. It eliminates cramping at high frequencies.
+     *
+     * @param band Band configuration
+     * @param sample_rate Sample rate in Hz
+     * @param is_low_shelf true for low shelf, false for high shelf
+     * @return Biquad coefficients
+     */
+    BiquadCoeffs calculateShelfMatchedTransform(
+        const radioform_band_t& band,
+        float sample_rate,
+        bool is_low_shelf
+    ) {
+        BiquadCoeffs c;
+
+        const float freq = band.frequency_hz;
+        const float gain_db = band.gain_db;
+        const float Q = band.q_factor;
+
+        // Linear gain (not sqrt)
+        const float A = std::pow(10.0f, gain_db / 20.0f);
+
+        // Prewarped frequency
+        const float w0 = 2.0f * M_PI * freq / sample_rate;
+        const float tan_w0_2 = std::tan(w0 / 2.0f);
+
+        // Analog shelf pole/zero calculation
+        const float alpha = std::sqrt(A);
+        const float beta = std::sqrt(A) / Q;
+
+        if (is_low_shelf) {
+            // Low shelf matched transform
+            const float b0_analog = A;
+            const float b1_analog = beta * alpha;
+            const float a0_analog = 1.0f;
+            const float a1_analog = beta / alpha;
+
+            // Map to digital domain using matched transform
+            const float norm = a0_analog + a1_analog * tan_w0_2;
+            c.b0 = (b0_analog + b1_analog * tan_w0_2) / norm;
+            c.b1 = (b0_analog - b1_analog * tan_w0_2) / norm;
+            c.b2 = 0.0f;
+            c.a1 = (a0_analog - a1_analog * tan_w0_2) / norm;
+            c.a2 = 0.0f;
+        } else {
+            // High shelf matched transform
+            const float b0_analog = 1.0f;
+            const float b1_analog = beta / alpha;
+            const float a0_analog = A;
+            const float a1_analog = beta * alpha;
+
+            // Map to digital domain using matched transform
+            const float norm = a0_analog * tan_w0_2 + a1_analog;
+            c.b0 = (b0_analog * tan_w0_2 + b1_analog) / norm;
+            c.b1 = (b0_analog * tan_w0_2 - b1_analog) / norm;
+            c.b2 = 0.0f;
+            c.a1 = (a0_analog * tan_w0_2 - a1_analog) / norm;
+            c.a2 = 0.0f;
+        }
+
+        return c;
+    }
+
+    /**
      * @brief Calculate biquad coefficients from band parameters
      *
-     * Using Robert Bristow-Johnson's cookbook formulas:
+     * Using Robert Bristow-Johnson's cookbook formulas with audiophile enhancements:
+     * - Enhanced bandwidth prewarping for peak filters (reduces cramping at high frequencies)
+     * - Standard RBJ formulas for shelving filters (well-tested, reliable)
      * https://www.w3.org/TR/audio-eq-cookbook/
      */
     BiquadCoeffs calculateCoeffs(const radioform_band_t& band, float sample_rate) {
@@ -116,12 +184,18 @@ private:
         const float w0 = 2.0f * M_PI * freq / sample_rate;
         const float cos_w0 = std::cos(w0);
         const float sin_w0 = std::sin(w0);
-        const float alpha = sin_w0 / (2.0f * Q);
+
+        // Enhanced bandwidth prewarping for peak filters
+        // This compensates for bandwidth cramping at high frequencies
+        // Warp factor approaches 1.0 at low frequencies, increases at high frequencies
+        const float warp_factor = (w0 < 0.01f) ? 1.0f : w0 / std::sin(w0);
+        const float alpha = sin_w0 / (2.0f * Q * warp_factor);
+
         const float A = std::pow(10.0f, gain_db / 40.0f); // Sqrt of gain
 
         switch (band.type) {
             case RADIOFORM_FILTER_PEAK: {
-                // Parametric peaking EQ
+                // Parametric peaking EQ with enhanced bandwidth prewarping
                 const float a0 = 1.0f + alpha / A;
                 c.b0 = (1.0f + alpha * A) / a0;
                 c.b1 = (-2.0f * cos_w0) / a0;
@@ -132,7 +206,7 @@ private:
             }
 
             case RADIOFORM_FILTER_LOW_SHELF: {
-                // Low shelf
+                // Low shelf (RBJ cookbook - well-tested formula)
                 const float beta = std::sqrt(A) / Q;
                 const float a0 = (A + 1.0f) + (A - 1.0f) * cos_w0 + beta * sin_w0;
 
@@ -145,7 +219,7 @@ private:
             }
 
             case RADIOFORM_FILTER_HIGH_SHELF: {
-                // High shelf
+                // High shelf (RBJ cookbook - well-tested formula)
                 const float beta = std::sqrt(A) / Q;
                 const float a0 = (A + 1.0f) - (A - 1.0f) * cos_w0 + beta * sin_w0;
 

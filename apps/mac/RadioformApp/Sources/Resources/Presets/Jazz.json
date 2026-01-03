@@ -1,57 +1,78 @@
 {
-  "name": "Clear",
+  "name": "Jazz",
   "bands": [
     {
-      "frequency_hz": 125.0,
-      "gain_db": -2.26,
-      "q_factor": 1.0,
-      "filter_type": 0,
-      "enabled": true
-    },
-    {
-      "frequency_hz": 250.0,
-      "gain_db": -1.14,
-      "q_factor": 1.0,
-      "filter_type": 0,
-      "enabled": true
-    },
-    {
-      "frequency_hz": 500.0,
+      "frequency_hz": 32.0,
       "gain_db": 0.0,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": false
     },
     {
-      "frequency_hz": 1000.0,
-      "gain_db": 2.26,
+      "frequency_hz": 64.0,
+      "gain_db": 1.5,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
+      "frequency_hz": 125.0,
+      "gain_db": 1.5,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 250.0,
+      "gain_db": 0.75,
+      "q_factor": 1.2,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 500.0,
+      "gain_db": 0.0,
+      "q_factor": 1.1,
+      "filter_type": 0,
+      "enabled": false
+    },
+    {
+      "frequency_hz": 1000.0,
+      "gain_db": 0.0,
+      "q_factor": 1.0,
+      "filter_type": 0,
+      "enabled": false
+    },
+    {
       "frequency_hz": 2000.0,
-      "gain_db": 4.52,
+      "gain_db": 0.75,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 4000.0,
-      "gain_db": 3.38,
-      "q_factor": 1.0,
+      "gain_db": -0.75,
+      "q_factor": 1.2,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 8000.0,
-      "gain_db": 1.14,
-      "q_factor": 1.0,
+      "gain_db": 0.75,
+      "q_factor": 0.9,
+      "filter_type": 0,
+      "enabled": true
+    },
+    {
+      "frequency_hz": 16000.0,
+      "gain_db": 1.5,
+      "q_factor": 0.9,
       "filter_type": 0,
       "enabled": true
     }
   ],
   "preamp_db": 0.0,
   "limiter_enabled": true,
-  "limiter_threshold_db": -1.2
+  "limiter_threshold_db": -1.0
 }

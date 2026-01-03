@@ -19,7 +19,8 @@ let deviceMonitor = DeviceMonitor(
     registry: deviceRegistry,
     proxyManager: proxyManager,
     memoryManager: memoryManager,
-    discovery: deviceDiscovery
+    discovery: deviceDiscovery,
+    audioEngine: audioEngine
 )
 let presetLoader = PresetLoader()
 let presetMonitor = PresetMonitor(loader: presetLoader, processor: dspProcessor)
@@ -136,7 +137,24 @@ func cleanup() {
 
     memoryManager.cleanup()
 
+    restartCoreAudio()
+
     print("[Cleanup] ✓ Complete")
+}
+
+private func restartCoreAudio() {
+    // Force HAL to drop any lingering virtual devices by restarting coreaudiod
+    let task = Process()
+    task.launchPath = "/usr/bin/killall"
+    task.arguments = ["-9", "coreaudiod"]
+
+    do {
+        try task.run()
+        task.waitUntilExit()
+        print("[Cleanup] Restarted coreaudiod (status \(task.terminationStatus))")
+    } catch {
+        print("[Cleanup] Failed to restart coreaudiod: \(error)")
+    }
 }
 
 main()

@@ -153,6 +153,8 @@ public:
         , state_(DeviceState::Uninitialized)
         , last_health_check_(std::chrono::steady_clock::now())
         , last_heartbeat_(std::chrono::steady_clock::now())
+        , last_host_hb_(0)
+        , last_host_hb_change_(std::chrono::steady_clock::now())
         , current_sample_rate_(DEFAULT_SAMPLE_RATE)
         , current_channels_(DEFAULT_CHANNELS)
         , resampler_(nullptr)
@@ -437,30 +439,20 @@ private:
             return false;
         }
 
-        // Check heartbeat timeout
-        static uint64_t last_host_hb = 0;
-        static auto last_check = std::chrono::steady_clock::now();
-
+        // Check heartbeat timeout (treat a never-started heartbeat as unhealthy after timeout)
         auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - last_check).count();
+        uint64_t current_host_hb = atomic_load(&shared_memory_->host_heartbeat);
 
-        if (elapsed >= HEARTBEAT_INTERVAL_SEC) {
-            uint64_t current_host_hb = atomic_load(&shared_memory_->host_heartbeat);
-
-            if (current_host_hb == last_host_hb && last_host_hb > 0) {
-                // Heartbeat not incrementing
-                auto hb_timeout = std::chrono::duration_cast<std::chrono::seconds>(
-                    now - last_check).count();
-
-                if (hb_timeout >= HEARTBEAT_TIMEOUT_SEC) {
-                    RF_LOG_ERROR("Health: host heartbeat timeout");
-                    return false;
-                }
+        if (current_host_hb != last_host_hb_) {
+            last_host_hb_ = current_host_hb;
+            last_host_hb_change_ = now;
+        } else {
+            auto hb_age = std::chrono::duration_cast<std::chrono::seconds>(
+                now - last_host_hb_change_).count();
+            if (hb_age >= HEARTBEAT_TIMEOUT_SEC) {
+                RF_LOG_ERROR("Health: host heartbeat timeout (stalled %llds)", (long long)hb_age);
+                return false;
             }
-
-            last_host_hb = current_host_hb;
-            last_check = now;
         }
 
         // Check ring buffer integrity
@@ -618,6 +610,8 @@ private:
 
     std::chrono::steady_clock::time_point last_health_check_;
     std::chrono::steady_clock::time_point last_heartbeat_;
+    uint64_t last_host_hb_;
+    std::chrono::steady_clock::time_point last_host_hb_change_;
 
     uint32_t current_sample_rate_;
     uint32_t current_channels_;
@@ -635,6 +629,12 @@ struct RadioformGlobalState {
     std::map<std::string, std::shared_ptr<aspl::Device>> devices;
     std::thread monitor_thread;
     std::atomic<bool> should_stop{false};
+
+    struct HostHeartbeatState {
+        uint64_t last_value{0};
+        std::chrono::steady_clock::time_point last_change{std::chrono::steady_clock::now()};
+    };
+    std::map<std::string, HostHeartbeatState> host_hb_cache;
 };
 
 static RadioformGlobalState* g_state = nullptr;
@@ -669,6 +669,10 @@ void AddDevice(const std::string& name, const std::string& uid) {
     if (device) {
         g_state->plugin->AddDevice(device);
         g_state->devices[uid] = device;
+        // Preserve any stale heartbeat knowledge; only init if missing.
+        if (g_state->host_hb_cache.find(uid) == g_state->host_hb_cache.end()) {
+            g_state->host_hb_cache[uid] = RadioformGlobalState::HostHeartbeatState{};
+        }
     }
 }
 
@@ -697,10 +701,66 @@ std::map<std::string, std::string> ParseControlFile() {
     return devices;
 }
 
+bool HostHeartbeatFresh(const std::string& uid) {
+    if (!g_state) return false;
+
+    std::string safe_uid = uid;
+    for (char& c : safe_uid) {
+        if (c == ':' || c == '/' || c == ' ') c = '_';
+    }
+    std::string path = "/tmp/radioform-" + safe_uid;
+
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) {
+        return false;
+    }
+
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) {
+        return false;
+    }
+
+    void* mem = mmap(nullptr, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    close(fd);
+    if (mem == MAP_FAILED) {
+        return false;
+    }
+
+    auto shared = reinterpret_cast<RFSharedAudioV2*>(mem);
+    uint64_t hb = atomic_load(&shared->host_heartbeat);
+
+    munmap(mem, st.st_size);
+
+    auto now = std::chrono::steady_clock::now();
+    auto& state = g_state->host_hb_cache[uid];
+
+    if (hb != state.last_value) {
+        state.last_value = hb;
+        state.last_change = now;
+    }
+
+    auto age = std::chrono::duration_cast<std::chrono::seconds>(
+        now - state.last_change).count();
+
+    // Treat a stalled or never-started heartbeat as stale after the timeout.
+    return age < HEARTBEAT_TIMEOUT_SEC;
+}
+
 void SyncDevices() {
     if (!g_state) return;
 
-    auto desired = ParseControlFile();
+    auto desired_raw = ParseControlFile();
+    std::map<std::string, std::string> desired;
+
+    for (const auto& [uid, name] : desired_raw) {
+        if (HostHeartbeatFresh(uid)) {
+            desired[uid] = name;
+        } else {
+            RF_LOG_INFO("SyncDevices: skipping stale entry uid=%s (no host heartbeat)", uid.c_str());
+        }
+    }
+
+    RF_LOG_INFO("SyncDevices: desired=%zu current=%zu", desired.size(), g_state->devices.size());
 
     for (const auto& [uid, name] : desired) {
         if (g_state->devices.find(uid) == g_state->devices.end()) {
@@ -716,6 +776,7 @@ void SyncDevices() {
     }
 
     for (const auto& uid : to_remove) {
+        RF_LOG_INFO("SyncDevices: removing proxy for uid=%s", uid.c_str());
         RemoveDevice(uid);
     }
 }
@@ -730,10 +791,7 @@ void MonitorControlFile() {
 }
 
 std::shared_ptr<aspl::Driver> CreateRadioformDriver() {
-    RF_LOG_INFO("╔═══════════════════════════════════════════════╗");
-    RF_LOG_INFO("║   RADIOFORM UNIVERSAL DRIVER V2               ║");
-    RF_LOG_INFO("║   Works with ANY format, rate, or device      ║");
-    RF_LOG_INFO("╚═══════════════════════════════════════════════╝");
+
 
     g_state = new RadioformGlobalState();
     g_state->context = std::make_shared<aspl::Context>();

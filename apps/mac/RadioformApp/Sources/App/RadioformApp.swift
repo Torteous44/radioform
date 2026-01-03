@@ -95,7 +95,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        let logFile = "/tmp/radioform-quit.log"
+        let logsDir = FileManager.default.urls(
+            for: .libraryDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Logs/Radioform")
+
+        try? FileManager.default.createDirectory(
+            at: logsDir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+
+        let logFile = logsDir.appendingPathComponent("app.log").path
 
         func log(_ message: String) {
             let timestamp = Date()

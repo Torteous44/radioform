@@ -7,8 +7,13 @@ struct RadioformConfig {
     static let defaultFormat = RF_FORMAT_FLOAT32
     static let defaultDurationMs: UInt32 = 40
 
-    static let controlFilePath = "/tmp/radioform-devices.txt"
-    static let presetFilePath = "/tmp/radioform-preset.json"
+    static var controlFilePath: String {
+        return PathManager.controlFilePath
+    }
+
+    static var presetFilePath: String {
+        return PathManager.presetFilePath.path
+    }
 
     static let heartbeatInterval: TimeInterval = 1.0
     static let presetMonitorInterval: TimeInterval = 0.5

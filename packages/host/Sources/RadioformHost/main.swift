@@ -29,6 +29,17 @@ func main() {
     print("║   RADIOFORM HOST V2 - UNIVERSAL AUDIO DRIVER      ║")
     print("╚════════════════════════════════════════════════════╝")
 
+    print("[Step 0] Setting up directories...")
+    do {
+        try PathManager.ensureDirectories()
+        PathManager.migrateOldPreset()
+        print("    ✓ Application Support: \(PathManager.appSupportDir.path)")
+        print("    ✓ Logs: \(PathManager.logsDir.path)")
+    } catch {
+        print("[ERROR] Failed to create directories: \(error)")
+        exit(1)
+    }
+
     print("[Step 1] Discovering physical audio devices...")
     let devices = deviceDiscovery.enumeratePhysicalDevices()
 
@@ -52,7 +63,8 @@ func main() {
 
     print("[Step 4] Writing control file...")
     deviceRegistry.writeControlFile()
-    print("    ✓ Control file: /tmp/radioform-devices.txt")
+    print("    ✓ Control file: \(RadioformConfig.controlFilePath)")
+    print("    ✓ Preset file: \(RadioformConfig.presetFilePath)")
 
     print("[Step 5] Starting heartbeat monitor...")
     memoryManager.startHeartbeat()

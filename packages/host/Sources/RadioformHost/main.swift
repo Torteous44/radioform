@@ -1,8 +1,8 @@
-import Foundation
-import CoreAudio
 import AudioToolbox
 import CRadioformAudio
 import CRadioformDSP
+import CoreAudio
+import Foundation
 
 let deviceDiscovery = DeviceDiscovery()
 let deviceRegistry = DeviceRegistry()
@@ -25,9 +25,6 @@ let presetLoader = PresetLoader()
 let presetMonitor = PresetMonitor(loader: presetLoader, processor: dspProcessor)
 
 func main() {
-    print("╔════════════════════════════════════════════════════╗")
-    print("║   RADIOFORM HOST V2 - UNIVERSAL AUDIO DRIVER      ║")
-    print("╚════════════════════════════════════════════════════╝")
 
     print("[Step 0] Setting up directories...")
     do {
@@ -81,7 +78,6 @@ func main() {
         print("[ERROR] Failed to apply EQ preset")
         exit(1)
     }
-    print("    ✓ Bass boost EQ: +6dB @ 100Hz, +3dB @ 60Hz")
 
     print("[Step 9] Finding physical output device...")
     print("[Step 10] Creating audio unit...")
@@ -93,13 +89,6 @@ func main() {
         print("[ERROR] Audio engine setup failed: \(error)")
         exit(1)
     }
-
-    print("")
-    print("╔════════════════════════════════════════════════════╗")
-    print("║            HOST V2 RUNNING - UNIVERSAL             ║")
-    print("║  Features: Multi-rate, Multi-format, Heartbeat    ║")
-    print("╚════════════════════════════════════════════════════╝")
-    print("")
 
     presetMonitor.startMonitoring()
 

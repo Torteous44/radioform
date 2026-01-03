@@ -3,34 +3,34 @@
   "bands": [
     {
       "frequency_hz": 2000.0,
-      "gain_db": -0.73,
+      "gain_db": -0.88,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 4000.0,
-      "gain_db": 0.73,
+      "gain_db": 0.88,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 8000.0,
-      "gain_db": 2.9,
+      "gain_db": 3.48,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     },
     {
       "frequency_hz": 16000.0,
-      "gain_db": 2.17,
+      "gain_db": 2.6,
       "q_factor": 1.0,
       "filter_type": 0,
       "enabled": true
     }
   ],
-  "preamp_db": -2.5,
+  "preamp_db": -3.0,
   "limiter_enabled": true,
-  "limiter_threshold_db": -1.0
+  "limiter_threshold_db": -1.2
 }

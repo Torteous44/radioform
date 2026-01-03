@@ -1,10 +1,5 @@
-"use client";
-
-import { useState, useEffect } from "react";
-
 interface LogsProps {
   className?: string;
-  onClick?: () => void;
 }
 
 interface ChangelogEntry {
@@ -15,156 +10,153 @@ interface ChangelogEntry {
   time: string;
 }
 
-export default function Logs({ className = "", onClick }: LogsProps) {
-  const [entries, setEntries] = useState<ChangelogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+const fallbackEntries: ChangelogEntry[] = [
+  {
+    type: "fix",
+    description: "Readme header and line fixes",
+    author: "GitHub",
+    date: "Jan 3, 2026",
+    time: "11:07 am",
+  },
+  {
+    type: "misc",
+    description: "Add GPL v3 license file, readme updates, structural docs",
+    author: "GitHub",
+    date: "Jan 3, 2026",
+    time: "11:07 am",
+  },
+];
 
-  useEffect(() => {
-    const fetchReleaseData = async () => {
-      try {
-        const response = await fetch(
-          "https://api.github.com/repos/Torteous44/radioform/releases/latest"
-        );
-        if (!response.ok) throw new Error("Failed to fetch release data");
-        
-        const data = await response.json();
-        const parsedEntries: ChangelogEntry[] = [];
-        
-        // Parse the release body
-        const body = data.body || "";
-        const lines = body.split("\n");
-        
-        // Parse date from release
-        const releaseDate = new Date(data.published_at);
-        const dateStr = releaseDate.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-        const timeStr = releaseDate.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        });
-        const author = data.author?.login || "GitHub";
-        
-        let currentSection = "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          
-          // Detect section headers (### or ##)
-          if (trimmed.startsWith("### ") || trimmed.startsWith("## ")) {
-            const section = trimmed.replace(/^##+\s+/, "").toLowerCase();
-            if (section.includes("bug") || section.includes("fix")) {
-              currentSection = "fix";
-            } else if (section.includes("feat") || section.includes("feature")) {
-              currentSection = "feat";
-            } else if (section.includes("refactor")) {
-              currentSection = "refactor";
-            } else if (section.includes("doc")) {
-              currentSection = "docs";
-            } else if (section.includes("misc")) {
-              currentSection = "misc";
-            } else {
-              currentSection = "misc";
-            }
-            continue;
-          }
-          
-          // Parse bullet points (* or -)
-          if ((trimmed.startsWith("* ") || trimmed.startsWith("- ")) && trimmed.length > 2) {
-            const description = trimmed.replace(/^[\*\-\s]+/, "").trim();
-            if (description && description.length > 0) {
-              parsedEntries.push({
-                type: currentSection || "misc",
-                description,
-                author,
-                date: dateStr,
-                time: timeStr.toLowerCase(),
-              });
-            }
-          }
+async function fetchEntries(): Promise<ChangelogEntry[]> {
+  try {
+    const response = await fetch(
+      "https://api.github.com/repos/Torteous44/radioform/releases/latest",
+      { next: { revalidate: 3600 } }
+    );
+    if (!response.ok) {
+      throw new Error("Failed to fetch release data");
+    }
+
+    const data = await response.json();
+    const parsedEntries: ChangelogEntry[] = [];
+
+    // Parse the release body
+    const body = data.body || "";
+    const lines = body.split("\n");
+
+    // Parse date from release
+    const releaseDate = data.published_at ? new Date(data.published_at) : new Date();
+    const dateStr = releaseDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const timeStr = releaseDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const author = data.author?.login || "GitHub";
+
+    let currentSection = "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Detect section headers (### or ##)
+      if (trimmed.startsWith("### ") || trimmed.startsWith("## ")) {
+        const section = trimmed.replace(/^##+\s+/, "").toLowerCase();
+        if (section.includes("bug") || section.includes("fix")) {
+          currentSection = "fix";
+        } else if (section.includes("feat") || section.includes("feature")) {
+          currentSection = "feat";
+        } else if (section.includes("refactor")) {
+          currentSection = "refactor";
+        } else if (section.includes("doc")) {
+          currentSection = "docs";
+        } else if (section.includes("misc")) {
+          currentSection = "misc";
+        } else {
+          currentSection = "misc";
         }
-        
-        // If no entries were parsed, create entries from common patterns
-        if (parsedEntries.length === 0) {
-          const bodyLower = body.toLowerCase();
-          
-          // Try to extract information from body text
-          if (bodyLower.includes("readme")) {
-            parsedEntries.push({
-              type: "fix",
-              description: "Readme header and line fixes",
-              author,
-              date: dateStr,
-              time: timeStr.toLowerCase(),
-            });
-          }
-          
-          if (bodyLower.includes("license") || bodyLower.includes("gpl")) {
-            parsedEntries.push({
-              type: "misc",
-              description: "Add GPL v3 license file",
-              author,
-              date: dateStr,
-              time: timeStr.toLowerCase(),
-            });
-          }
-          
-          if (bodyLower.includes("readme") || bodyLower.includes("contributing")) {
-            parsedEntries.push({
-              type: "docs",
-              description: "Readme update, contributing md file",
-              author,
-              date: dateStr,
-              time: timeStr.toLowerCase(),
-            });
-          }
-          
-          if (bodyLower.includes("refactor") || bodyLower.includes("host")) {
-            parsedEntries.push({
-              type: "refactor",
-              description: "Refactor host",
-              author,
-              date: dateStr,
-              time: timeStr.toLowerCase(),
-            });
-          }
-        }
-        
-        // Limit to 4 entries for display
-        setEntries(parsedEntries.slice(0, 4));
-      } catch (error) {
-        console.error("Error fetching release data:", error);
-        // Fallback to default entries
-        setEntries([
-          {
-            type: "fix",
-            description: "Readme header and line fixes",
-            author: "GitHub",
-            date: "Jan 3, 2026",
-            time: "11:07 am",
-          },
-          {
-            type: "misc",
-            description: "Add GPL v3 license file, readme updates, structural docs",
-            author: "GitHub",
-            date: "Jan 3, 2026",
-            time: "11:07 am",
-          },
-        ]);
-      } finally {
-        setLoading(false);
+        continue;
       }
-    };
 
-    fetchReleaseData();
-  }, []);
+      // Parse bullet points (* or -)
+      if ((trimmed.startsWith("* ") || trimmed.startsWith("- ")) && trimmed.length > 2) {
+        const description = trimmed.replace(/^[\*\-\s]+/, "").trim();
+        if (description && description.length > 0) {
+          parsedEntries.push({
+            type: currentSection || "misc",
+            description,
+            author,
+            date: dateStr,
+            time: timeStr.toLowerCase(),
+          });
+        }
+      }
+    }
+
+    // If no entries were parsed, create entries from common patterns
+    if (parsedEntries.length === 0) {
+      const bodyLower = body.toLowerCase();
+
+      // Try to extract information from body text
+      if (bodyLower.includes("readme")) {
+        parsedEntries.push({
+          type: "fix",
+          description: "Readme header and line fixes",
+          author,
+          date: dateStr,
+          time: timeStr.toLowerCase(),
+        });
+      }
+
+      if (bodyLower.includes("license") || bodyLower.includes("gpl")) {
+        parsedEntries.push({
+          type: "misc",
+          description: "Add GPL v3 license file",
+          author,
+          date: dateStr,
+          time: timeStr.toLowerCase(),
+        });
+      }
+
+      if (bodyLower.includes("readme") || bodyLower.includes("contributing")) {
+        parsedEntries.push({
+          type: "docs",
+          description: "Readme update, contributing md file",
+          author,
+          date: dateStr,
+          time: timeStr.toLowerCase(),
+        });
+      }
+
+      if (bodyLower.includes("refactor") || bodyLower.includes("host")) {
+        parsedEntries.push({
+          type: "refactor",
+          description: "Refactor host",
+          author,
+          date: dateStr,
+          time: timeStr.toLowerCase(),
+        });
+      }
+    }
+
+    const entries = parsedEntries.length > 0 ? parsedEntries : fallbackEntries;
+
+    // Limit to 4 entries for display
+    return entries.slice(0, 4);
+  } catch (error) {
+    return fallbackEntries;
+  }
+}
+
+export default async function Logs({ className = "" }: LogsProps) {
+  const entries = await fetchEntries();
 
   return (
     <div
-      className={`relative w-full max-w-[750px] aspect-[1/1.414] ${onClick ? "cursor-pointer" : ""} ${className}`}
-      onClick={onClick}
+      className={`relative w-full max-w-[450px] aspect-[1/1.214] ${className}`}
       style={{
         fontFamily: '"Courier New", Courier, monospace',
         filter: `
@@ -177,22 +169,22 @@ export default function Logs({ className = "", onClick }: LogsProps) {
     >
       {/* Base paper with grid */}
       <div
-        className="relative bg-white pl-10 pr-5 py-5 h-full flex flex-col"
+        className="relative bg-white pl-8 pr-4 py-4 h-full flex flex-col"
         style={{
           backgroundColor: "#ffffff",
           backgroundImage: `
             linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)
           `,
-          backgroundSize: "18px 18px",
+          backgroundSize: "14px 14px",
         }}
       >
         {/* Binder holes on left side */}
-        <div className="absolute left-3 top-0 bottom-0 flex flex-col justify-evenly py-6 z-[15]">
+        <div className="absolute left-2 top-0 bottom-0 flex flex-col justify-evenly py-4 z-[15]">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="w-4 h-4 rounded-full bg-gray-200 border border-gray-300"
+              className="w-3 h-3 rounded-full bg-gray-200 border border-gray-300"
               style={{
                 boxShadow: "inset 1px 1px 2px rgba(0,0,0,0.15), inset -1px -1px 1px rgba(255,255,255,0.5)",
               }}
@@ -254,34 +246,37 @@ export default function Logs({ className = "", onClick }: LogsProps) {
         {/* Content */}
         <div className="relative z-[10] flex flex-col flex-1">
           {/* Header */}
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-sm font-bold text-black underline">
+          <div className="flex justify-between items-center mb-2">
+            <a
+              href="https://github.com/Torteous44/radioform"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-bold text-black underline cursor-pointer hover:opacity-80 transition-opacity"
+            >
               VIEW GITHUB
-            </h1>
+            </a>
             <h1
-              className="text-sm font-bold tracking-widest text-black"
-              style={{ letterSpacing: "0.2em" }}
+              className="text-xs font-bold tracking-widest text-black"
+              style={{ letterSpacing: "0.15em" }}
             >
               CHANGELOG
             </h1>
           </div>
 
           {/* Entries */}
-          <div className="space-y-4 flex-1">
-            {loading ? (
-              <div className="text-[11px] text-gray-600">Loading changelog...</div>
-            ) : entries.length === 0 ? (
-              <div className="text-[11px] text-gray-600">No changelog entries found</div>
+          <div className="space-y-2 flex-1">
+            {entries.length === 0 ? (
+              <div className="text-[9px] text-gray-600">No changelog entries found</div>
             ) : (
               entries.map((entry, index) => (
-                <div key={index} className="text-[11px] leading-relaxed">
+                <div key={index} className="text-[9px] leading-relaxed">
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="font-bold">{entry.type}:</span>{" "}
                       <span>{entry.description}</span>
                     </div>
                   </div>
-                  <div className="text-[10px] text-gray-600 mt-0.5">
+                  <div className="text-[8px] text-gray-600 mt-0.5">
                     {entry.author} / {entry.date} / {entry.time}
                   </div>
                 </div>

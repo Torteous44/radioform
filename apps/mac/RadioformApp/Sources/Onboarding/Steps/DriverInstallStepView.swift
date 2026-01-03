@@ -5,48 +5,28 @@ struct DriverInstallStepView: View {
     @StateObject private var installer = DriverInstaller()
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var iconScale: CGFloat = 1.0
 
     let onContinue: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // Icon with breathe animation
-            Image(systemName: "headphones")
-                .font(.system(size: 64))
-                .foregroundColor(.accentColor)
-                .scaleEffect(iconScale)
-                .onAppear {
-                    // Breathe animation loop
-                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                        iconScale = 1.2
-                    }
-                }
-            
-            // Explanation text
-            Text("Radioform needs to install a system audio driver to process your audio")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 400)
-
-            // Status and progress
-            VStack(spacing: 16) {
-                Text(installer.state.description)
-                    .font(.system(size: 14))
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("We’ll need to install an audio driver")
+                    .font(.system(size: 20, weight: .semibold))
+                Text("These will help set up the EQ.")
+                    .font(.system(size: 20))
                     .foregroundColor(.secondary)
-
-                if !installer.state.isComplete && !installer.state.isFailed {
-                    ProgressView(value: installer.progress)
-                        .frame(maxWidth: 300)
-                }
             }
 
-            Spacer()
+            VStack(alignment: .leading, spacing: 12) {
+                Text(installer.state.description == "Not started" ? "Install →" : installer.state.description)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                ProgressView(value: installer.progress)
+                    .frame(maxWidth: 360)
+                    .tint(Color.gray.opacity(0.65))
+            }
 
-            // Action buttons
             HStack(spacing: 12) {
                 if installer.state.isFailed {
                     Button("Retry") {
@@ -56,7 +36,7 @@ struct DriverInstallStepView: View {
                 }
 
                 if installer.state == .notStarted {
-                    Button("Install Driver") {
+                    Button("Install") {
                         installDriver()
                     }
                     .keyboardShortcut(.return)
@@ -72,7 +52,7 @@ struct DriverInstallStepView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .alert("Installation Error", isPresented: $showError) {
             Button("OK") {
                 showError = false

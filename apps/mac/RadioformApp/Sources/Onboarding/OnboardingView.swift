@@ -4,133 +4,136 @@ import AppKit
 /// Main onboarding view with multi-step wizard
 struct OnboardingView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
-    @State private var currentStep: OnboardingStep = .driverInstall
-    @State private var logoSize: CGFloat = 80
-    @State private var topSpacerHeight: CGFloat = 200
-    @State private var showOnboardingContent = false
+    @State private var currentStep: OnboardingStep = .welcome
 
     enum OnboardingStep {
+        case welcome
         case driverInstall
-        case permissions
-        case completion
+        case instructions
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Top spacer - animates to shrink, moving logo up
-            Spacer()
-                .frame(height: topSpacerHeight)
-            
-            // Logo - stays in same view, just moves position
-            HStack {
-                Spacer()
-                Text("Radioform")
-                    .font(radioformFont(size: logoSize))
-                Spacer()
-            }
-            .padding(.horizontal, 40)
-            
-            // Onboarding content appears below logo
-            if showOnboardingContent {
-                onboardingContent
-            } else {
-                // Bottom spacer to keep logo centered initially
-                Spacer()
-            }
-        }
-        .frame(width: 600, height: 500)
-        .onAppear {
-            // After 1 second, animate logo to top
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                withAnimation(.easeInOut(duration: 0.6)) {
-                    logoSize = 32
-                    topSpacerHeight = 20
-                }
-                // Show onboarding content after animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    showOnboardingContent = true
-                }
-            }
-        }
-    }
-    
-    private var onboardingContent: some View {
-        VStack(spacing: 0) {
-            // Step content
-            if currentStep == .completion {
-                // For completion step, show content in middle and completion view at bottom
-                VStack(spacing: 0) {
-                    // Main content area (empty for completion, but could show other steps)
-                    Spacer()
-                    
-                    // Completion step at bottom
-                    CompletionStepView(
-                        onComplete: {
-                            coordinator.complete()
-                        }
-                    )
-                    .frame(height: 60)
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 20)
-                }
-            } else {
-                // Regular step content
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                Color.white
+                    .ignoresSafeArea()
+
+                // Envelope background that animates between steps
+                EnvelopeView(formattedDate: formattedDate)
+                    .frame(width: envelopeSize(for: geo).width, height: envelopeSize(for: geo).height)
+                    .offset(envelopeOffset(for: currentStep, geo: geo))
+                    .animation(.spring(response: 0.7, dampingFraction: 0.8, blendDuration: 0.2), value: currentStep)
+
+                // Step content - fixed position on right side of white background
                 stepView(for: currentStep)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 40)
+                    .frame(width: 500)
+                    .position(
+                        x: geo.size.width - 180,
+                        y: geo.size.height * 0.77
+                    )
+
+                // Continue button for welcome step - bottom-right of modal
+                if currentStep == .welcome {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button("Continue") {
+                                currentStep = .driverInstall
+                            }
+                            .keyboardShortcut(.return)
+                            .buttonStyle(.borderedProminent)
+                            .padding(.trailing, 32)
+                            .padding(.bottom, 32)
+                        }
+                    }
+                }
             }
+            .preferredColorScheme(.light) // keep white even in dark mode
         }
-    }
-    
-    private func radioformFont(size: CGFloat) -> Font {
-        // Try the expected name first
-        if NSFont(name: "SignPainterHouseScript", size: size) != nil {
-            return .custom("SignPainterHouseScript", size: size)
-        }
-        
-        // Try variations
-        let possibleNames = [
-            "SignPainterHouseScript",
-            "SignPainter-HouseScript",
-            "SignPainter House Script",
-            "SignPainter"
-        ]
-        
-        for name in possibleNames {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        
-        // Fallback to system font
-        return .system(size: size, weight: .bold)
+        .frame(minWidth: 800, minHeight: 600)
     }
 
     @ViewBuilder
     private func stepView(for step: OnboardingStep) -> some View {
         switch step {
+        case .welcome:
+            WelcomeStepView(
+                onContinue: {
+                    currentStep = .driverInstall
+                }
+            )
+
         case .driverInstall:
             DriverInstallStepView(
                 onContinue: {
-                    currentStep = .permissions
+                    currentStep = .instructions
                 }
             )
 
-        case .permissions:
+        case .instructions:
             PermissionsStepView(
                 onContinue: {
-                    currentStep = .completion
-                }
-            )
-
-        case .completion:
-            CompletionStepView(
-                onComplete: {
                     coordinator.complete()
                 }
             )
         }
+    }
+
+    // MARK: Envelope layout helpers
+
+    private func envelopeSize(for geo: GeometryProxy) -> CGSize {
+        let width = min(geo.size.width * 0.72, 900)
+        let height = min(geo.size.height * 0.9, 950)
+        return CGSize(width: width, height: height)
+    }
+
+    private func envelopeOffset(for step: OnboardingStep, geo: GeometryProxy) -> CGSize {
+        let size = envelopeSize(for: geo)
+        switch step {
+        case .welcome:
+            // Phase 1: envelope far right, right corners completely off-screen
+            return CGSize(
+                width: geo.size.width * 0.52,
+                height: -geo.size.height * 0.05
+            )
+        case .driverInstall, .instructions:
+            // Phase 2/3: envelope far left, left corners off-screen, reveals right side
+            return CGSize(
+                width: -geo.size.width * 0.42,
+                height: -geo.size.height * 0.05
+            )
+        }
+    }
+
+    private var formattedDate: String {
+        let now = Date()
+        let calendar = Calendar.current
+        let day = calendar.component(.day, from: now)
+        let monthFormatter = DateFormatter()
+        monthFormatter.dateFormat = "MMM"
+        let month = monthFormatter.string(from: now).uppercased()
+        let year = calendar.component(.year, from: now)
+        return "\(month) \(ordinal(for: day)) \(year)"
+    }
+
+    private func ordinal(for day: Int) -> String {
+        let suffix: String
+        let ones = day % 10
+        let tens = (day / 10) % 10
+
+        if tens == 1 {
+            suffix = "TH"
+        } else {
+            switch ones {
+            case 1: suffix = "ST"
+            case 2: suffix = "ND"
+            case 3: suffix = "RD"
+            default: suffix = "TH"
+            }
+        }
+
+        return "\(day)\(suffix)"
     }
 }
 
@@ -140,11 +143,11 @@ struct ProgressIndicator: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            StepDot(number: 1, isActive: isActive(.driverInstall), isCompleted: isCompleted(.driverInstall))
-            StepLine(isActive: isActive(.permissions) || isCompleted(.permissions))
-            StepDot(number: 2, isActive: isActive(.permissions), isCompleted: isCompleted(.permissions))
-            StepLine(isActive: isActive(.completion) || isCompleted(.completion))
-            StepDot(number: 3, isActive: isActive(.completion), isCompleted: isCompleted(.completion))
+            StepDot(number: 1, isActive: isActive(.welcome), isCompleted: isCompleted(.welcome))
+            StepLine(isActive: isActive(.driverInstall) || isCompleted(.driverInstall))
+            StepDot(number: 2, isActive: isActive(.driverInstall), isCompleted: isCompleted(.driverInstall))
+            StepLine(isActive: isActive(.instructions) || isCompleted(.instructions))
+            StepDot(number: 3, isActive: isActive(.instructions), isCompleted: isCompleted(.instructions))
         }
     }
 
@@ -154,10 +157,10 @@ struct ProgressIndicator: View {
 
     private func isCompleted(_ step: OnboardingView.OnboardingStep) -> Bool {
         switch (step, currentStep) {
-        case (.driverInstall, .permissions), (.driverInstall, .completion):
-            return true
-        case (.permissions, .completion):
-            return true
+        case (.welcome, .driverInstall), (.welcome, .instructions), (.welcome, .welcome):
+            return currentStep != .welcome
+        case (.driverInstall, .instructions):
+            return currentStep == .instructions
         default:
             return false
         }
@@ -216,5 +219,88 @@ struct StepLine: View {
             .fill(isActive ? Color.green : Color(.systemGray).opacity(0.3))
             .frame(height: 2)
             .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: Envelope visuals
+
+private struct EnvelopeView: View {
+    let formattedDate: String
+
+    private let brandColor = Color(red: 0.68, green: 0.36, blue: 0.28)
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: .black.opacity(0.12), radius: 16, y: 10)
+                    .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+
+                // Corner decorations - fixed to envelope corners
+                ZStack(alignment: .topLeading) {
+                    // Top-left stamp
+                    topLeftStamp
+                        .offset(x: 50, y: 50)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                    // Bottom-left asset
+                    if let bottomLeftImage = loadImage(named: "RadioformBottomLeft") {
+                        Image(nsImage: bottomLeftImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 200)
+                            .offset(x: -10, y: 40)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    }
+
+                    // Top-right asset
+                    if let topRightImage = loadImage(named: "RadioformTopRight") {
+                        Image(nsImage: topRightImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 240)
+                            .offset(x: 40, y: -40)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    }
+
+                    // Bottom-right asset
+                    if let bottomRightImage = loadImage(named: "RadioformBottomRight") {
+                        Image(nsImage: bottomRightImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 220)
+                            .offset(x: 20, y: 40)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    }
+                }
+                .padding(24)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func loadImage(named: String) -> NSImage? {
+        // Try to load from bundle resources
+        if let url = Bundle.module.url(forResource: named, withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        return nil
+    }
+
+    private var topLeftStamp: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("FROM: THE PAVLOS COMPANY RSA")
+            Text("DATE: \(formattedDate)")
+        }
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundColor(.black)
+        .overlay(alignment: .bottomLeading) {
+            Rectangle()
+                .fill(Color.black.opacity(0.1))
+                .frame(height: 1)
+                .offset(y: 6)
+        }
     }
 }

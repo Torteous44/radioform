@@ -4,7 +4,20 @@ import Foundation
 class IPCController {
     static let shared = IPCController()
 
-    private let presetFilePath = "/tmp/radioform-preset.json"
+    private lazy var presetFilePath: String = {
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Radioform")
+
+        try? FileManager.default.createDirectory(
+            at: appSupport,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+
+        return appSupport.appendingPathComponent("preset.json").path
+    }()
 
     private init() {}
 

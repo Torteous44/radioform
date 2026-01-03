@@ -1,5 +1,5 @@
 
-## [1.0.11] - 2026-01-03
+## [Unreleased]
 
 ### Bug Fixes
 
@@ -11,6 +11,7 @@
 - Add gpl v3 license file
 - Readme update, contributing md file
 - Structural docs
+- Changelogs, refactor host
 
 ## [1.0.10] - 2026-01-01
 

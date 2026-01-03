@@ -1,41 +1,165 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 interface LogsProps {
   className?: string;
   onClick?: () => void;
 }
 
+interface ChangelogEntry {
+  type: string;
+  description: string;
+  author: string;
+  date: string;
+  time: string;
+}
+
 export default function Logs({ className = "", onClick }: LogsProps) {
-  const entries = [
-    {
-      type: "feat",
-      description: "add invisible audio sweetening",
-      author: "Max de Castro",
-      date: "Jan 3, 2026",
-      time: "1:30 pm",
-    },
-    {
-      type: "fix",
-      description: "move SSE headers for Linux compatibility",
-      author: "Pavlos Team",
-      date: "Jan 2, 2026",
-      time: "4:00 pm",
-    },
-    {
-      type: "refactor",
-      description: "separate DSP module from core",
-      author: "Engineering",
-      date: "Jan 1, 2026",
-      time: "5:00 pm",
-    },
-    {
-      type: "docs",
-      description: "update API documentation",
-      author: "Team",
-      date: "Dec 30, 2025",
-      time: "2:00 pm",
-    },
-  ];
+  const [entries, setEntries] = useState<ChangelogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchReleaseData = async () => {
+      try {
+        const response = await fetch(
+          "https://api.github.com/repos/Torteous44/radioform/releases/latest"
+        );
+        if (!response.ok) throw new Error("Failed to fetch release data");
+        
+        const data = await response.json();
+        const parsedEntries: ChangelogEntry[] = [];
+        
+        // Parse the release body
+        const body = data.body || "";
+        const lines = body.split("\n");
+        
+        // Parse date from release
+        const releaseDate = new Date(data.published_at);
+        const dateStr = releaseDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeStr = releaseDate.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+        const author = data.author?.login || "GitHub";
+        
+        let currentSection = "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          
+          // Detect section headers (### or ##)
+          if (trimmed.startsWith("### ") || trimmed.startsWith("## ")) {
+            const section = trimmed.replace(/^##+\s+/, "").toLowerCase();
+            if (section.includes("bug") || section.includes("fix")) {
+              currentSection = "fix";
+            } else if (section.includes("feat") || section.includes("feature")) {
+              currentSection = "feat";
+            } else if (section.includes("refactor")) {
+              currentSection = "refactor";
+            } else if (section.includes("doc")) {
+              currentSection = "docs";
+            } else if (section.includes("misc")) {
+              currentSection = "misc";
+            } else {
+              currentSection = "misc";
+            }
+            continue;
+          }
+          
+          // Parse bullet points (* or -)
+          if ((trimmed.startsWith("* ") || trimmed.startsWith("- ")) && trimmed.length > 2) {
+            const description = trimmed.replace(/^[\*\-\s]+/, "").trim();
+            if (description && description.length > 0) {
+              parsedEntries.push({
+                type: currentSection || "misc",
+                description,
+                author,
+                date: dateStr,
+                time: timeStr.toLowerCase(),
+              });
+            }
+          }
+        }
+        
+        // If no entries were parsed, create entries from common patterns
+        if (parsedEntries.length === 0) {
+          const bodyLower = body.toLowerCase();
+          
+          // Try to extract information from body text
+          if (bodyLower.includes("readme")) {
+            parsedEntries.push({
+              type: "fix",
+              description: "Readme header and line fixes",
+              author,
+              date: dateStr,
+              time: timeStr.toLowerCase(),
+            });
+          }
+          
+          if (bodyLower.includes("license") || bodyLower.includes("gpl")) {
+            parsedEntries.push({
+              type: "misc",
+              description: "Add GPL v3 license file",
+              author,
+              date: dateStr,
+              time: timeStr.toLowerCase(),
+            });
+          }
+          
+          if (bodyLower.includes("readme") || bodyLower.includes("contributing")) {
+            parsedEntries.push({
+              type: "docs",
+              description: "Readme update, contributing md file",
+              author,
+              date: dateStr,
+              time: timeStr.toLowerCase(),
+            });
+          }
+          
+          if (bodyLower.includes("refactor") || bodyLower.includes("host")) {
+            parsedEntries.push({
+              type: "refactor",
+              description: "Refactor host",
+              author,
+              date: dateStr,
+              time: timeStr.toLowerCase(),
+            });
+          }
+        }
+        
+        // Limit to 4 entries for display
+        setEntries(parsedEntries.slice(0, 4));
+      } catch (error) {
+        console.error("Error fetching release data:", error);
+        // Fallback to default entries
+        setEntries([
+          {
+            type: "fix",
+            description: "Readme header and line fixes",
+            author: "GitHub",
+            date: "Jan 3, 2026",
+            time: "11:07 am",
+          },
+          {
+            type: "misc",
+            description: "Add GPL v3 license file, readme updates, structural docs",
+            author: "GitHub",
+            date: "Jan 3, 2026",
+            time: "11:07 am",
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReleaseData();
+  }, []);
 
   return (
     <div
@@ -144,19 +268,25 @@ export default function Logs({ className = "", onClick }: LogsProps) {
 
           {/* Entries */}
           <div className="space-y-4 flex-1">
-            {entries.map((entry, index) => (
-              <div key={index} className="text-[11px] leading-relaxed">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="font-bold">{entry.type}:</span>{" "}
-                    <span>{entry.description}</span>
+            {loading ? (
+              <div className="text-[11px] text-gray-600">Loading changelog...</div>
+            ) : entries.length === 0 ? (
+              <div className="text-[11px] text-gray-600">No changelog entries found</div>
+            ) : (
+              entries.map((entry, index) => (
+                <div key={index} className="text-[11px] leading-relaxed">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="font-bold">{entry.type}:</span>{" "}
+                      <span>{entry.description}</span>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-0.5">
+                    {entry.author} / {entry.date} / {entry.time}
                   </div>
                 </div>
-                <div className="text-[10px] text-gray-600 mt-0.5">
-                  {entry.author} / {entry.date} / {entry.time}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

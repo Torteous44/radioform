@@ -183,6 +183,26 @@ jobs:
           echo "✓ Checksums generated"
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      #  Generate Release Notes
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Install git-cliff
+        run: |
+          brew install git-cliff
+
+      - name: Get previous tag
+        id: previoustag
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "${GITHUB_REF#refs/tags/}" | head -n1)
+          echo "tag=${PREV_TAG:-$(git rev-list --max-parents=0 HEAD)}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        run: |
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          PREV_TAG=${{ steps.previoustag.outputs.tag }}
+
+          git cliff --config .github/cliff.toml --strip header --current ${PREV_TAG}..${CURRENT_TAG} > release_notes.md
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Create GitHub Release
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       - name: Create GitHub Release
@@ -191,7 +211,7 @@ jobs:
           name: Radioform v${{ steps.version.outputs.version }}
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'alpha') }}
-          generate_release_notes: true
+          body_path: release_notes.md
           files: |
             dist/*.dmg
             dist/checksums.txt

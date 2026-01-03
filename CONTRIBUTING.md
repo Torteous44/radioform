@@ -64,17 +64,46 @@ make test
 make help
 ```
 
+## Commit Message Format
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for automatic changelog generation:
+
+```
+<type>: <description>
+
+[optional body]
+```
+
+Types:
+- `feat:` New feature
+- `fix:` Bug fix
+- `perf:` Performance improvement
+- `refactor:` Code refactoring
+- `docs:` Documentation changes
+- `test:` Test additions/changes
+- `build:` Build system changes
+- `ci:` CI/CD changes
+- `chore:` Maintenance tasks
+
+Examples:
+```
+feat: add preset export functionality
+fix: resolve device switching crash on USB disconnect
+perf: optimize ring buffer read operations
+docs: update installation instructions
+```
+
 ## Opening a Pull Request
 
-1. Fork the repository and create a branch for your change.
-2. Make focused commits with clear messages.
-3. Run the relevant `make` commands above to verify builds and tests before pushing.
-4. Ensure new code includes appropriate documentation or comments where the intent is non-obvious.
+1. Fork the repository and create a branch for your change
+2. Make focused commits with conventional commit messages
+3. Run relevant `make` commands to verify builds and tests
+4. Ensure new code includes appropriate documentation where non-obvious
 5. Open a pull request with:
-   - A concise summary of the change and motivation.
-   - Notes on testing performed (commands and results).
-   - Any known limitations or follow-up work.
-6. Respond to feedback; keep the PR scope tight to speed up review.
+   - Concise summary of the change and motivation
+   - Notes on testing performed
+   - Any known limitations or follow-up work
+6. Respond to feedback; keep the PR scope tight to speed up review
 
 ## Reporting Issues
 

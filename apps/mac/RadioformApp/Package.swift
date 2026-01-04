@@ -12,10 +12,16 @@ let package = Package(
             targets: ["RadioformApp"]
         )
     ],
+    dependencies: [
+        // Sparkle 2.x for auto-updates
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.5.0")
+    ],
     targets: [
         .executableTarget(
             name: "RadioformApp",
-            dependencies: [],
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources",
             resources: [
                 .copy("Resources")

@@ -5,6 +5,7 @@ import AppKit
 import CoreText
 import CoreGraphics
 import CoreAudio
+import Sparkle
 
 // Main entry point - AppKit-based app with SwiftUI views
 @main
@@ -14,10 +15,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var hostProcess: Process?
     var eventMonitor: EventMonitor?
     var onboardingCoordinator: OnboardingCoordinator?
+    var updaterController: SPUStandardUpdaterController?
+    var driverUpdateWindow: DriverUpdateWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Register custom font
         registerCustomFont()
+
+        // Initialize Sparkle updater
+        initializeUpdater()
 
         // Check if onboarding is needed
         if !OnboardingState.hasCompleted() {
@@ -29,11 +35,116 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Onboarding complete - run as menu bar app only
         NSApp.setActivationPolicy(.accessory)
 
+        // Check for driver version mismatch (lazy update)
+        checkDriverVersionMismatch()
+
         // Launch audio host if not already running
         launchHostIfNeeded()
 
         // Set up menu bar UI
         setupMenuBar()
+    }
+
+    func initializeUpdater() {
+        // Initialize Sparkle with standard user driver
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+        print("✓ Sparkle updater initialized")
+    }
+
+    func checkDriverVersionMismatch() {
+        // Only check if driver is already installed
+        guard VersionManager.isDriverInstalled() else {
+            print("Driver not installed - skipping version check")
+            return
+        }
+
+        // Check for version mismatch
+        if VersionManager.driverNeedsUpdate() {
+            let installedVersion = VersionManager.installedDriverVersion() ?? "unknown"
+            let bundledVersion = VersionManager.bundledDriverVersion() ?? "unknown"
+
+            print("Driver version mismatch detected:")
+            print("  Installed: \(installedVersion)")
+            print("  Bundled: \(bundledVersion)")
+
+            // Only prompt if we haven't already prompted for this version
+            if OnboardingState.lastDriverVersionCheck() != bundledVersion {
+                // Show update prompt
+                showDriverUpdatePrompt(
+                    currentVersion: installedVersion,
+                    newVersion: bundledVersion
+                )
+
+                // Mark this version as checked
+                OnboardingState.updateLastDriverVersionCheck(bundledVersion)
+            } else {
+                print("Already prompted for version \(bundledVersion), skipping")
+            }
+        } else {
+            print("✓ Driver version is up to date")
+        }
+    }
+
+    func showDriverUpdatePrompt(currentVersion: String, newVersion: String) {
+        // Close existing window if any
+        driverUpdateWindow?.close()
+
+        // Create and show driver update window
+        driverUpdateWindow = DriverUpdateWindow(
+            currentVersion: currentVersion,
+            newVersion: newVersion,
+            onUpdate: { [weak self] in
+                self?.performDriverUpdate()
+            },
+            onDismiss: { [weak self] in
+                self?.driverUpdateWindow?.close()
+                self?.driverUpdateWindow = nil
+            }
+        )
+
+        driverUpdateWindow?.center()
+        driverUpdateWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func performDriverUpdate() {
+        // Close the update window
+        driverUpdateWindow?.close()
+        driverUpdateWindow = nil
+
+        // Use existing DriverInstaller logic
+        let installer = DriverInstaller()
+
+        Task {
+            do {
+                try await installer.installDriver()
+                print("✓ Driver updated successfully")
+
+                // Show success alert
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "Driver Updated"
+                    alert.informativeText = "The Radioform audio driver has been updated to version \(VersionManager.bundledDriverVersion() ?? "unknown")."
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            } catch {
+                print("Driver update failed: \(error)")
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "Update Failed"
+                    alert.informativeText = "Failed to update driver: \(error.localizedDescription)"
+                    alert.alertStyle = .critical
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+        }
     }
 
     func showOnboarding() {

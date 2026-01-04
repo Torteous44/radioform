@@ -44,7 +44,19 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo " Building version: $VERSION"
+          echo "Building version: $VERSION"
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      #  Update Component Versions
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Update Component Versions
+        run: |
+          echo "Updating all components to version ${{ steps.version.outputs.version }}"
+          ./tools/update_versions.sh ${{ steps.version.outputs.version }}
+          echo "✓ Version synchronization complete"
+
+          # Show what changed for verification
+          git diff apps/mac/RadioformApp/Info.plist packages/driver/Info.plist packages/host/Info.plist
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Install Apple Certificate

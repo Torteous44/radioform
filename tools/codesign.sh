@@ -160,10 +160,39 @@ fi
 # Step 3: Sign embedded frameworks (e.g. Sparkle)
 if [ -d "$APP_BUNDLE/Contents/Frameworks" ]; then
     echo "📝 Signing frameworks..."
+
+    sign_macho_binaries() {
+        local root="$1"
+        while IFS= read -r macho; do
+            if file "$macho" | grep -q "Mach-O"; then
+                local name_rel="${macho#$APP_BUNDLE/}"
+                echo "      ↳ $name_rel"
+                if ! codesign "${SIGN_OPTS[@]}" "$macho"; then
+                    error "Failed to sign $name_rel"
+                    exit 1
+                fi
+            fi
+        done < <(find "$root" -type f \( -perm -111 -o -name "*.dylib" \) | sort)
+    }
+
     while IFS= read -r framework; do
         NAME=$(basename "$framework")
         echo "   • $NAME"
-        if codesign "${SIGN_OPTS[@]}" "$framework"; then
+
+        # Sign nested XPC services first (they contain their own Mach-O)
+        while IFS= read -r xpc; do
+            sign_macho_binaries "$xpc/Contents/MacOS"
+            if ! codesign "${SIGN_OPTS[@]}" "$xpc"; then
+                error "Failed to sign $(basename "$xpc")"
+                exit 1
+            fi
+        done < <(find "$framework" -type d -name "*.xpc" | sort)
+
+        # Sign any Mach-O binaries inside the framework (e.g. Autoupdate)
+        sign_macho_binaries "$framework"
+
+        # Finally sign the framework bundle itself with a deep signature
+        if codesign "${SIGN_OPTS[@]}" --deep "$framework"; then
             success "$NAME signed"
         else
             error "Failed to sign $NAME"

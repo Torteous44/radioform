@@ -259,7 +259,7 @@ jobs:
 
           # Generate appcast with signature
           "${SPARKLE_BIN}" \
-            --ed25519-private-key-file "$KEY_PATH" \
+            --ed-key-file "$KEY_PATH" \
             --download-url-prefix "$DOWNLOAD_PREFIX/" \
             dist
 

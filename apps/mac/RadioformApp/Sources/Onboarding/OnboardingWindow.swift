@@ -21,9 +21,8 @@ class OnboardingWindow: NSWindow {
         // Center on screen
         self.center()
 
-        // Set up SwiftUI content with vintage paper background
+        // Set up SwiftUI content
         let contentView = OnboardingView(coordinator: coordinator)
-            .vintagePaperBackground()
             .clipShape(RoundedRectangle(cornerRadius: 12))
         self.contentView = NSHostingView(rootView: contentView)
 

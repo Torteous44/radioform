@@ -158,7 +158,7 @@ jobs:
             --output-format json > "$RESULT_JSON"; then
             echo "Notary submission failed"
             cat "$RESULT_JSON" || true
-            SUBMISSION_ID=$(python - "$RESULT_JSON" -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("id",""))')
+            SUBMISSION_ID=$(python -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("id",""))' "$RESULT_JSON")
             if [ -n "$SUBMISSION_ID" ]; then
               xcrun notarytool log "$SUBMISSION_ID" \
                 --apple-id "$APPLE_ID" \
@@ -168,8 +168,8 @@ jobs:
             exit 1
           fi
 
-          STATUS=$(python - "$RESULT_JSON" -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("status",""))')
-          SUBMISSION_ID=$(python - "$RESULT_JSON" -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("id",""))')
+          STATUS=$(python -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("status",""))' "$RESULT_JSON")
+          SUBMISSION_ID=$(python -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("id",""))' "$RESULT_JSON")
 
           echo "Submission ID: ${SUBMISSION_ID}"
           echo "Status: ${STATUS}"

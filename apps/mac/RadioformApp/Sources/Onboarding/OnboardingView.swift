@@ -1,16 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// Main onboarding view with multi-step wizard
+/// Main onboarding view showing the envelope interface
 struct OnboardingView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
-    @State private var currentStep: OnboardingStep = .welcome
-
-    enum OnboardingStep {
-        case welcome
-        case driverInstall
-        case instructions
-    }
 
     var body: some View {
         GeometryReader { geo in
@@ -18,93 +11,20 @@ struct OnboardingView: View {
                 Color.white
                     .ignoresSafeArea()
 
-                // Envelope background that animates between steps
-                EnvelopeView(formattedDate: formattedDate)
-                    .frame(width: envelopeSize(for: geo).width, height: envelopeSize(for: geo).height)
-                    .offset(envelopeOffset(for: currentStep, geo: geo))
-                    .animation(.spring(response: 0.7, dampingFraction: 0.8, blendDuration: 0.2), value: currentStep)
-
-                // Step content - fixed position on right side of white background
-                stepView(for: currentStep)
-                    .frame(width: 500)
-                    .position(
-                        x: geo.size.width - 180,
-                        y: geo.size.height * 0.77
-                    )
-
-                // Continue button for welcome step - bottom-right of modal
-                if currentStep == .welcome {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Button("Continue") {
-                                currentStep = .driverInstall
-                            }
-                            .keyboardShortcut(.return)
-                            .buttonStyle(.borderedProminent)
-                            .padding(.trailing, 32)
-                            .padding(.bottom, 32)
-                        }
+                // Show the two-sided envelope with flip animation
+                SkeuomorphicEnvelopeView(
+                    formattedDate: formattedDate,
+                    onComplete: {
+                        // End onboarding - launches host and shows menu bar
+                        coordinator.complete()
                     }
-                }
+                )
             }
             .preferredColorScheme(.light) // keep white even in dark mode
         }
         .frame(minWidth: 800, minHeight: 600)
     }
 
-    @ViewBuilder
-    private func stepView(for step: OnboardingStep) -> some View {
-        switch step {
-        case .welcome:
-            WelcomeStepView(
-                onContinue: {
-                    currentStep = .driverInstall
-                }
-            )
-
-        case .driverInstall:
-            DriverInstallStepView(
-                onContinue: {
-                    currentStep = .instructions
-                }
-            )
-
-        case .instructions:
-            PermissionsStepView(
-                onContinue: {
-                    coordinator.complete()
-                }
-            )
-        }
-    }
-
-    // MARK: Envelope layout helpers
-
-    private func envelopeSize(for geo: GeometryProxy) -> CGSize {
-        let width = min(geo.size.width * 0.72, 900)
-        let height = min(geo.size.height * 0.9, 950)
-        return CGSize(width: width, height: height)
-    }
-
-    private func envelopeOffset(for step: OnboardingStep, geo: GeometryProxy) -> CGSize {
-        let size = envelopeSize(for: geo)
-        switch step {
-        case .welcome:
-            // Phase 1: envelope far right, right corners completely off-screen
-            return CGSize(
-                width: geo.size.width * 0.52,
-                height: -geo.size.height * 0.05
-            )
-        case .driverInstall, .instructions:
-            // Phase 2/3: envelope far left, left corners off-screen, reveals right side
-            return CGSize(
-                width: -geo.size.width * 0.42,
-                height: -geo.size.height * 0.05
-            )
-        }
-    }
 
     private var formattedDate: String {
         let now = Date()
@@ -137,170 +57,440 @@ struct OnboardingView: View {
     }
 }
 
-/// Progress indicator showing current step
-struct ProgressIndicator: View {
-    let currentStep: OnboardingView.OnboardingStep
 
-    var body: some View {
-        HStack(spacing: 12) {
-            StepDot(number: 1, isActive: isActive(.welcome), isCompleted: isCompleted(.welcome))
-            StepLine(isActive: isActive(.driverInstall) || isCompleted(.driverInstall))
-            StepDot(number: 2, isActive: isActive(.driverInstall), isCompleted: isCompleted(.driverInstall))
-            StepLine(isActive: isActive(.instructions) || isCompleted(.instructions))
-            StepDot(number: 3, isActive: isActive(.instructions), isCompleted: isCompleted(.instructions))
-        }
-    }
 
-    private func isActive(_ step: OnboardingView.OnboardingStep) -> Bool {
-        return currentStep == step
-    }
+// MARK: - Skeuomorphic Envelope Components
 
-    private func isCompleted(_ step: OnboardingView.OnboardingStep) -> Bool {
-        switch (step, currentStep) {
-        case (.welcome, .driverInstall), (.welcome, .instructions), (.welcome, .welcome):
-            return currentStep != .welcome
-        case (.driverInstall, .instructions):
-            return currentStep == .instructions
-        default:
-            return false
-        }
+/// Triangular envelope flap shape - points downward from top edge
+struct EnvelopeFlapShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: 0))                           // Top-left
+        path.addLine(to: CGPoint(x: rect.width, y: 0))               // Top-right
+        path.addLine(to: CGPoint(x: rect.width / 2, y: rect.height)) // Bottom-center apex
+        path.closeSubpath()
+        return path
     }
 }
 
-/// Individual step dot
-struct StepDot: View {
-    let number: Int
-    let isActive: Bool
-    let isCompleted: Bool
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(fillColor)
-                .frame(width: 32, height: 32)
-
-            if isCompleted {
-                Image(systemName: "checkmark")
-                    .foregroundColor(.white)
-                    .font(.system(size: 14, weight: .semibold))
-            } else {
-                Text("\(number)")
-                    .foregroundColor(textColor)
-                    .font(.system(size: 14, weight: .semibold))
-            }
-        }
-    }
-
-    private var fillColor: Color {
-        if isCompleted {
-            return .green
-        } else if isActive {
-            return .accentColor
-        } else {
-            return Color(.systemGray).opacity(0.3)
-        }
-    }
-
-    private var textColor: Color {
-        if isActive {
-            return .white
-        } else {
-            return Color(.systemGray)
-        }
-    }
-}
-
-/// Connection line between steps
-struct StepLine: View {
-    let isActive: Bool
-
-    var body: some View {
-        Rectangle()
-            .fill(isActive ? Color.green : Color(.systemGray).opacity(0.3))
-            .frame(height: 2)
-            .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: Envelope visuals
-
-private struct EnvelopeView: View {
+/// Skeuomorphic envelope view with two sides and flip animation
+private struct SkeuomorphicEnvelopeView: View {
     let formattedDate: String
+    let onComplete: () -> Void  // Called when installation completes
 
-    private let brandColor = Color(red: 0.68, green: 0.36, blue: 0.28)
+    // Animation state
+    @State private var isFlipped = false
+    @State private var envelopeOffsetX: CGFloat = 0
+    @State private var showInstallUI = false
+    @State private var showNextButton = false  // Fades in after entrance animation
+    
+    // Entrance animation state
+    @State private var envelopeOffsetY: CGFloat = 300  // Start below screen
+    @State private var envelopeScale: CGFloat = 0.95   // Start slightly smaller (1.05x increase)
+    @State private var envelopeRotation: Double = -5   // Start with slight rotation
+    
+    // Hover state
+    @State private var isHovered = false
+
+    // Driver installation
+    @StateObject private var installer = DriverInstaller()
+
+    // Envelope colors
+    private let envelopeCream = Color(red: 0.98, green: 0.96, blue: 0.91)
+    private let envelopeDarkerCream = Color(red: 0.95, green: 0.92, blue: 0.85)
+    private let borderColor = Color(red: 0.85, green: 0.80, blue: 0.70)
+    private let textColor = Color(red: 0.15, green: 0.12, blue: 0.10)
 
     var body: some View {
         GeometryReader { geo in
+            let envelopeWidth = min(geo.size.width * 0.7, 550)
+            let envelopeHeight = envelopeWidth * 0.6
+            let flapHeight = envelopeHeight * 0.5  // Larger flap
+
             ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: .black.opacity(0.12), radius: 16, y: 10)
-                    .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+                Color.white
+                    .ignoresSafeArea()
 
-                // Corner decorations - fixed to envelope corners
-                ZStack(alignment: .topLeading) {
-                    // Top-left stamp
-                    topLeftStamp
-                        .offset(x: 40, y: 40)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                HStack(spacing: 0) {
+                    // Envelope (slides left after flip)
+                    ZStack {
+                        // Front of envelope (no flap)
+                        envelopeFront(width: envelopeWidth, height: envelopeHeight)
+                            .opacity(isFlipped ? 0 : 1)
+                            .rotation3DEffect(
+                                .degrees(isFlipped ? 180 : 0),
+                                axis: (x: 0, y: 1, z: 0),
+                                perspective: 0.5
+                            )
 
-                    // Bottom-left asset
-                    if let bottomLeftImage = loadImage(named: "RadioformBottomLeft") {
-                        Image(nsImage: bottomLeftImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 200)
-                            .offset(x: -10, y: 50)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        // Back of envelope (with flap)
+                        envelopeBack(width: envelopeWidth, height: envelopeHeight, flapHeight: flapHeight)
+                            .opacity(isFlipped ? 1 : 0)
+                            .rotation3DEffect(
+                                .degrees(isFlipped ? 0 : -180),
+                                axis: (x: 0, y: 1, z: 0),
+                                perspective: 0.5
+                            )
+                    }
+                    .frame(width: envelopeWidth, height: envelopeHeight)
+                    .scaleEffect(envelopeScale * (isHovered && !isFlipped ? 1.03 : 1.0))
+                    .rotationEffect(.degrees(envelopeRotation + (isHovered && !isFlipped ? 2 : 0)))
+                    .offset(x: envelopeOffsetX, y: envelopeOffsetY)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isHovered)
+                    .onTapGesture {
+                        if !isFlipped {
+                            triggerFlipSequence(geo: geo)
+                        }
+                    }
+                    .onHover { hovering in
+                        if !isFlipped {
+                            isHovered = hovering
+                        }
+                    }
+                    .onAppear {
+                        // Entrance animation: slide up, scale in, and rotate to level
+                        withAnimation(.spring(response: 0.8, dampingFraction: 0.75)) {
+                            envelopeOffsetY = 0
+                            envelopeScale = 1.0
+                            envelopeRotation = 0
+                        }
+                        
+                        // Fade in Next button after entrance completes
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                            withAnimation(.easeIn(duration: 0.5)) {
+                                showNextButton = true
+                            }
+                        }
                     }
 
-                    // Top-right asset
-                    if let topRightImage = loadImage(named: "RadioformTopRight") {
-                        Image(nsImage: topRightImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 240)
-                            .offset(x: 40, y: -40)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    }
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.leading, isFlipped ? 0 : (geo.size.width - envelopeWidth) / 2)
 
-                    // Bottom-right asset
-                    if let bottomRightImage = loadImage(named: "RadioformBottomRight") {
-                        Image(nsImage: bottomRightImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 220)
-                            .offset(x: 20, y: 50)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                // Install UI (fades in on the right)
+                if showInstallUI {
+                    installPromptView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        .padding(.leading, geo.size.width * 0.4)
+                        .opacity(showInstallUI ? 1 : 0)
+                }
+
+                // Next button (only shown before flip, fades in after entrance)
+                if showNextButton && !isFlipped {
+                    VStack {
+                        Spacer()
+                        Button(action: {
+                            triggerFlipSequence(geo: geo)
+                        }) {
+                            Text("Next →")
+                                .underline()
+                                .foregroundColor(.primary)
+                        }
+                        .keyboardShortcut(.return)
+                        .buttonStyle(.plain)
+                        .padding(.bottom, 40)
+                        .opacity(showNextButton ? 1 : 0)
                     }
                 }
-                .padding(24)
+                
             }
-            .allowsHitTesting(false)
+            .preferredColorScheme(.light)
+        }
+    }
+    
+
+    // MARK: - Flip Animation Sequence
+
+    private func triggerFlipSequence(geo: GeometryProxy) {
+        showNextButton = false
+
+        // Step 1: Flip the envelope (show back)
+        withAnimation(.easeInOut(duration: 0.6)) {
+            isFlipped = true
+        }
+        
+        // Step 2: Slide envelope left and show install UI
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeOut(duration: 0.5)) {
+                envelopeOffsetX = -geo.size.width * 0.25
+            }
+
+            withAnimation(.easeIn(duration: 0.4).delay(0.3)) {
+                showInstallUI = true
+            }
         }
     }
 
+    // MARK: - Front of Envelope (no flap)
+
+    @ViewBuilder
+    private func envelopeFront(width: CGFloat, height: CGFloat) -> some View {
+        ZStack {
+            // Envelope body
+            envelopeBody(width: width, height: height)
+
+            // Content
+            envelopeFrontContent(width: width, height: height)
+        }
+        .frame(width: width, height: height)
+    }
+
+    @ViewBuilder
+    private func envelopeFrontContent(width: CGFloat, height: CGFloat) -> some View {
+        ZStack {
+            // Top-left: FROM, DATE, SUBJECT
+            VStack(alignment: .leading, spacing: 8) {
+                Text("FROM: THE PAVLOS COMPANY RSA")
+                    .font(typewriterFont(size: 13))
+                    .foregroundColor(textColor)
+                Text("DATE: \(formattedDate)")
+                    .font(typewriterFont(size: 13))
+                    .foregroundColor(textColor)
+
+                Text("SUBJECT: RADIOFORM")
+                    .font(typewriterFont(size: 13))
+                    .foregroundColor(textColor)
+                    .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.top, 32)
+            .padding(.leading, 32)
+
+            // Top-right: Stamp
+            if let stampImage = loadImage(named: "RadioformTopRight") {
+                Image(nsImage: stampImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 90)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 24)
+                    .padding(.trailing, 24)
+            }
+
+            // Bottom-left: Logo
+            if let logoImage = loadImage(named: "RadioformBottomRight") {
+                Image(nsImage: logoImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(.bottom, 20)
+                    .padding(.leading, 20)
+            }
+        }
+        .frame(width: width, height: height)
+    }
+
+    // MARK: - Back of Envelope (with flap overlapping body)
+
+    @ViewBuilder
+    private func envelopeBack(width: CGFloat, height: CGFloat, flapHeight: CGFloat) -> some View {
+        ZStack {
+            // Envelope body - no offset, flap overlaps it
+            envelopeBody(width: width, height: height)
+
+            // Triangular flap overlays the top portion - stays closed
+            VStack(spacing: 0) {
+                envelopeFlap(width: width, height: flapHeight)
+                Spacer()
+            }
+            .frame(width: width, height: height)
+            .zIndex(2)  // Flap on top
+
+            // RADIOFORM text at bottom center
+            Text("RADIOFORM")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundColor(textColor.opacity(0.5))
+                .tracking(3)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 16)
+        }
+        .frame(width: width, height: height)
+    }
+
+    // MARK: - Envelope Components
+
+    @ViewBuilder
+    private func envelopeBody(width: CGFloat, height: CGFloat) -> some View {
+        ZStack {
+            // Base envelope shape with gradient
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [envelopeCream, envelopeDarkerCream.opacity(0.9)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            // Outer border
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .stroke(borderColor.opacity(0.4), lineWidth: 1)
+
+            // Decorative inner border
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .stroke(borderColor.opacity(0.3), lineWidth: 0.5)
+                .padding(12)
+        }
+        .frame(width: width, height: height)
+        .shadow(color: .black.opacity(0.12), radius: 16, y: 10)
+        .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+    }
+
+    @ViewBuilder
+    private func envelopeFlap(width: CGFloat, height: CGFloat) -> some View {
+        ZStack {
+            EnvelopeFlapShape()
+                .fill(
+                    LinearGradient(
+                        colors: [envelopeDarkerCream, envelopeCream],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            EnvelopeFlapShape()
+                .stroke(borderColor.opacity(0.4), lineWidth: 0.5)
+        }
+        .frame(width: width, height: height)
+        .shadow(color: .black.opacity(0.08), radius: 3, y: 2)
+    }
+
+    // MARK: - Install Prompt UI
+
+    @ViewBuilder
+    private var installPromptView: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if installer.state.isComplete {
+                // Post-install instructions
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Select Radioform from your\nsounds in settings")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineSpacing(4)
+                    
+                    // Instructions with SF Symbols
+                    HStack(spacing: 6) {
+                        Text("Go to")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                        
+                        Image(systemName: "switch.2")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        
+                        Text("Control Center")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                        
+                        Image(systemName: "speaker.wave.3.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        
+                        Text("Sound")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Button(action: {
+                    onComplete()
+                }) {
+                    Text("Open Radioform →")
+                        .underline()
+                        .foregroundColor(.primary)
+                }
+                .keyboardShortcut(.return)
+                .buttonStyle(.plain)
+            } else {
+                // Pre-install / installing
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("To begin we need to\ninstall an audio driver")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineSpacing(4)
+                    
+                    Text("This enables Radioform to process your system audio")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    if installer.state != .notStarted {
+                        Text(installer.state.description)
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+
+                    ProgressView(value: installer.progress)
+                        .frame(width: 280)
+                        .tint(Color.gray.opacity(0.65))
+                }
+
+                HStack(spacing: 12) {
+                    if installer.state == .notStarted {
+                        Button(action: {
+                            installDriver()
+                        }) {
+                            Text("Install →")
+                                .underline()
+                                .foregroundColor(.primary)
+                        }
+                        .keyboardShortcut(.return)
+                        .buttonStyle(.plain)
+                    }
+
+                    if installer.state.isFailed {
+                        Button(action: {
+                            installDriver()
+                        }) {
+                            Text("Retry →")
+                                .underline()
+                                .foregroundColor(.primary)
+                        }
+                        .keyboardShortcut(.return)
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(32)
+        .onAppear {
+            // Check if driver is already installed
+            if installer.isDriverLoaded() {
+                installer.state = .complete
+                installer.progress = 1.0
+            }
+        }
+    }
+
+    private func installDriver() {
+        Task {
+            do {
+                try await installer.installDriver()
+                // Installation complete - UI will update to show instructions
+                // User must click "Close" to finish onboarding
+            } catch {
+                await MainActor.run {
+                    installer.state = .failed(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func typewriterFont(size: CGFloat) -> Font {
+        return .custom("American Typewriter", size: size)
+    }
+
     private func loadImage(named: String) -> NSImage? {
-        // Try to load from bundle resources
         if let url = Bundle.module.url(forResource: named, withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             return image
         }
         return nil
     }
-
-    private var topLeftStamp: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("FROM: THE PAVLOS COMPANY RSA")
-            Text("DATE: \(formattedDate)")
-        }
-        .font(.system(size: 14, weight: .semibold))
-        .foregroundColor(.black)
-        .overlay(alignment: .bottomLeading) {
-            Rectangle()
-                .fill(Color.black.opacity(0.1))
-                .frame(height: 1)
-                .offset(y: 6)
-        }
-    }
 }
+

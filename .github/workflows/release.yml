@@ -221,6 +221,48 @@ jobs:
         id: dmg
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      #  Install Sparkle Tools
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Install Sparkle Tools
+        run: |
+          brew install sparkle
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      #  Generate Sparkle Appcast
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Generate Sparkle Appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          DMG_NAME: ${{ steps.dmg.outputs.dmg_name }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "❌ SPARKLE_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+
+          KEY_PATH="$RUNNER_TEMP/sparkle_ed25519.key"
+          echo "$SPARKLE_PRIVATE_KEY" | base64 --decode > "$KEY_PATH"
+
+          DOWNLOAD_PREFIX="https://github.com/${{ github.repository }}/releases/download/v${APP_VERSION}"
+
+          # Generate appcast with signature
+          generate_appcast \
+            --ed25519-private-key-file "$KEY_PATH" \
+            --download-url-prefix "$DOWNLOAD_PREFIX/" \
+            dist
+
+          if [ -f dist/appcast.xml ]; then
+            echo "✓ Appcast generated at dist/appcast.xml"
+          else
+            echo "❌ generate_appcast did not produce dist/appcast.xml"
+            ls dist
+            exit 1
+          fi
+
+          head -n 10 dist/appcast.xml
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Generate Checksums
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       - name: Generate Checksums
@@ -262,6 +304,7 @@ jobs:
           body_path: release_notes.md
           files: |
             dist/*.dmg
+            dist/appcast.xml
             dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

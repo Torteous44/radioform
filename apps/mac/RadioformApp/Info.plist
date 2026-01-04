@@ -25,7 +25,7 @@
 	<key>SUEnableSystemProfiling</key>
 	<false/>
 	<key>SUFeedURL</key>
-	<string>https://github.com/Torteous44/radioform/releases.atom</string>
+	<string>https://github.com/Torteous44/radioform/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>1cnAH16Xr19pXc3Ds20rnZGdf3EMoaQhdU5UsYVp6yk=</string>
 	<key>SUScheduledCheckInterval</key>

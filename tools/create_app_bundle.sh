@@ -105,6 +105,17 @@ else
     echo "  No presets directory found at $PRESETS_DIR"
 fi
 
+# Copy other app resources (images, fonts, etc.)
+echo "   Copying app resources..."
+RESOURCES_DIR="$PROJECT_ROOT/apps/mac/RadioformApp/Sources/Resources"
+if [ -d "$RESOURCES_DIR" ]; then
+    # Copy everything except Presets (already handled above)
+    rsync -av --exclude "Presets" "$RESOURCES_DIR"/ "$APP_PATH/Contents/Resources/" >/dev/null
+    echo "✓ Resources copied"
+else
+    echo "  No resources directory found at $RESOURCES_DIR"
+fi
+
 # Copy Sparkle framework
 echo " Copying Sparkle.framework..."
 mkdir -p "$APP_PATH/Contents/Frameworks"

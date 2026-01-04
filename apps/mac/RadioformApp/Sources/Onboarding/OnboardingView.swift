@@ -486,11 +486,11 @@ private struct SkeuomorphicEnvelopeView: View {
     }
 
     private func loadImage(named: String) -> NSImage? {
-        if let url = Bundle.module.url(forResource: named, withExtension: "png"),
+        // Resources are packaged into the app bundle during bundling
+        if let url = Bundle.main.url(forResource: named, withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             return image
         }
         return nil
     }
 }
-

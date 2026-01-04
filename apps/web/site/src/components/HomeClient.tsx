@@ -18,7 +18,7 @@ const C = {
   // Offsets from folder top (negative = above folder, positive = below/into folder)
   card: { width: 480, y: -110, z: 5, hoverY: -40, scaleExp: 1.05, yExp: -35 },
   logs: { width: 450, y: -215, x: -60, rotation: 8, scale: 0.85, scaleExp: 1.2, z: 4, hoverY: -20 },
-  instructions: { width: 900, y: -220, x: 180, rotation: -8, scale: 0.55, scaleExp: 1.1, yExp: -56, z: 4, hoverY: -20 },
+  instructions: { width: 1000, y: -220, x: 220, rotation: -8, scale: 0.55, scaleExp: 0.80, yExp: -56, z: 4, hoverY: -20 },
 };
 
 const SCENE = (() => {
@@ -86,8 +86,8 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
     };
   }, []);
 
-  const nav = (n: 1 | 2 | 3 | 4) => setExp({ 1: null, 2: "card", 3: "logs", 4: "instructions" }[n] as Expanded);
-  const current = exp === "card" ? 2 : exp === "logs" ? 3 : exp === "instructions" ? 4 : 1;
+  const nav = (n: 1 | 2 | 3 | 4) => setExp({ 1: null, 2: "card", 3: "instructions", 4: "logs" }[n] as Expanded);
+  const current = exp === "card" ? 2 : exp === "logs" ? 4 : exp === "instructions" ? 3 : 1;
 
   // Calculate pop-out offsets for the expand animation
   const getPopOffset = (item: "card" | "logs" | "instructions") => {
@@ -109,8 +109,8 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
         {[
           { num: 1, label: "Home" },
           { num: 2, label: "Info" },
-          { num: 3, label: "Changelog" },
-          { num: 4, label: "Instructions" },
+          { num: 3, label: "Instructions" },
+          { num: 4, label: "Changelog" },
         ].map(({ num, label }) => (
           <button
             key={num}
@@ -127,7 +127,7 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
         <button
           type="button"
           aria-label="Close expanded view"
-          className="fixed inset-0 z-[3] cursor-pointer bg-transparent"
+          className="fixed inset-0 z-[2] cursor-pointer bg-transparent"
           onClick={() => setExp(null)}
         />
       )}
@@ -139,6 +139,7 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
           position: "fixed",
           inset: 0,
           pointerEvents: "none",
+          zIndex: 5,
         }}
       >
         {/* Card - relative to folder top */}

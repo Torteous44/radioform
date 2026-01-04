@@ -29,7 +29,7 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
 
   return (
     <div
-      className={`relative w-full max-w-[900px] ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`relative w-full max-w-[900px] mx-auto ${onClick ? "cursor-pointer" : ""} ${className}`}
       onClick={onClick}
       style={{
         fontFamily: "var(--font-ibm-plex-mono), monospace",

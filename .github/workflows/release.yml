@@ -130,6 +130,11 @@ jobs:
           make sign
           echo "✓ App signed"
 
+      - name: Verify Signatures
+        run: |
+          ./tools/verify_signatures.sh
+          echo "✓ Signatures verified"
+
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Notarize
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -151,18 +156,18 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --wait \
             --output-format json > "$RESULT_JSON"; then
-            echo "❌ Notary submission failed"
+            echo "Notary submission failed"
             cat "$RESULT_JSON" || true
             SUBMISSION_ID=$(python - <<'PY' "$RESULT_JSON"
-import json, sys
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    print(data.get("id",""))
-except Exception:
-    pass
-PY
-)
+              import json, sys
+              try:
+                  with open(sys.argv[1]) as f:
+                      data = json.load(f)
+                  print(data.get("id",""))
+              except Exception:
+                  pass
+            PY
+            )
             if [ -n "$SUBMISSION_ID" ]; then
               xcrun notarytool log "$SUBMISSION_ID" \
                 --apple-id "$APPLE_ID" \
@@ -173,25 +178,25 @@ PY
           fi
 
           STATUS=$(python - <<'PY' "$RESULT_JSON"
-import json, sys
-with open(sys.argv[1]) as f:
-    data = json.load(f)
-print(data.get("status",""))
-PY
-)
+            import json, sys
+            with open(sys.argv[1]) as f:
+                data = json.load(f)
+            print(data.get("status",""))
+          PY
+          )
           SUBMISSION_ID=$(python - <<'PY' "$RESULT_JSON"
-import json, sys
-with open(sys.argv[1]) as f:
-    data = json.load(f)
-print(data.get("id",""))
-PY
-)
+            import json, sys
+            with open(sys.argv[1]) as f:
+                data = json.load(f)
+            print(data.get("id",""))
+          PY
+          )
 
           echo "Submission ID: ${SUBMISSION_ID}"
           echo "Status: ${STATUS}"
 
           if [ "$STATUS" != "Accepted" ]; then
-            echo "❌ Notary submission returned status: $STATUS"
+            echo "Notary submission returned status: $STATUS"
             if [ -n "$SUBMISSION_ID" ]; then
               xcrun notarytool log "$SUBMISSION_ID" \
                 --apple-id "$APPLE_ID" \

@@ -25,6 +25,8 @@ APP_PLIST="$PROJECT_ROOT/apps/mac/RadioformApp/Info.plist"
 if [ -f "$APP_PLIST" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_PLIST" 2>/dev/null || \
         /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$APP_PLIST"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_PLIST" 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$APP_PLIST"
     echo "✓ Updated apps/mac/RadioformApp/Info.plist"
 else
     echo "⚠️  Warning: $APP_PLIST not found"
@@ -35,6 +37,8 @@ DRIVER_PLIST="$PROJECT_ROOT/packages/driver/Info.plist"
 if [ -f "$DRIVER_PLIST" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$DRIVER_PLIST" 2>/dev/null || \
         /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$DRIVER_PLIST"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$DRIVER_PLIST" 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$DRIVER_PLIST"
     echo "✓ Updated packages/driver/Info.plist"
 else
     echo "⚠️  Warning: $DRIVER_PLIST not found"
@@ -45,6 +49,8 @@ HOST_PLIST="$PROJECT_ROOT/packages/host/Info.plist"
 if [ -f "$HOST_PLIST" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$HOST_PLIST" 2>/dev/null || \
         /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$HOST_PLIST"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$HOST_PLIST" 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$HOST_PLIST"
     echo "✓ Updated packages/host/Info.plist"
 else
     echo "⚠️  Warning: $HOST_PLIST not found (will be created next)"

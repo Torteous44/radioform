@@ -53,6 +53,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             userDriverDelegate: nil
         )
         print("✓ Sparkle updater initialized")
+
+        // Trigger a background check on launch so updates are offered immediately
+        updaterController?.updater.checkForUpdatesInBackground()
     }
 
     func checkDriverVersionMismatch() {

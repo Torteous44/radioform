@@ -11,17 +11,20 @@ struct DriverInstallStepView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("We’ll need to install an audio driver")
-                    .font(.system(size: 20, weight: .semibold))
-                Text("These will help set up the EQ.")
-                    .font(.system(size: 20))
+                Text("We'll need to install an audio driver")
+                    .font(.system(size: 18, weight: .semibold))
+                Text("This enables system-wide EQ across all apps.")
+                    .font(.system(size: 18))
                     .foregroundColor(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text(installer.state.description == "Not started" ? "Install →" : installer.state.description)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
+                Text(
+                    installer.state.description == "Not started"
+                        ? "Install →" : installer.state.description
+                )
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
                 ProgressView(value: installer.progress)
                     .frame(maxWidth: 360)
                     .tint(Color.gray.opacity(0.65))

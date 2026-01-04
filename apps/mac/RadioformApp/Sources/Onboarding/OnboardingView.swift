@@ -241,7 +241,7 @@ private struct EnvelopeView: View {
                 ZStack(alignment: .topLeading) {
                     // Top-left stamp
                     topLeftStamp
-                        .offset(x: 50, y: 50)
+                        .offset(x: 40, y: 40)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
                     // Bottom-left asset
@@ -250,7 +250,7 @@ private struct EnvelopeView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 200)
-                            .offset(x: -10, y: 40)
+                            .offset(x: -10, y: 50)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     }
 
@@ -270,7 +270,7 @@ private struct EnvelopeView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 220)
-                            .offset(x: 20, y: 40)
+                            .offset(x: 20, y: 50)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     }
                 }
@@ -294,7 +294,7 @@ private struct EnvelopeView: View {
             Text("FROM: THE PAVLOS COMPANY RSA")
             Text("DATE: \(formattedDate)")
         }
-        .font(.system(size: 16, weight: .semibold))
+        .font(.system(size: 14, weight: .semibold))
         .foregroundColor(.black)
         .overlay(alignment: .bottomLeading) {
             Rectangle()

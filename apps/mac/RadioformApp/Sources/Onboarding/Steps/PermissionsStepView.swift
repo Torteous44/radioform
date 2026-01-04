@@ -7,16 +7,16 @@ struct PermissionsStepView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Great! Now select “Radioform” from the audio dropdown")
-                    .font(.system(size: 20, weight: .semibold))
+                Text("Great! Now select \"Radioform\" from the audio dropdown")
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.primary)
                 Text("Sounds → (Radioform)")
-                    .font(.system(size: 20))
+                    .font(.system(size: 18))
                     .foregroundColor(.secondary)
             }
 
             Text("Ready to hear the difference? →")
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.top, 12)
 

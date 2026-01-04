@@ -142,18 +142,70 @@ jobs:
           # Create zip for notarization
           ditto -c -k --keepParent dist/Radioform.app dist/Radioform.zip
 
-          # Submit for notarization
-          xcrun notarytool submit dist/Radioform.zip \
+          RESULT_JSON=$(mktemp)
+
+          # Submit for notarization and capture the result
+          if ! xcrun notarytool submit dist/Radioform.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_ID_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --wait \
+            --output-format json > "$RESULT_JSON"; then
+            echo "❌ Notary submission failed"
+            cat "$RESULT_JSON" || true
+            SUBMISSION_ID=$(python - <<'PY' "$RESULT_JSON"
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    print(data.get("id",""))
+except Exception:
+    pass
+PY
+)
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_ID_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+          STATUS=$(python - <<'PY' "$RESULT_JSON"
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+print(data.get("status",""))
+PY
+)
+          SUBMISSION_ID=$(python - <<'PY' "$RESULT_JSON"
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+print(data.get("id",""))
+PY
+)
+
+          echo "Submission ID: ${SUBMISSION_ID}"
+          echo "Status: ${STATUS}"
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "❌ Notary submission returned status: $STATUS"
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_ID_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
 
           # Staple the ticket
           xcrun stapler staple dist/Radioform.app
 
           # Clean up
-          rm dist/Radioform.zip
+          rm dist/Radioform.zip "$RESULT_JSON"
 
           echo "✓ App notarized and stapled"
 

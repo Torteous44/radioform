@@ -157,7 +157,24 @@ else
     warn "RadioformDriver.driver not found in bundle (optional)"
 fi
 
-# Step 3: Sign RadioformApp main executable
+# Step 3: Sign embedded frameworks (e.g. Sparkle)
+if [ -d "$APP_BUNDLE/Contents/Frameworks" ]; then
+    echo "📝 Signing frameworks..."
+    while IFS= read -r framework; do
+        NAME=$(basename "$framework")
+        echo "   • $NAME"
+        if codesign "${SIGN_OPTS[@]}" "$framework"; then
+            success "$NAME signed"
+        else
+            error "Failed to sign $NAME"
+            exit 1
+        fi
+    done < <(find "$APP_BUNDLE/Contents/Frameworks" -maxdepth 1 -type d -name "*.framework")
+else
+    warn "No frameworks found in bundle"
+fi
+
+# Step 4: Sign RadioformApp main executable
 echo "📝 Signing RadioformApp..."
 if codesign "${SIGN_OPTS[@]}" \
     --entitlements "$PROJECT_ROOT/apps/mac/RadioformApp/RadioformApp.entitlements" \
@@ -168,7 +185,7 @@ else
     exit 1
 fi
 
-# Step 4: Sign the entire app bundle (outer signature)
+# Step 5: Sign the entire app bundle (outer signature)
 echo "📝 Signing Radioform.app bundle..."
 if codesign "${SIGN_OPTS[@]}" \
     --entitlements "$PROJECT_ROOT/apps/mac/RadioformApp/RadioformApp.entitlements" \

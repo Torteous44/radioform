@@ -96,6 +96,13 @@ verify_component() {
 verify_component "$APP_BUNDLE/Contents/MacOS/RadioformHost" "RadioformHost"
 verify_component "$APP_BUNDLE/Contents/MacOS/RadioformApp" "RadioformApp"
 verify_component "$APP_BUNDLE/Contents/Resources/RadioformDriver.driver" "RadioformDriver.driver"
+if [ -d "$APP_BUNDLE/Contents/Frameworks" ]; then
+    while IFS= read -r framework; do
+        verify_component "$framework" "$(basename "$framework")"
+    done < <(find "$APP_BUNDLE/Contents/Frameworks" -maxdepth 1 -type d -name "*.framework" | sort)
+else
+    warn "No frameworks found in bundle"
+fi
 verify_component "$APP_BUNDLE" "Radioform.app (bundle)"
 
 section "Gatekeeper Assessment"

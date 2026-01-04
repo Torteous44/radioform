@@ -56,6 +56,10 @@ fi
 
 cp "$APP_EXECUTABLE" "$APP_PATH/Contents/MacOS/RadioformApp"
 chmod +x "$APP_PATH/Contents/MacOS/RadioformApp"
+
+# Add rpath for Frameworks directory (needed for Sparkle)
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_PATH/Contents/MacOS/RadioformApp" 2>/dev/null || true
+
 echo "✓ RadioformApp executable copied"
 
 # Copy RadioformHost
@@ -99,6 +103,24 @@ if [ -d "$PRESETS_DIR" ]; then
     echo "✓ Presets copied ($(ls -1 "$PRESETS_DIR" | wc -l | tr -d ' ') files)"
 else
     echo "  No presets directory found at $PRESETS_DIR"
+fi
+
+# Copy Sparkle framework
+echo " Copying Sparkle.framework..."
+mkdir -p "$APP_PATH/Contents/Frameworks"
+
+SPARKLE_FRAMEWORK="$PROJECT_ROOT/apps/mac/RadioformApp/.build/$SWIFT_ARCH/release/Sparkle.framework"
+if [ ! -d "$SPARKLE_FRAMEWORK" ]; then
+    # Try without arch subdirectory
+    SPARKLE_FRAMEWORK="$PROJECT_ROOT/apps/mac/RadioformApp/.build/release/Sparkle.framework"
+fi
+
+if [ -d "$SPARKLE_FRAMEWORK" ]; then
+    cp -R "$SPARKLE_FRAMEWORK" "$APP_PATH/Contents/Frameworks/"
+    echo "✓ Sparkle.framework copied"
+else
+    echo " Sparkle.framework not found"
+    echo "   Expected at: $SPARKLE_FRAMEWORK"
 fi
 
 # Create PkgInfo file

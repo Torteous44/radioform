@@ -226,6 +226,17 @@ jobs:
       - name: Install Sparkle Tools
         run: |
           brew install sparkle
+          # Add Sparkle CLI tools to PATH (generate_appcast lives inside the cask payload)
+          SPARKLE_BIN=$(find "$(brew --prefix)/Caskroom/sparkle" -name generate_appcast -type f | head -1)
+          if [ -z "$SPARKLE_BIN" ]; then
+            SPARKLE_BIN=$(find /Applications -path "*Sparkle*bin/generate_appcast" -type f | head -1)
+          fi
+          if [ -z "$SPARKLE_BIN" ]; then
+            echo "❌ generate_appcast not found after installing Sparkle cask"
+            exit 1
+          fi
+          echo "Found generate_appcast at $SPARKLE_BIN"
+          echo "SPARKLE_BIN=$SPARKLE_BIN" >> $GITHUB_ENV
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Generate Sparkle Appcast
@@ -247,7 +258,7 @@ jobs:
           DOWNLOAD_PREFIX="https://github.com/${{ github.repository }}/releases/download/v${APP_VERSION}"
 
           # Generate appcast with signature
-          generate_appcast \
+          "${SPARKLE_BIN}" \
             --ed25519-private-key-file "$KEY_PATH" \
             --download-url-prefix "$DOWNLOAD_PREFIX/" \
             dist

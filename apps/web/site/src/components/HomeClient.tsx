@@ -55,6 +55,7 @@ interface HomeClientProps {
 
 export default function HomeClient({ card, logs, instructions, folder }: HomeClientProps) {
   const [sceneScale, setSceneScale] = useState(1);
+  const [viewportWidth, setViewportWidth] = useState(1200);
   const [exp, setExp] = useState<Expanded>(null);
   const [introPhase, setIntroPhase] = useState<IntroPhase>("slideUp");
 
@@ -67,6 +68,7 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
     const handleResize = () => {
       const nextScale = getSceneScale(window.innerWidth, window.innerHeight);
       setSceneScale(nextScale);
+      setViewportWidth(window.innerWidth);
     };
 
     handleResize();
@@ -102,6 +104,16 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
 
   const isInteractive = introPhase === "done";
 
+  // Calculate scale for expanded instructions
+  // On mobile (<768px): use fixed scale that fits, capped so it doesn't grow with viewport
+  // On desktop (>=768px): use normal scaling
+  const MOBILE_BREAKPOINT = 768;
+  const MOBILE_MAX_SCALE = 0.36; // Fixed size for mobile 2x2 layout
+
+  const instructionsExpandedScale = viewportWidth < MOBILE_BREAKPOINT
+    ? Math.min(MOBILE_MAX_SCALE, (viewportWidth - 32) / C.instructions.width)
+    : C.instructions.scaleExp * sceneScale;
+
   return (
     <div className="h-screen w-screen paper-texture relative overflow-hidden">
       {/* Nav */}
@@ -111,15 +123,27 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
           { num: 2, label: "Info" },
           { num: 3, label: "Instructions" },
           { num: 4, label: "Changelog" },
-        ].map(({ num, label }) => (
-          <button
-            key={num}
-            onClick={() => nav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
-            className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
-            style={{ color: current === num ? "#000" : "#999", fontFamily: '"Courier New", monospace' }}
-          >
-            {current === num && num !== 1 ? "<- Back" : `${num} ${label}`}
-          </button>
+          { num: 5, label: "Download", isLink: true },
+        ].map(({ num, label, isLink }) => (
+          isLink ? (
+            <a
+              key={num}
+              href="https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
+              className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
+              style={{ color: "#999", fontFamily: '"Courier New", monospace', textDecoration: "none" }}
+            >
+              {num} {label}
+            </a>
+          ) : (
+            <button
+              key={num}
+              onClick={() => nav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
+              className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
+              style={{ color: current === num ? "#000" : "#999", fontFamily: '"Courier New", monospace' }}
+            >
+              {current === num && num !== 1 ? "<- Back" : `${num} ${label}`}
+            </button>
+          )
         ))}
       </div>
 
@@ -194,7 +218,7 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
               ? `calc(50% + ${scaled(C.instructions.yExp)}px)`
               : `calc(100vh - ${folderTopPx}px + ${scaled(C.instructions.y)}px)`,
             transform: exp === "instructions"
-              ? `translate(50%, -50%) scale(${C.instructions.scaleExp * sceneScale})`
+              ? `translate(50%, -50%) scale(${instructionsExpandedScale})`
               : `translateX(calc(${scaled(C.instructions.x)}px + ${getPopOffset("instructions").x}px)) translateY(calc(var(--instructions-hover-y, 0px) + ${offset}px + ${getPopOffset("instructions").y}px)) rotate(${C.instructions.rotation}deg) scale(${C.instructions.scale * sceneScale})`,
             transformOrigin: exp === "instructions" ? "center" : "top right",
             pointerEvents: anyExp && exp !== "instructions" ? "none" : !isInteractive ? "none" : "auto",

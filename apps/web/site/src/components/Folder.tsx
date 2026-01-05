@@ -15,7 +15,7 @@ export default function Folder({ className = "", onClick, style }: FolderProps) 
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/manilafolder.png"
+        src="/manilafolder.avif"
         alt="Manila folder"
         className="block w-full h-full"
       />

@@ -114,14 +114,14 @@ export default function Card({ className = "", onClick }: CardProps) {
       <div className="absolute top-[-32px] right-[-48px] z-20">
         {/* Paperclip on top */}
         <Image
-          src="/paperclip.png"
+          src="/paperclip.avif"
           alt="Paperclip"
           width={64}
           height={64}
           className="absolute top-[12px] left-9/12 -translate-x-1/2 rotate-[-50deg] z-30 w-16 h-auto"
         />
         <Polaroid
-          src="/radioform.png"
+          src="/radioform.avif"
           alt="Attached photo"
           className="scale-[0.5] origin-top-right top-[36px] right-[36px] rotate-[5deg]"
         />
@@ -168,7 +168,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             We know you&apos;ve bought that new{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "Stereo system")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Stereo system")}
               onMouseLeave={handleTextLeave}
             >
               stereo system
@@ -176,7 +176,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             or{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "Headphones")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Headphones")}
               onMouseLeave={handleTextLeave}
             >
               headphones
@@ -190,7 +190,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             Introducing{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "Radioform")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Radioform")}
               onMouseLeave={handleTextLeave}
             >
               Radioform
@@ -199,7 +199,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             your{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "Menubar")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Menubar")}
               onMouseLeave={handleTextLeave}
             >
               menubar
@@ -213,7 +213,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             We built this project to be fully{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "Open source")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Open source")}
               onMouseLeave={handleTextLeave}
             >
               open sourced
@@ -222,7 +222,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             getting into. Natively built in{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "Swift")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Swift")}
               onMouseLeave={handleTextLeave}
             >
               Swift
@@ -237,7 +237,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             have got your hands dirty. Make your own custom{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "EQ presets")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "EQ presets")}
               onMouseLeave={handleTextLeave}
             >
               EQ presets
@@ -247,7 +247,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             or even your{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.png", "MacBook")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "MacBook")}
               onMouseLeave={handleTextLeave}
             >
               MacBook

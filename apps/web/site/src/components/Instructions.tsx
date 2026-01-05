@@ -11,7 +11,19 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
   const instructions = [
     {
       image: "/instructions/frame1.png",
-      caption: "Step 1: Download and install Radioform.",
+      caption: (
+        <>
+          Step 1:{" "}
+          <a
+            href="https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
+            className="underline"
+            style={{ color: "inherit" }}
+          >
+            Download
+          </a>{" "}
+          and install Radioform.
+        </>
+      ),
     },
     {
       image: "/instructions/frame2.png",

@@ -111,15 +111,27 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
           { num: 2, label: "Info" },
           { num: 3, label: "Instructions" },
           { num: 4, label: "Changelog" },
-        ].map(({ num, label }) => (
-          <button
-            key={num}
-            onClick={() => nav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
-            className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
-            style={{ color: current === num ? "#000" : "#999", fontFamily: '"Courier New", monospace' }}
-          >
-            {current === num && num !== 1 ? "<- Back" : `${num} ${label}`}
-          </button>
+          { num: 5, label: "Download", isLink: true },
+        ].map(({ num, label, isLink }) => (
+          isLink ? (
+            <a
+              key={num}
+              href="https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
+              className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
+              style={{ color: "#999", fontFamily: '"Courier New", monospace', textDecoration: "none" }}
+            >
+              {num} {label}
+            </a>
+          ) : (
+            <button
+              key={num}
+              onClick={() => nav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
+              className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
+              style={{ color: current === num ? "#000" : "#999", fontFamily: '"Courier New", monospace' }}
+            >
+              {current === num && num !== 1 ? "<- Back" : `${num} ${label}`}
+            </button>
+          )
         ))}
       </div>
 

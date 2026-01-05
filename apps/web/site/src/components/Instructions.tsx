@@ -120,7 +120,7 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
         {/* Header */}
         <div className="relative z-[10] mb-6">
           <h1
-            className="text-left text-[18px] font-semibold underline text-black"
+            className="text-left text-2xl font-semibold underline text-black"
             style={{
               fontFamily: "var(--font-ibm-plex-mono), monospace",
             }}
@@ -130,7 +130,7 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
         </div>
 
         {/* Content */}
-        <div className="relative z-[10] flex flex-row gap-4">
+        <div className="relative z-[10] grid grid-cols-2 md:grid-cols-4 gap-4">
           {instructions.map((instruction, index) => (
             <div key={index} className="flex flex-col flex-1">
               <div className="relative mb-3 aspect-square">
@@ -146,7 +146,7 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
                 />
               </div>
               <p
-                className="text-xs leading-relaxed text-black text-left"
+                className="text-2xl md:text-xs leading-relaxed text-black text-left"
                 style={{
                   fontFamily: "var(--font-ibm-plex-mono), monospace",
                 }}

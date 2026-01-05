@@ -1,3 +1,5 @@
+![Radioform](readme.png)
+
 <div align="center">
   <h1>Radioform</h1>
   <p><em>A system equalizer for macOS.</em></p>

@@ -480,8 +480,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // First try to find the resource bundle
         if let resourceBundleURL = Bundle.main.url(forResource: "RadioformApp_RadioformApp", withExtension: "bundle"),
            let resourceBundle = Bundle(url: resourceBundleURL),
-           let logoPath = resourceBundle.url(forResource: "logo", withExtension: "svg") {
-            print("Found logo via resource bundle API: \(logoPath.path)")
+           let logoPath = resourceBundle.url(forResource: "icons/radioform-menu", withExtension: "svg") {
+            print("Found menu icon via resource bundle API: \(logoPath.path)")
             logoURL = logoPath
         }
 
@@ -492,7 +492,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let resourceBundleURL = executableURL
                 .deletingLastPathComponent()
                 .appendingPathComponent(bundleName)
-                .appendingPathComponent("Resources/logo.svg")
+                .appendingPathComponent("Resources/icons/radioform-menu.svg")
 
             if fileManager.fileExists(atPath: resourceBundleURL.path) {
                 print("Found logo in SwiftPM bundle: \(resourceBundleURL.path)")
@@ -501,16 +501,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // PRIORITY 3: Try main bundle's built-in resource lookup
-        if logoURL == nil, let mainBundleURL = Bundle.main.url(forResource: "logo", withExtension: "svg") {
-            print("Found logo via main bundle: \(mainBundleURL.path)")
+        if logoURL == nil, let mainBundleURL = Bundle.main.url(forResource: "icons/radioform-menu", withExtension: "svg") {
+            print("Found menu icon via main bundle: \(mainBundleURL.path)")
             logoURL = mainBundleURL
         }
 
         // PRIORITY 4: Try main bundle resources (alternative bundle structure)
         if logoURL == nil, let resourcePath = Bundle.main.resourcePath {
             let possiblePaths = [
-                "\(resourcePath)/Resources/logo.svg",
-                "\(resourcePath)/logo.svg"
+                "\(resourcePath)/Resources/icons/radioform-menu.svg",
+                "\(resourcePath)/icons/radioform-menu.svg"
             ]
 
             for path in possiblePaths {
@@ -525,7 +525,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // PRIORITY 5: Development - relative to executable
         if logoURL == nil, let executablePath = Bundle.main.executablePath {
             let executableDir = (executablePath as NSString).deletingLastPathComponent
-            let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/logo.svg")
+            let sourcePath = (executableDir as NSString).appendingPathComponent("../../../Sources/Resources/icons/radioform-menu.svg")
             let normalizedPath = (sourcePath as NSString).standardizingPath
             if fileManager.fileExists(atPath: normalizedPath) {
                 print("Found logo in development Sources: \(normalizedPath)")
@@ -536,15 +536,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // PRIORITY 6: Development - absolute path from repo root
         if logoURL == nil {
             let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? ""
-            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/Sources/Resources/logo.svg"
+            let absolutePath = "\(homeDir)/radioform/apps/mac/RadioformApp/Sources/Resources/icons/radioform-menu.svg"
             if fileManager.fileExists(atPath: absolutePath) {
-                print("Found logo at absolute path: \(absolutePath)")
+                print("Found menu icon at absolute path: \(absolutePath)")
                 logoURL = URL(fileURLWithPath: absolutePath)
             }
         }
 
         guard let url = logoURL else {
-            print("Failed to find logo.svg in any location")
+            print("Failed to find radioform-menu.svg in any location")
             return nil
         }
 

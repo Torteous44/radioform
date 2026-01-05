@@ -39,6 +39,34 @@ echo "📋 Copying Info.plist..."
 cp "$PROJECT_ROOT/apps/mac/RadioformApp/Info.plist" "$APP_PATH/Contents/Info.plist"
 echo "✓ Info.plist copied"
 
+# Copy app icon
+echo "🎨 Copying app icon..."
+ICON_SOURCE="$PROJECT_ROOT/apps/mac/RadioformApp/Sources/Resources/MyIcon.icns"
+ICON_SIZES_DIR="$PROJECT_ROOT/apps/mac/RadioformApp/Sources/Resources/icons"
+ICON_DEST="$APP_PATH/Contents/Resources/MyIcon.icns"
+if [ -d "$ICON_SIZES_DIR" ] && command -v iconutil >/dev/null 2>&1; then
+    TMP_ICONSET="$(mktemp -d)/MyIcon.iconset"
+    mkdir -p "$TMP_ICONSET"
+    cp "$ICON_SIZES_DIR/MacOS-16.png" "$TMP_ICONSET/icon_16x16.png"
+    cp "$ICON_SIZES_DIR/MacOS-32.png" "$TMP_ICONSET/icon_16x16@2x.png"
+    cp "$ICON_SIZES_DIR/MacOS-32.png" "$TMP_ICONSET/icon_32x32.png"
+    cp "$ICON_SIZES_DIR/MacOS-64.png" "$TMP_ICONSET/icon_32x32@2x.png"
+    cp "$ICON_SIZES_DIR/MacOS-128.png" "$TMP_ICONSET/icon_128x128.png"
+    cp "$ICON_SIZES_DIR/MacOS-256.png" "$TMP_ICONSET/icon_128x128@2x.png"
+    cp "$ICON_SIZES_DIR/MacOS-256.png" "$TMP_ICONSET/icon_256x256.png"
+    cp "$ICON_SIZES_DIR/MacOS-512.png" "$TMP_ICONSET/icon_256x256@2x.png"
+    cp "$ICON_SIZES_DIR/MacOS-512.png" "$TMP_ICONSET/icon_512x512.png"
+    cp "$ICON_SIZES_DIR/MacOS-1024.png" "$TMP_ICONSET/icon_512x512@2x.png"
+    iconutil -c icns "$TMP_ICONSET" -o "$ICON_DEST"
+    rm -rf "$(dirname "$TMP_ICONSET")"
+    echo "✓ App icon generated from icons/"
+elif [ -f "$ICON_SOURCE" ]; then
+    cp "$ICON_SOURCE" "$APP_PATH/Contents/Resources/"
+    echo "✓ App icon copied"
+else
+    echo "⚠️ App icon not found at $ICON_SIZES_DIR or $ICON_SOURCE"
+fi
+
 # Copy main executable (RadioformApp)
 echo "📦 Copying RadioformApp executable..."
 APP_EXECUTABLE="$PROJECT_ROOT/apps/mac/RadioformApp/.build/$SWIFT_ARCH/release/RadioformApp"

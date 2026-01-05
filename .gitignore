@@ -134,6 +134,3 @@ diagnostics/
 *.crash
 *.diag
 .env
-
-# Local developer guides
-RELEASE_GUIDE.md

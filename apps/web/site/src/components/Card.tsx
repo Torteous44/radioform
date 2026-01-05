@@ -12,15 +12,17 @@ interface CardProps {
 interface HoverTooltipProps {
   src: string;
   alt: string;
+  text?: string;
   x: number;
   y: number;
   visible: boolean;
 }
 
-function HoverTooltip({ src, alt, x, y, visible }: HoverTooltipProps) {
+function HoverTooltip({ src, alt, text, x, y, visible }: HoverTooltipProps) {
   if (!visible) return null;
 
   const isVideo = src.endsWith('.mp4') || src.includes('video/upload');
+  const isTextOnly = !!text;
 
   return (
     <div
@@ -32,12 +34,22 @@ function HoverTooltip({ src, alt, x, y, visible }: HoverTooltipProps) {
       }}
     >
       <div
-        className="bg-white border-2 border-white overflow-hidden w-[179px] h-[179px]"
+        className={`bg-white border-2 border-white overflow-hidden ${isTextOnly ? 'px-4 py-2' : 'w-[179px] h-[179px]'}`}
         style={{
           boxShadow: "0 4px 12px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.1)",
         }}
       >
-        {isVideo ? (
+        {isTextOnly ? (
+          <span
+            className="text-[12px] font-normal tracking-wider text-gray-600"
+            style={{
+              fontFamily: "var(--font-ibm-plex-mono), monospace",
+              letterSpacing: "0.1em",
+            }}
+          >
+            {text}
+          </span>
+        ) : isVideo ? (
           <video
             key={src}
             src={src}
@@ -66,20 +78,23 @@ export default function Card({ className = "", onClick }: CardProps) {
     visible: boolean;
     src: string;
     alt: string;
+    text?: string;
     x: number;
     y: number;
   }>({
     visible: false,
     src: "",
     alt: "",
+    text: undefined,
     x: 0,
     y: 0,
   });
 
   const handleTextHover = (
-    e: React.MouseEvent<HTMLSpanElement>,
+    e: React.MouseEvent<HTMLSpanElement | HTMLAnchorElement>,
     imageSrc: string,
-    imageAlt: string
+    imageAlt: string,
+    text?: string
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const cardRect = e.currentTarget.closest('[data-card-container]')?.getBoundingClientRect();
@@ -89,6 +104,7 @@ export default function Card({ className = "", onClick }: CardProps) {
       visible: true,
       src: imageSrc,
       alt: imageAlt,
+      text: text,
       x: rect.right - cardRect.left,
       y: rect.top - cardRect.top + rect.height / 2,
     });
@@ -101,7 +117,6 @@ export default function Card({ className = "", onClick }: CardProps) {
   // Preload all hover media after component mounts
   useEffect(() => {
     const mediaUrls = [
-      "/radioform-hover.png",
       "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614903/mb_1_mqccrc.mp4",
       "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-preset_1_y7vonk.mp4",
       "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4",
@@ -157,6 +172,7 @@ export default function Card({ className = "", onClick }: CardProps) {
       <HoverTooltip
         src={hoverState.src}
         alt={hoverState.alt}
+        text={hoverState.text}
         x={hoverState.x}
         y={hoverState.y}
         visible={hoverState.visible}
@@ -217,13 +233,15 @@ export default function Card({ className = "", onClick }: CardProps) {
         <div className="text-left space-y-3 text-[12px] leading-relaxed flex-1">
           <p>
             You&apos;ve got the headphones. You&apos;ve got the speakers. But macOS still outputs the same flat, unoptimized audio it always has.{" "}
-            <span
+            <a
+              href="https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform-hover.png", "Radioform")}
+              onClick={(e) => e.stopPropagation()}
+              onMouseEnter={(e) => handleTextHover(e, "", "", "DOWNLOAD")}
               onMouseLeave={handleTextLeave}
             >
               Radioform
-            </span>{" "}
+            </a>{" "}
             is a macOS native equalizer that finally lets you shape your sound system-wide.
           </p>
 
@@ -231,7 +249,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             It tucks into your{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614903/mb_1_mqccrc.mp4", "Menubar")}
+              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614903/mb_1_mqccrc.mp4", "Menubar", undefined)}
               onMouseLeave={handleTextLeave}
             >
               menubar
@@ -239,7 +257,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             and stays out of your way. Pick from{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-preset_1_y7vonk.mp4", "Ready-made presets")}
+              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-preset_1_y7vonk.mp4", "Ready-made presets", undefined)}
               onMouseLeave={handleTextLeave}
             >
               ready-made presets
@@ -247,7 +265,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             or take matters into your own hands and{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4", "Craft your own EQ curves")}
+              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4", "Craft your own EQ curves", undefined)}
               onMouseLeave={handleTextLeave}
             >
               craft your own EQ curves
@@ -262,6 +280,8 @@ export default function Card({ className = "", onClick }: CardProps) {
               target="_blank"
               rel="noopener noreferrer"
               className="underline"
+              onMouseEnter={(e) => handleTextHover(e, "", "", "VIEW GITHUB")}
+              onMouseLeave={handleTextLeave}
             >
               fully open source
             </a>

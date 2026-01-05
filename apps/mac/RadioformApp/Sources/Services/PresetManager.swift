@@ -51,11 +51,9 @@ class PresetManager: ObservableObject {
         // Load current preset from IPC
         let loadedPreset = IPCController.shared.getCurrentPreset()
 
-        // Apply the loaded preset (ensures UI sync + sweetening), or default to "Flat"
+        // Apply the loaded preset (ensures UI sync), or default to "Flat"
         if let preset = loadedPreset {
-            // Strip any existing sweetening to avoid double-application
-            let originalPreset = stripSweetening(preset)
-            applyPreset(originalPreset)  // Syncs UI state and applies fresh sweetening
+            applyPreset(preset)
         } else if let flatPreset = bundledPresets.first(where: { $0.name == "Flat" }) {
             applyPreset(flatPreset)
         }
@@ -217,29 +215,6 @@ class PresetManager: ObservableObject {
         loadAllPresets()
     }
 
-    /// Remove invisible sweetening bands from a preset (if present)
-    /// Returns the preset with sweetening bands stripped
-    private func stripSweetening(_ preset: EQPreset) -> EQPreset {
-        var strippedPreset = preset
-
-        // Sweetening consists of first 2 bands: Warmth (80Hz) and Air (12kHz)
-        // Check if first band matches Warmth characteristics
-        if preset.bands.count >= 2,
-           preset.bands[0].frequencyHz == 80,
-           preset.bands[0].filterType == .lowShelf,
-           abs(preset.bands[0].gainDb - 1.2) < 0.1,
-           preset.bands[1].frequencyHz == 12000,
-           preset.bands[1].filterType == .highShelf,
-           abs(preset.bands[1].gainDb - 1.8) < 0.1 {
-            // Remove first 2 bands (sweetening)
-            strippedPreset.bands = Array(preset.bands.dropFirst(2))
-            // Remove sweetening preamp boost
-            strippedPreset.preampDb -= 1.25
-        }
-
-        return strippedPreset
-    }
-
     /// Map preset bands to standard 10-band UI frequencies
     /// Returns: (mapped band values, warning messages)
     private func mapPresetToStandardBands(_ preset: EQPreset) -> ([Float], [String]) {
@@ -314,40 +289,8 @@ class PresetManager: ObservableObject {
     /// Apply preset via IPC
     func applyPreset(_ preset: EQPreset) {
         do {
-            // Create a modified preset with sweetening boost when enabled
-            var modifiedPreset = preset
-
-            if isEnabled {
-                // Add invisible sweetening bands at the beginning
-                var sweeteningBands: [EQBand] = []
-
-                // Warmth: Low shelf at 80Hz (+1.2dB)
-                sweeteningBands.append(
-                    EQBand(
-                        frequencyHz: 80,
-                        gainDb: 1.2,
-                        qFactor: 0.707,
-                        filterType: .lowShelf,
-                        enabled: true
-                    ))
-
-                // Air: High shelf at 12kHz (+1.8dB)
-                sweeteningBands.append(
-                    EQBand(
-                        frequencyHz: 12000,
-                        gainDb: 1.8,
-                        qFactor: 0.707,
-                        filterType: .highShelf,
-                        enabled: true
-                    ))
-
-                // Combine sweetening + original preset bands (limit to 10 total)
-                modifiedPreset.bands = (sweeteningBands + preset.bands).prefix(10).map { $0 }
-                modifiedPreset.preampDb += 1.25  // Add +2.5dB preamp sweetening
-            }
-
-            try IPCController.shared.applyPreset(modifiedPreset)
-            currentPreset = preset  // Store original preset without boost
+            try IPCController.shared.applyPreset(preset)
+            currentPreset = preset
 
             // Reset custom preset state
             isCustomPreset = false
@@ -378,33 +321,7 @@ class PresetManager: ObservableObject {
 
     /// Apply current state (either enabled with current bands, or disabled with all zeros)
     func applyCurrentState() {
-        var bands: [EQBand] = []
-
-        // Add invisible sweetening bands when enabled (applied first in processing chain)
-        if isEnabled {
-            // Warmth: Low shelf at 80Hz (+1.2dB)
-            bands.append(
-                EQBand(
-                    frequencyHz: 80,
-                    gainDb: 1.2,
-                    qFactor: 0.707,  // Butterworth Q for smooth shelf
-                    filterType: .lowShelf,
-                    enabled: true
-                ))
-
-            // Air: High shelf at 12kHz (+1.8dB)
-            bands.append(
-                EQBand(
-                    frequencyHz: 12000,
-                    gainDb: 1.8,
-                    qFactor: 0.707,
-                    filterType: .highShelf,
-                    enabled: true
-                ))
-        }
-
-        // Add user's visible EQ bands (only first 8 to stay within 10-band limit)
-        let userBands = standardFrequencies.prefix(8).enumerated().map { index, frequency in
+        let bands = standardFrequencies.enumerated().map { index, frequency in
             let gain = isEnabled ? currentBands[index] : 0.0
             return EQBand(
                 frequencyHz: frequency,
@@ -414,12 +331,11 @@ class PresetManager: ObservableObject {
                 enabled: abs(gain) > 0.01
             )
         }
-        bands.append(contentsOf: userBands)
 
         let customPreset = EQPreset(
             name: "Custom",
             bands: bands,
-            preampDb: isEnabled ? 1.25 : 0.0,  // +2.5dB sweetening when enabled
+            preampDb: 0.0,
             limiterEnabled: true,
             limiterThresholdDb: -1.0
         )

@@ -11,7 +11,7 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
   const instructions = [
     {
       image: "/instructions/frame1.png",
-      caption: "Step 1: Download and install Radioform from the menubar",
+      caption: "Step 1: Download and install Radioform.",
     },
     {
       image: "/instructions/frame2.png",
@@ -23,16 +23,16 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
     },
     {
       image: "/instructions/frame4.png",
-      caption: "Step 4: Enjoy your enhanced audio experience",
+      caption: "Step 4: Enjoy.",
     },
   ];
 
   return (
     <div
-      className={`relative w-full max-w-[900px] ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`relative w-full max-w-[900px] mx-auto ${onClick ? "cursor-pointer" : ""} ${className}`}
       onClick={onClick}
       style={{
-        fontFamily: '"Courier New", Courier, monospace',
+        fontFamily: "var(--font-ibm-plex-mono), monospace",
         filter: `
           drop-shadow(0px 1px 1px rgba(0,0,0,0.1))
           drop-shadow(0px 2px 4px rgba(0,0,0,0.08))
@@ -108,9 +108,9 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
         {/* Header */}
         <div className="relative z-[10] mb-6">
           <h1
-            className="text-left text-[18px] font-bold underline text-black"
+            className="text-left text-[18px] font-semibold underline text-black"
             style={{
-              fontFamily: '"Courier New", Courier, monospace',
+              fontFamily: "var(--font-ibm-plex-mono), monospace",
             }}
           >
             INSTRUCTIONS FOR ENJOYMENT
@@ -134,9 +134,9 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
                 />
               </div>
               <p
-                className="text-sm leading-relaxed text-black text-left font-semibold"
+                className="text-xs leading-relaxed text-black text-left"
                 style={{
-                  fontFamily: '"Courier New", Courier, monospace',
+                  fontFamily: "var(--font-ibm-plex-mono), monospace",
                 }}
               >
                 {instruction.caption}

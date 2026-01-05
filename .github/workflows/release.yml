@@ -44,7 +44,19 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo " Building version: $VERSION"
+          echo "Building version: $VERSION"
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      #  Update Component Versions
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Update Component Versions
+        run: |
+          echo "Updating all components to version ${{ steps.version.outputs.version }}"
+          ./tools/update_versions.sh ${{ steps.version.outputs.version }}
+          echo "✓ Version synchronization complete"
+
+          # Show what changed for verification
+          git diff apps/mac/RadioformApp/Info.plist packages/driver/Info.plist packages/host/Info.plist
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Install Apple Certificate
@@ -118,6 +130,11 @@ jobs:
           make sign
           echo "✓ App signed"
 
+      - name: Verify Signatures
+        run: |
+          ./tools/verify_signatures.sh
+          echo "✓ Signatures verified"
+
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Notarize
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -130,18 +147,49 @@ jobs:
           # Create zip for notarization
           ditto -c -k --keepParent dist/Radioform.app dist/Radioform.zip
 
-          # Submit for notarization
-          xcrun notarytool submit dist/Radioform.zip \
+          RESULT_JSON=$(mktemp)
+
+          # Submit for notarization and capture the result
+          if ! xcrun notarytool submit dist/Radioform.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_ID_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --wait \
+            --output-format json > "$RESULT_JSON"; then
+            echo "Notary submission failed"
+            cat "$RESULT_JSON" || true
+            SUBMISSION_ID=$(python -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("id",""))' "$RESULT_JSON")
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_ID_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+          STATUS=$(python -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("status",""))' "$RESULT_JSON")
+          SUBMISSION_ID=$(python -c 'import json,sys, pathlib; p=pathlib.Path(sys.argv[1]); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get("id",""))' "$RESULT_JSON")
+
+          echo "Submission ID: ${SUBMISSION_ID}"
+          echo "Status: ${STATUS}"
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notary submission returned status: $STATUS"
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_ID_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
 
           # Staple the ticket
           xcrun stapler staple dist/Radioform.app
 
           # Clean up
-          rm dist/Radioform.zip
+          rm dist/Radioform.zip "$RESULT_JSON"
 
           echo "✓ App notarized and stapled"
 
@@ -171,6 +219,60 @@ jobs:
           echo "dmg_name=${DMG_NAME}" >> "$GITHUB_OUTPUT"
           echo "✓ DMG created: ${DMG_NAME}"
         id: dmg
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      #  Install Sparkle Tools
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Install Sparkle Tools
+        run: |
+          brew install sparkle
+          # Add Sparkle CLI tools to PATH (generate_appcast lives inside the cask payload)
+          SPARKLE_BIN=$(find "$(brew --prefix)/Caskroom/sparkle" -name generate_appcast -type f | head -1)
+          if [ -z "$SPARKLE_BIN" ]; then
+            SPARKLE_BIN=$(find /Applications -path "*Sparkle*bin/generate_appcast" -type f | head -1)
+          fi
+          if [ -z "$SPARKLE_BIN" ]; then
+            echo "❌ generate_appcast not found after installing Sparkle cask"
+            exit 1
+          fi
+          echo "Found generate_appcast at $SPARKLE_BIN"
+          echo "SPARKLE_BIN=$SPARKLE_BIN" >> $GITHUB_ENV
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      #  Generate Sparkle Appcast
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Generate Sparkle Appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          DMG_NAME: ${{ steps.dmg.outputs.dmg_name }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "❌ SPARKLE_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+
+          KEY_PATH="$RUNNER_TEMP/sparkle_ed25519.key"
+          # Secret should be the raw Ed25519 private key string (as generated by Sparkle's generate_keys)
+          printf "%s" "$SPARKLE_PRIVATE_KEY" > "$KEY_PATH"
+
+          DOWNLOAD_PREFIX="https://github.com/${{ github.repository }}/releases/download/v${APP_VERSION}"
+
+          # Generate appcast with signature
+          "${SPARKLE_BIN}" \
+            --ed-key-file "$KEY_PATH" \
+            --download-url-prefix "$DOWNLOAD_PREFIX/" \
+            dist
+
+          if [ -f dist/appcast.xml ]; then
+            echo "✓ Appcast generated at dist/appcast.xml"
+          else
+            echo "❌ generate_appcast did not produce dist/appcast.xml"
+            ls dist
+            exit 1
+          fi
+
+          head -n 10 dist/appcast.xml
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Generate Checksums
@@ -214,6 +316,7 @@ jobs:
           body_path: release_notes.md
           files: |
             dist/*.dmg
+            dist/appcast.xml
             dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

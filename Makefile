@@ -1,7 +1,7 @@
 # Radioform Development Makefile
 # Shortcuts for building, testing, and running Radioform
 
-.PHONY: help clean build run dev reset bundle install-deps test sign verify release test-release quick rebuild dmg full-release changelog
+.PHONY: help clean build run dev reset bundle install-deps test sign verify release test-release quick rebuild dmg full-release changelog update-version
 
 # Default target - show help
 help:
@@ -19,6 +19,7 @@ help:
 	@echo "    make bundle       - Create .app bundle in dist/"
 	@echo "    make clean        - Clean all build artifacts"
 	@echo "    make rebuild      - Full clean + rebuild"
+	@echo "    make update-version - Update all component versions from git tag"
 	@echo ""
 	@echo "  Release (Code Signing):"
 	@echo "    make release      - Build, sign, and verify for distribution"
@@ -54,8 +55,14 @@ run:
 		exit 1; \
 	fi
 
+# Update version from git tags
+update-version:
+	@echo "Updating version from git tags..."
+	@./tools/update_versions.sh
+	@echo "✓ Version updated"
+
 # Build all components
-build:
+build: update-version
 	@echo "Building all components..."
 	@./tools/build_release.sh
 

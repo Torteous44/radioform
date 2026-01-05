@@ -1,5 +1,25 @@
 
-## [1.0.11] - 2026-01-03
+## [Unreleased]
+
+### Bug Fixes
+
+- Website enhancements
+- Fix build errors
+- Remove incorrect .shm extension from shared memory path
+
+### Miscellaneous Tasks
+
+- Update preset values
+
+### Other
+
+- Add folder-based UI with Card and Logs components, update styling and navigation
+- Get changelog data from github API
+- Merge pull request #20 from Torteous44/feature/folder-ui-components
+
+Add folder-based UI with Card and Logs components, update styling and…
+
+## [1.0.12] - 2026-01-03
 
 ### Bug Fixes
 
@@ -11,6 +31,7 @@
 - Add gpl v3 license file
 - Readme update, contributing md file
 - Structural docs
+- Changelogs, refactor host
 
 ## [1.0.10] - 2026-01-01
 

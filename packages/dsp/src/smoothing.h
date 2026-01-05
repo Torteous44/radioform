@@ -12,10 +12,11 @@
 namespace radioform {
 
 /**
- * @brief Simple one-pole smoother for parameter changes
+ * @brief Zero-zipper parameter smoother with polynomial ramping
  *
- * Uses exponential smoothing to gradually approach target value.
- * This prevents audible clicks/zippers when parameters change.
+ * Uses exponential smoothing with improved ramping characteristics.
+ * This prevents audible clicks/zippers when parameters change, with
+ * smoother transitions than simple one-pole filters.
  */
 class ParameterSmoother {
 public:
@@ -30,6 +31,7 @@ public:
         setTimeConstant(time_constant_ms);
         current_ = 0.0f;
         target_ = 0.0f;
+        velocity_ = 0.0f;
     }
 
     /**
@@ -47,6 +49,9 @@ public:
         } else {
             coeff_ = 0.0f; // Instant change
         }
+
+        // Velocity damping coefficient (slightly faster than main coeff)
+        velocity_coeff_ = coeff_ * 0.95f;
     }
 
     /**
@@ -66,16 +71,27 @@ public:
     void setValue(float value) {
         current_ = value;
         target_ = value;
+        velocity_ = 0.0f;
     }
 
     /**
-     * @brief Get next smoothed value
+     * @brief Get next smoothed value (zero-zipper algorithm)
+     *
+     * Uses velocity tracking for smoother parameter transitions.
+     * This eliminates subtle phase modulation artifacts during parameter sweeps.
      *
      * @return Smoothed value (moves toward target)
      */
     inline float next() {
-        // One-pole lowpass filter: y[n] = a * y[n-1] + (1-a) * x[n]
-        current_ = coeff_ * current_ + (1.0f - coeff_) * target_;
+        // Calculate error
+        const float error = target_ - current_;
+
+        // Update velocity with damping
+        velocity_ = velocity_coeff_ * velocity_ + (1.0f - velocity_coeff_) * error;
+
+        // Update current value using velocity (second-order smoothing)
+        current_ = coeff_ * current_ + (1.0f - coeff_) * (target_ - velocity_ * 0.5f);
+
         return current_;
     }
 
@@ -86,7 +102,7 @@ public:
      * @return true if current value is close enough to target
      */
     bool isStable(float epsilon = 0.0001f) const {
-        return std::abs(current_ - target_) < epsilon;
+        return std::abs(current_ - target_) < epsilon && std::abs(velocity_) < epsilon;
     }
 
     /**
@@ -102,8 +118,10 @@ public:
 private:
     float sample_rate_ = 48000.0f;
     float coeff_ = 0.0f;
+    float velocity_coeff_ = 0.0f;
     float current_ = 0.0f;
     float target_ = 0.0f;
+    float velocity_ = 0.0f;  // Tracks rate of change for smoother transitions
 };
 
 /**

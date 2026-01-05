@@ -22,8 +22,7 @@ class SharedMemoryManager {
     func createMemory(for uid: String) -> Bool {
         print("[RadioformHost V2] Creating shared memory for: \(uid)")
 
-        let safeUID = sanitizeUID(uid)
-        let shmPath = "/tmp/radioform-\(safeUID)"
+        let shmPath = PathManager.sharedMemoryPath(uid: uid)
         print("[RadioformHost V2] File: \(shmPath)")
 
         unlink(shmPath)
@@ -96,8 +95,7 @@ class SharedMemoryManager {
         munmap(sharedMem, shmSize)
         deviceMemory.removeValue(forKey: uid)
 
-        let safeUID = sanitizeUID(uid)
-        let shmPath = "/tmp/radioform-\(safeUID)"
+        let shmPath = PathManager.sharedMemoryPath(uid: uid)
         unlink(shmPath)
     }
 
@@ -143,12 +141,5 @@ class SharedMemoryManager {
             munmap(mem, size)
         }
         deviceMemory.removeAll()
-    }
-
-    private func sanitizeUID(_ uid: String) -> String {
-        return uid
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
     }
 }

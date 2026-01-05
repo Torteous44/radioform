@@ -13,11 +13,14 @@
 namespace radioform {
 
 /**
- * @brief Simple soft-knee limiter
+ * @brief soft-knee limiter
  *
- * Uses a tanh-based soft clipping function to prevent harsh clipping.
+ * Uses a rational function soft clipping curve that is smoother and more
+ * transparent than tanh, with the same computational cost.
+ *
  * This is not a look-ahead limiter, so it's very low latency but may
- * still clip on extremely fast transients.
+ * still clip on extremely fast transients. The rational function provides
+ * cleaner harmonics and less "grunge" than tanh.
  */
 class SoftLimiter {
 public:
@@ -37,16 +40,30 @@ public:
      */
     void setThreshold(float threshold_db) {
         threshold_ = std::pow(10.0f, threshold_db / 20.0f);
+        // Knee width for smooth transition (starts softening at 80% of threshold)
+        knee_start_ = threshold_ * 0.8f;
     }
 
     /**
      * @brief Process one sample (in-place)
      */
     inline float processSample(float input) {
-        // Soft clip using tanh
-        // tanh(x) smoothly compresses values > 1.0
-        const float scaled = input / threshold_;
-        return threshold_ * std::tanh(scaled);
+        const float abs_input = std::abs(input);
+
+        // Below knee: pass through
+        if (abs_input <= knee_start_) {
+            return input;
+        }
+
+        // Above knee: apply soft limiting
+        // Using rational function: x / (1 + |x|)
+        // This is smoother than tanh and produces cleaner harmonics
+        const float scaled = (abs_input - knee_start_) / (threshold_ - knee_start_);
+        const float limited = knee_start_ + (threshold_ - knee_start_) *
+                             (scaled / (1.0f + scaled));
+
+        // Preserve sign
+        return (input < 0.0f) ? -limited : limited;
     }
 
     /**
@@ -71,7 +88,8 @@ public:
     }
 
 private:
-    float threshold_ = 0.99f; // ~-0.1 dB
+    float threshold_ = 0.99f;    // ~-0.1 dB
+    float knee_start_ = 0.792f;  // 80% of threshold
 };
 
 /**

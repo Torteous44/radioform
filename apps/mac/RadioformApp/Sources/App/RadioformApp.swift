@@ -5,6 +5,7 @@ import AppKit
 import CoreText
 import CoreGraphics
 import CoreAudio
+import Sparkle
 
 // Main entry point - AppKit-based app with SwiftUI views
 @main
@@ -14,10 +15,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var hostProcess: Process?
     var eventMonitor: EventMonitor?
     var onboardingCoordinator: OnboardingCoordinator?
+    var updaterController: SPUStandardUpdaterController?
+    var driverUpdateWindow: DriverUpdateWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Register custom font
         registerCustomFont()
+
+        // Initialize Sparkle updater
+        initializeUpdater()
 
         // Check if onboarding is needed
         if !OnboardingState.hasCompleted() {
@@ -29,11 +35,119 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Onboarding complete - run as menu bar app only
         NSApp.setActivationPolicy(.accessory)
 
+        // Check for driver version mismatch (lazy update)
+        checkDriverVersionMismatch()
+
         // Launch audio host if not already running
         launchHostIfNeeded()
 
         // Set up menu bar UI
         setupMenuBar()
+    }
+
+    func initializeUpdater() {
+        // Initialize Sparkle with standard user driver
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+        print("✓ Sparkle updater initialized")
+
+        // Trigger a background check on launch so updates are offered immediately
+        updaterController?.updater.checkForUpdatesInBackground()
+    }
+
+    func checkDriverVersionMismatch() {
+        // Only check if driver is already installed
+        guard VersionManager.isDriverInstalled() else {
+            print("Driver not installed - skipping version check")
+            return
+        }
+
+        // Check for version mismatch
+        if VersionManager.driverNeedsUpdate() {
+            let installedVersion = VersionManager.installedDriverVersion() ?? "unknown"
+            let bundledVersion = VersionManager.bundledDriverVersion() ?? "unknown"
+
+            print("Driver version mismatch detected:")
+            print("  Installed: \(installedVersion)")
+            print("  Bundled: \(bundledVersion)")
+
+            // Only prompt if we haven't already prompted for this version
+            if OnboardingState.lastDriverVersionCheck() != bundledVersion {
+                // Show update prompt
+                showDriverUpdatePrompt(
+                    currentVersion: installedVersion,
+                    newVersion: bundledVersion
+                )
+
+                // Mark this version as checked
+                OnboardingState.updateLastDriverVersionCheck(bundledVersion)
+            } else {
+                print("Already prompted for version \(bundledVersion), skipping")
+            }
+        } else {
+            print("✓ Driver version is up to date")
+        }
+    }
+
+    func showDriverUpdatePrompt(currentVersion: String, newVersion: String) {
+        // Close existing window if any
+        driverUpdateWindow?.close()
+
+        // Create and show driver update window
+        driverUpdateWindow = DriverUpdateWindow(
+            currentVersion: currentVersion,
+            newVersion: newVersion,
+            onUpdate: { [weak self] in
+                self?.performDriverUpdate()
+            },
+            onDismiss: { [weak self] in
+                self?.driverUpdateWindow?.close()
+                self?.driverUpdateWindow = nil
+            }
+        )
+
+        driverUpdateWindow?.center()
+        driverUpdateWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func performDriverUpdate() {
+        // Close the update window
+        driverUpdateWindow?.close()
+        driverUpdateWindow = nil
+
+        // Use existing DriverInstaller logic
+        let installer = DriverInstaller()
+
+        Task {
+            do {
+                try await installer.installDriver()
+                print("✓ Driver updated successfully")
+
+                // Show success alert
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "Driver Updated"
+                    alert.informativeText = "The Radioform audio driver has been updated to version \(VersionManager.bundledDriverVersion() ?? "unknown")."
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            } catch {
+                print("Driver update failed: \(error)")
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "Update Failed"
+                    alert.informativeText = "Failed to update driver: \(error.localizedDescription)"
+                    alert.alertStyle = .critical
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+        }
     }
 
     func showOnboarding() {
@@ -95,7 +209,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        let logFile = "/tmp/radioform-quit.log"
+        let logsDir = FileManager.default.urls(
+            for: .libraryDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Logs/Radioform")
+
+        try? FileManager.default.createDirectory(
+            at: logsDir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+
+        let logFile = logsDir.appendingPathComponent("app.log").path
 
         func log(_ message: String) {
             let timestamp = Date()
@@ -119,13 +244,104 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Perform cleanup directly from the app
         performCleanup(logger: log)
 
-        // Then terminate the host process
-        if let process = hostProcess, process.isRunning {
-            log("Terminating host process...")
-            process.terminate()
-        }
+        terminateHostAndProxies(logger: log)
 
         log("=== applicationWillTerminate COMPLETE ===")
+    }
+
+    /// Best-effort fallback to stop any running RadioformHost even if we did not launch it.
+    private func terminateHostAndProxies(logger: (String) -> Void) {
+        if let process = hostProcess, process.isRunning {
+            logger("Terminating tracked host process (pid \(process.processIdentifier))...")
+            process.terminate()
+            waitForProcessExit(process, timeout: 0.3, logger: logger)
+            if process.isRunning {
+                logger("Host still running, sending SIGKILL")
+                kill(process.processIdentifier, SIGKILL)
+            }
+        }
+
+        logger("Attempting best-effort shutdown via pgrep/kill for any remaining hosts")
+
+        let pgrep = Process()
+        pgrep.launchPath = "/usr/bin/pgrep"
+        pgrep.arguments = ["-f", "RadioformHost"]
+
+        let pipe = Pipe()
+        pgrep.standardOutput = pipe
+        pgrep.standardError = Pipe()
+
+        do {
+            try pgrep.run()
+            pgrep.waitUntilExit()
+        } catch {
+            logger("Failed to run pgrep: \(error)")
+            return
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8)?
+            .split(separator: "\n")
+            .compactMap({ Int32($0) }),
+              !output.isEmpty else {
+            logger("No additional RadioformHost processes found")
+            return
+        }
+
+        for pid in output {
+            guard pid != getpid() else { continue }
+            logger("Sending SIGTERM to RadioformHost pid \(pid)")
+            kill(pid, SIGTERM)
+            if !waitForPIDExit(pid, timeout: 0.3) {
+                logger("PID \(pid) still alive, sending SIGKILL")
+                kill(pid, SIGKILL)
+            }
+        }
+
+        // Remove any lingering shared memory/control files so the driver tears down proxies
+        cleanupTempIPC(logger: logger)
+    }
+
+    /// Poll a Process for exit up to timeout seconds.
+    private func waitForProcessExit(_ process: Process, timeout: TimeInterval, logger: (String) -> Void) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if process.isRunning {
+            logger("Process \(process.processIdentifier) did not exit within \(timeout)s")
+        }
+    }
+
+    /// Poll a PID for exit up to timeout seconds.
+    private func waitForPIDExit(_ pid: Int32, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if kill(pid, 0) != 0 {
+                return true // no longer running
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return kill(pid, 0) != 0
+    }
+
+    /// Clean up temporary files that keep proxies alive.
+    private func cleanupTempIPC(logger: (String) -> Void) {
+        let fm = FileManager.default
+        let controlFile = "/tmp/radioform-devices.txt"
+        if fm.fileExists(atPath: controlFile) {
+            logger("Removing control file \(controlFile)")
+            unlink(controlFile)
+        }
+
+        // Remove shared memory files the driver might watch
+        if let tmpItems = try? fm.contentsOfDirectory(atPath: "/tmp") {
+            for item in tmpItems where item.hasPrefix("radioform-") {
+                let path = "/tmp/\(item)"
+                logger("Removing shared memory file \(path)")
+                unlink(path)
+            }
+        }
     }
 
     func performCleanup(logger: (String) -> Void = { print($0) }) {

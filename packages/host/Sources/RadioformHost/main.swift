@@ -1,8 +1,8 @@
-import Foundation
-import CoreAudio
 import AudioToolbox
 import CRadioformAudio
 import CRadioformDSP
+import CoreAudio
+import Foundation
 
 let deviceDiscovery = DeviceDiscovery()
 let deviceRegistry = DeviceRegistry()
@@ -19,15 +19,24 @@ let deviceMonitor = DeviceMonitor(
     registry: deviceRegistry,
     proxyManager: proxyManager,
     memoryManager: memoryManager,
-    discovery: deviceDiscovery
+    discovery: deviceDiscovery,
+    audioEngine: audioEngine
 )
 let presetLoader = PresetLoader()
 let presetMonitor = PresetMonitor(loader: presetLoader, processor: dspProcessor)
 
 func main() {
-    print("╔════════════════════════════════════════════════════╗")
-    print("║   RADIOFORM HOST V2 - UNIVERSAL AUDIO DRIVER      ║")
-    print("╚════════════════════════════════════════════════════╝")
+
+    print("[Step 0] Setting up directories...")
+    do {
+        try PathManager.ensureDirectories()
+        PathManager.migrateOldPreset()
+        print("    ✓ Application Support: \(PathManager.appSupportDir.path)")
+        print("    ✓ Logs: \(PathManager.logsDir.path)")
+    } catch {
+        print("[ERROR] Failed to create directories: \(error)")
+        exit(1)
+    }
 
     print("[Step 1] Discovering physical audio devices...")
     let devices = deviceDiscovery.enumeratePhysicalDevices()
@@ -52,7 +61,8 @@ func main() {
 
     print("[Step 4] Writing control file...")
     deviceRegistry.writeControlFile()
-    print("    ✓ Control file: /tmp/radioform-devices.txt")
+    print("    ✓ Control file: \(RadioformConfig.controlFilePath)")
+    print("    ✓ Preset file: \(RadioformConfig.presetFilePath)")
 
     print("[Step 5] Starting heartbeat monitor...")
     memoryManager.startHeartbeat()
@@ -69,7 +79,6 @@ func main() {
         print("[ERROR] Failed to apply EQ preset")
         exit(1)
     }
-    print("    ✓ Bass boost EQ: +6dB @ 100Hz, +3dB @ 60Hz")
 
     print("[Step 9] Finding physical output device...")
     print("[Step 10] Creating audio unit...")
@@ -81,13 +90,6 @@ func main() {
         print("[ERROR] Audio engine setup failed: \(error)")
         exit(1)
     }
-
-    print("")
-    print("╔════════════════════════════════════════════════════╗")
-    print("║            HOST V2 RUNNING - UNIVERSAL             ║")
-    print("║  Features: Multi-rate, Multi-format, Heartbeat    ║")
-    print("╚════════════════════════════════════════════════════╝")
-    print("")
 
     presetMonitor.startMonitoring()
 
@@ -135,7 +137,24 @@ func cleanup() {
 
     memoryManager.cleanup()
 
+    restartCoreAudio()
+
     print("[Cleanup] ✓ Complete")
+}
+
+private func restartCoreAudio() {
+    // Force HAL to drop any lingering virtual devices by restarting coreaudiod
+    let task = Process()
+    task.launchPath = "/usr/bin/killall"
+    task.arguments = ["-9", "coreaudiod"]
+
+    do {
+        try task.run()
+        task.waitUntilExit()
+        print("[Cleanup] Restarted coreaudiod (status \(task.terminationStatus))")
+    } catch {
+        print("[Cleanup] Failed to restart coreaudiod: \(error)")
+    }
 }
 
 main()

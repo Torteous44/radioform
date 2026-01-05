@@ -6,17 +6,20 @@ class DeviceMonitor {
     private let proxyManager: ProxyDeviceManager
     private let memoryManager: SharedMemoryManager
     private let discovery: DeviceDiscovery
+    private let audioEngine: AudioEngine
 
     init(
         registry: DeviceRegistry,
         proxyManager: ProxyDeviceManager,
         memoryManager: SharedMemoryManager,
-        discovery: DeviceDiscovery
+        discovery: DeviceDiscovery,
+        audioEngine: AudioEngine
     ) {
         self.registry = registry
         self.proxyManager = proxyManager
         self.memoryManager = memoryManager
         self.discovery = discovery
+        self.audioEngine = audioEngine
     }
 
     func registerListeners() {
@@ -67,8 +70,12 @@ class DeviceMonitor {
         let oldDevices = registry.devices
         let newDevices = discovery.enumeratePhysicalDevices()
 
-        let addedDevices = registry.findAdded(comparing: oldDevices)
-        let removedDevices = registry.findRemoved(comparing: oldDevices)
+        let addedDevices = newDevices.filter { new in
+            !oldDevices.contains { $0.uid == new.uid }
+        }
+        let removedDevices = oldDevices.filter { old in
+            !newDevices.contains { $0.uid == old.uid }
+        }
 
         for device in addedDevices {
             print("Device added: \(device.name) (\(discovery.transportTypeName(device.transportType)))")
@@ -117,8 +124,27 @@ class DeviceMonitor {
 
         if name.contains("Radioform") {
             proxyManager.handleProxySelection(uid, deviceID: deviceID)
+
+            let targetID = proxyManager.activePhysicalDeviceID
+            if targetID != 0 {
+                do {
+                    try audioEngine.switchDevice(targetID)
+                } catch {
+                    print("Failed to switch audio engine device: \(error)")
+                }
+            } else {
+                print("Warning: No active physical device mapped for proxy \(uid)")
+            }
         } else {
             proxyManager.handlePhysicalSelection(uid)
+
+            if let physical = registry.find(uid: uid) {
+                do {
+                    try audioEngine.switchDevice(physical.id)
+                } catch {
+                    print("Failed to switch audio engine device: \(error)")
+                }
+            }
         }
     }
 

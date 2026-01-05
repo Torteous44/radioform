@@ -1,5 +1,5 @@
 import Foundation
-import AppKit
+@preconcurrency import AppKit
 
 /// Driver installation states
 enum DriverInstallState: Equatable {
@@ -164,6 +164,7 @@ class DriverInstaller: ObservableObject {
     }
 
     /// Install driver with single admin prompt (combines copy, permissions, and restart)
+    @MainActor
     private func installDriverWithPrivileges(from source: String) async throws {
         // Escape single quotes in paths for shell
         let escapedSource = source.replacingOccurrences(of: "'", with: "'\\''")
@@ -181,15 +182,12 @@ class DriverInstaller: ObservableObject {
 
         let appleScript = NSAppleScript(source: script)
 
-        // Run on main thread (AppleScript requires it)
-        let error = await MainActor.run { () -> NSDictionary? in
-            var errorDict: NSDictionary?
-            appleScript?.executeAndReturnError(&errorDict)
-            return errorDict
-        }
+        // Execute on main thread (AppleScript requires it)
+        var errorDict: NSDictionary?
+        appleScript?.executeAndReturnError(&errorDict)
 
-        if let error = error {
-            let errorMessage = error["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
+        if let errorDict = errorDict,
+           let errorMessage = errorDict["NSAppleScriptErrorMessage"] as? String {
             print("Failed to install driver: \(errorMessage)")
             throw DriverInstallError.copyFailed(errorMessage)
         }
@@ -198,6 +196,7 @@ class DriverInstaller: ObservableObject {
     }
 
     /// Copy driver using AppleScript with admin privileges
+    @MainActor
     private func copyDriverWithPrivileges(from source: String) async throws {
         // Escape single quotes in paths for shell
         let escapedSource = source.replacingOccurrences(of: "'", with: "'\\''")
@@ -207,21 +206,19 @@ class DriverInstaller: ObservableObject {
 
         let appleScript = NSAppleScript(source: script)
 
-        // Run on main thread (AppleScript requires it)
-        let error = await MainActor.run { () -> NSDictionary? in
-            var errorDict: NSDictionary?
-            appleScript?.executeAndReturnError(&errorDict)
-            return errorDict
-        }
+        // Execute on main thread (AppleScript requires it)
+        var errorDict: NSDictionary?
+        appleScript?.executeAndReturnError(&errorDict)
 
-        if let error = error {
-            let errorMessage = error["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
+        if let errorDict = errorDict,
+           let errorMessage = errorDict["NSAppleScriptErrorMessage"] as? String {
             print("Failed to copy driver: \(errorMessage)")
             throw DriverInstallError.copyFailed(errorMessage)
         }
     }
 
     /// Set driver permissions using AppleScript
+    @MainActor
     private func setDriverPermissions() async throws {
         let driverPath = "\(driverDestination)/\(driverName)"
         let escapedPath = driverPath.replacingOccurrences(of: "'", with: "'\\''")
@@ -230,33 +227,30 @@ class DriverInstaller: ObservableObject {
 
         let appleScript = NSAppleScript(source: script)
 
-        let error = await MainActor.run { () -> NSDictionary? in
-            var errorDict: NSDictionary?
-            appleScript?.executeAndReturnError(&errorDict)
-            return errorDict
-        }
+        // Execute on main thread (AppleScript requires it)
+        var errorDict: NSDictionary?
+        appleScript?.executeAndReturnError(&errorDict)
 
-        if let error = error {
-            let errorMessage = error["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
+        if let errorDict = errorDict,
+           let errorMessage = errorDict["NSAppleScriptErrorMessage"] as? String {
             print("Failed to set permissions: \(errorMessage)")
             throw DriverInstallError.permissionsFailed(errorMessage)
         }
     }
 
     /// Restart coreaudiod using AppleScript
+    @MainActor
     private func restartAudio() async throws {
         let script = "do shell script \"killall coreaudiod\" with administrator privileges"
 
         let appleScript = NSAppleScript(source: script)
 
-        let error = await MainActor.run { () -> NSDictionary? in
-            var errorDict: NSDictionary?
-            appleScript?.executeAndReturnError(&errorDict)
-            return errorDict
-        }
+        // Execute on main thread (AppleScript requires it)
+        var errorDict: NSDictionary?
+        appleScript?.executeAndReturnError(&errorDict)
 
-        if let error = error {
-            let errorMessage = error["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
+        if let errorDict = errorDict,
+           let errorMessage = errorDict["NSAppleScriptErrorMessage"] as? String {
             print("Failed to restart coreaudiod: \(errorMessage)")
             throw DriverInstallError.audioRestartFailed(errorMessage)
         }

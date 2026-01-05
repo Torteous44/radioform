@@ -51,9 +51,23 @@ jobs:
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       - name: Update Component Versions
         run: |
-          echo "Updating all components to version ${{ steps.version.outputs.version }}"
-          ./tools/update_versions.sh ${{ steps.version.outputs.version }}
-          echo "✓ Version synchronization complete"
+          # Check if driver code has changed since last release
+          CURRENT_DRIVER_VERSION=$(cat packages/driver/VERSION 2>/dev/null || echo "1.0.0")
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+
+          # Check if driver files changed since last tag
+          DRIVER_CHANGED=$(git diff --name-only "$LAST_TAG" HEAD -- packages/driver/src packages/driver/include packages/driver/CMakeLists.txt 2>/dev/null | wc -l || echo "1")
+
+          if [ "$DRIVER_CHANGED" -gt 0 ]; then
+            echo "🔧 Driver code changed - updating all components to ${{ steps.version.outputs.version }}"
+            ./tools/update_versions.sh ${{ steps.version.outputs.version }}
+          else
+            echo "📱 Driver unchanged - updating app only to ${{ steps.version.outputs.version }}"
+            ./tools/update_versions.sh ${{ steps.version.outputs.version }} --app-only
+            echo "   Driver remains at version: $CURRENT_DRIVER_VERSION"
+          fi
+
+          echo "✓ Version update complete"
 
           # Show what changed for verification
           git diff apps/mac/RadioformApp/Info.plist packages/driver/Info.plist packages/host/Info.plist

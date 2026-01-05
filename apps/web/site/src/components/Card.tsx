@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Polaroid from "./Polaroid";
 
@@ -20,6 +20,8 @@ interface HoverTooltipProps {
 function HoverTooltip({ src, alt, x, y, visible }: HoverTooltipProps) {
   if (!visible) return null;
 
+  const isVideo = src.endsWith('.mp4') || src.includes('video/upload');
+
   return (
     <div
       className="absolute z-[100] pointer-events-none"
@@ -30,18 +32,30 @@ function HoverTooltip({ src, alt, x, y, visible }: HoverTooltipProps) {
       }}
     >
       <div
-        className="w-32 h-32 bg-white border-2 border-white overflow-hidden"
+        className="bg-white border-2 border-white overflow-hidden w-[179px] h-[179px]"
         style={{
           boxShadow: "0 4px 12px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.1)",
         }}
       >
-        <Image
-          src={src}
-          alt={alt}
-          width={128}
-          height={128}
-          className="w-full h-full object-cover"
-        />
+        {isVideo ? (
+          <video
+            key={src}
+            src={src}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <Image
+            src={src}
+            alt={alt}
+            width={179}
+            height={179}
+            className="w-full h-full object-cover"
+          />
+        )}
       </div>
     </div>
   );
@@ -83,6 +97,43 @@ export default function Card({ className = "", onClick }: CardProps) {
   const handleTextLeave = () => {
     setHoverState((prev) => ({ ...prev, visible: false }));
   };
+
+  // Preload all hover media after component mounts
+  useEffect(() => {
+    const mediaUrls = [
+      "/radioform-hover.png",
+      "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614903/mb_1_mqccrc.mp4",
+      "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-preset_1_y7vonk.mp4",
+      "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4",
+    ];
+
+    // Preload images
+    mediaUrls.forEach((url) => {
+      if (url.endsWith('.png') || url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.avif')) {
+        const img = document.createElement('img');
+        img.src = url;
+      } else if (url.endsWith('.mp4') || url.includes('video/upload')) {
+        // Preload videos
+        const video = document.createElement('video');
+        video.src = url;
+        video.preload = 'auto';
+        video.muted = true;
+        // Add to DOM but hide it
+        video.style.display = 'none';
+        video.style.position = 'absolute';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        document.body.appendChild(video);
+        // Remove after a delay to free memory
+        setTimeout(() => {
+          if (document.body.contains(video)) {
+            document.body.removeChild(video);
+          }
+        }, 30000); // Remove after 30 seconds
+      }
+    });
+  }, []);
+
   return (
     <div
       data-card-container
@@ -135,7 +186,7 @@ export default function Card({ className = "", onClick }: CardProps) {
             className="text-base font-bold tracking-widest mb-3"
             style={{ letterSpacing: "0.0em" }}
           >
-            FOR MUSIC LOVERS
+            An EQ App that just works.
           </h1>
 
           <div className="space-y-0 text-[12px]">
@@ -146,7 +197,7 @@ export default function Card({ className = "", onClick }: CardProps) {
               <span className="inline-block w-14">FROM:</span>The Pavlos Company RSA
             </p>
             <p>
-              <span className="inline-block w-14">DATE:</span>January 3, 2026
+              <span className="inline-block w-14">DATE:</span>January 5, 2026
             </p>
             <p>
               <span className="inline-block w-14">RE:</span>Quarterly Update
@@ -165,102 +216,66 @@ export default function Card({ className = "", onClick }: CardProps) {
         {/* Body */}
         <div className="text-left space-y-3 text-[12px] leading-relaxed flex-1">
           <p>
-            We know you&apos;ve bought that new{" "}
+            You&apos;ve got the headphones. You&apos;ve got the speakers. But macOS still outputs the same flat, unoptimized audio it always has.{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Stereo system")}
-              onMouseLeave={handleTextLeave}
-            >
-              stereo system
-            </span>{" "}
-            or{" "}
-            <span
-              className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Headphones")}
-              onMouseLeave={handleTextLeave}
-            >
-              headphones
-            </span>
-            . We know you&apos;re excited. But it&apos;s time to take it to the next level. The level
-            where your music starts to warm your ears like a hot shower. So let&apos;s
-            make that happen.
-          </p>
-
-          <p>
-            Introducing{" "}
-            <span
-              className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Radioform")}
+              onMouseEnter={(e) => handleTextHover(e, "/radioform-hover.png", "Radioform")}
               onMouseLeave={handleTextLeave}
             >
               Radioform
-            </span>
-            , the first EQ app that just works. It lives on
-            your{" "}
+            </span>{" "}
+            is a macOS native equalizer that finally lets you shape your sound system-wide.
+          </p>
+
+          <p>
+            It tucks into your{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Menubar")}
+              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614903/mb_1_mqccrc.mp4", "Menubar")}
               onMouseLeave={handleTextLeave}
             >
               menubar
-            </span>
-            , hidden away without interfering with your workflow. But
-            it does interfere with how bad your music sounds, by making it sound
-            so sweet like the Sirens from Odyssey.
-          </p>
-
-          <p>
-            We built this project to be fully{" "}
-            <span
-              className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Open source")}
-              onMouseLeave={handleTextLeave}
-            >
-              open sourced
-            </span>
-            , so you know what you&apos;re
-            getting into. Natively built in{" "}
-            <span
-              className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "Swift")}
-              onMouseLeave={handleTextLeave}
-            >
-              Swift
-            </span>
-            , this app is a performant,
-            lightweight way to enjoy your music the way it was meant to be.
-            Seriously, give it a go.
-          </p>
-
-          <p>
-            Take back control and learn what music can sound like once you really
-            have got your hands dirty. Make your own custom{" "}
-            <span
-              className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "EQ presets")}
-              onMouseLeave={handleTextLeave}
-            >
-              EQ presets
             </span>{" "}
-            or use some
-            of the pre-built ones. Optimize for your home stereo, your headphones,
-            or even your{" "}
+            and stays out of your way. Pick from{" "}
             <span
               className="underline"
-              onMouseEnter={(e) => handleTextHover(e, "/radioform.avif", "MacBook")}
+              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-preset_1_y7vonk.mp4", "Ready-made presets")}
               onMouseLeave={handleTextLeave}
             >
-              MacBook
-            </span>
-            . Radioform is for everyone.
+              ready-made presets
+            </span>{" "}
+            or take matters into your own hands and{" "}
+            <span
+              className="underline"
+              onMouseEnter={(e) => handleTextHover(e, "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4", "Craft your own EQ curves")}
+              onMouseLeave={handleTextLeave}
+            >
+              craft your own EQ curves
+            </span>{" "}
+            for different gear—your studio monitors, your AirPods, your living room setup. One app, every scenario.
+          </p>
+
+          <p>
+            Built in Swift,{" "}
+            <a
+              href="https://github.com/Torteous44/radioform"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              fully open source
+            </a>
+            , and completely free. No bloat, no secrets, no price tag.
           </p>
 
           <p className="inline-block">
-            <button
-              className="relative z-20 border border-gray-400 bg-white px-4 py-2 text-[12px] font-normal tracking-wider text-gray-600 hover:border-gray-600 hover:text-gray-800 hover:bg-gray-50 transition-all duration-150 cursor-pointer"
+            <a
+              href="https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
+              className="relative z-20 border border-gray-400 bg-white px-4 py-2 text-[12px] font-normal tracking-wider text-gray-600 hover:border-gray-600 hover:text-gray-800 hover:bg-gray-50 transition-all duration-150 cursor-pointer inline-block"
               style={{
                 fontFamily: "var(--font-ibm-plex-mono), monospace",
                 letterSpacing: "0.1em",
+                textDecoration: "none",
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -270,12 +285,12 @@ export default function Card({ className = "", onClick }: CardProps) {
               }}
             >
               DOWNLOAD
-            </button>
+            </a>
           </p>
         </div>
 
         {/* Logo at bottom - stamp style */}
-        <div className="flex justify-end -mt-24">
+        <div className="flex justify-end -mt-84">
           <Image
             src="/pavlos.svg"
             alt="Logo"

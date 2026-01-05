@@ -27,9 +27,6 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Radioform: A macOS EQ App",
   description: "Radioform is an open source macOS EQ app that lives in your menubar.",
-  icons: {
-    icon: "/favicon.png",
-  },
   openGraph: {
     title: "Radioform: A macOS EQ App",
     description: "Radioform is an open source macOS EQ app that lives in your menubar.",

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create DMG with drag-to-Applications layout for Radioform
+# Create DMG with custom background for Radioform
 
 set -e
 
@@ -8,10 +8,12 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 APP_BUNDLE="$PROJECT_ROOT/dist/Radioform.app"
 DMG_NAME="Radioform.dmg"
 DMG_PATH="$PROJECT_ROOT/dist/${DMG_NAME}"
+BACKGROUND_IMG="$SCRIPT_DIR/dmg/dmg-background.png"
 
 # Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -25,40 +27,53 @@ if [ ! -d "$APP_BUNDLE" ]; then
     exit 1
 fi
 
-# Clean up any existing temp directory
-rm -rf "$PROJECT_ROOT/dist/dmg_temp"
+# Check if create-dmg is installed
+if ! command -v create-dmg &> /dev/null; then
+    echo -e "${YELLOW}⚠️  create-dmg not found. Install with: brew install create-dmg${NC}"
+    echo "Falling back to basic DMG creation..."
 
-# Create temporary directory for DMG contents
-echo "📁 Creating temporary DMG staging directory..."
-mkdir -p "$PROJECT_ROOT/dist/dmg_temp"
+    # Fallback to basic hdiutil method
+    rm -rf "$PROJECT_ROOT/dist/dmg_temp"
+    mkdir -p "$PROJECT_ROOT/dist/dmg_temp"
+    cp -R "$APP_BUNDLE" "$PROJECT_ROOT/dist/dmg_temp/Radioform.app"
+    ln -s /Applications "$PROJECT_ROOT/dist/dmg_temp/Applications"
+    rm -f "$DMG_PATH"
+    hdiutil create -volname "Radioform" -srcfolder "$PROJECT_ROOT/dist/dmg_temp" -ov -format UDZO -fs HFS+ "$DMG_PATH"
+    rm -rf "$PROJECT_ROOT/dist/dmg_temp"
+    echo -e "${GREEN}✓ DMG created (basic layout)${NC}"
+    exit 0
+fi
 
-# Copy app bundle
-echo " Copying Radioform.app..."
-cp -R "$APP_BUNDLE" "$PROJECT_ROOT/dist/dmg_temp/Radioform.app"
-
-# Create Applications symlink
-echo " Creating Applications symlink..."
-ln -s /Applications "$PROJECT_ROOT/dist/dmg_temp/Applications"
+# Check if background image exists
+if [ ! -f "$BACKGROUND_IMG" ]; then
+    echo -e "${YELLOW}⚠️  Background image not found at $BACKGROUND_IMG${NC}"
+    echo "Creating DMG without custom background..."
+    BACKGROUND_ARG=""
+else
+    echo "📷 Using custom background: $BACKGROUND_IMG"
+    BACKGROUND_ARG="--background $BACKGROUND_IMG"
+fi
 
 # Remove any existing DMG
 rm -f "$DMG_PATH"
 
-# Create DMG
-echo " Creating DMG..."
-hdiutil create \
-    -volname "Radioform" \
-    -srcfolder "$PROJECT_ROOT/dist/dmg_temp" \
-    -ov \
-    -format UDZO \
-    -fs HFS+ \
-    "$DMG_PATH"
-
-# Clean up temp directory
-echo " Cleaning up..."
-rm -rf "$PROJECT_ROOT/dist/dmg_temp"
+# Create DMG with create-dmg
+echo "📦 Creating DMG with custom layout..."
+create-dmg \
+    --volname "Radioform" \
+    $BACKGROUND_ARG \
+    --window-pos 200 120 \
+    --window-size 660 450 \
+    --icon-size 100 \
+    --icon "Radioform.app" 210 220 \
+    --app-drop-link 455 220 \
+    --hide-extension "Radioform.app" \
+    --no-internet-enable \
+    "$DMG_PATH" \
+    "$APP_BUNDLE"
 
 echo ""
-echo -e "${GREEN} DMG created successfully!${NC}"
+echo -e "${GREEN}✓ DMG created successfully!${NC}"
 echo ""
 echo "Location: $DMG_PATH"
 echo "Size: $(du -h "$DMG_PATH" | cut -f1)"

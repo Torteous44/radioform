@@ -406,10 +406,9 @@ private struct SkeuomorphicEnvelopeView: View {
             } else {
                 // Pre-install / installing
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("To begin we need to\ninstall an audio driver")
+                    Text("To begin we need to install an audio driver")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundColor(.primary)
-                        .lineSpacing(4)
                     
                     Text("This enables Radioform to process your system audio")
                         .font(.system(size: 14))

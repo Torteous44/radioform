@@ -210,6 +210,11 @@ jobs:
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Create DMG
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Install DMG Tools
+        run: |
+          brew install create-dmg
+          echo "✓ create-dmg installed"
+
       - name: Create DMG
         run: |
           DMG_NAME="Radioform.dmg"

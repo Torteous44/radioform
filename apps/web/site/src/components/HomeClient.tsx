@@ -130,7 +130,7 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
               key={num}
               href="https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
               className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
-              style={{ color: "#999", fontFamily: '"Courier New", monospace', textDecoration: "none" }}
+              style={{ color: "#999", fontFamily: "var(--font-ibm-plex-mono), monospace", textDecoration: "none" }}
             >
               {num} {label}
             </a>
@@ -139,7 +139,7 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
               key={num}
               onClick={() => nav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
               className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
-              style={{ color: current === num ? "#000" : "#999", fontFamily: '"Courier New", monospace' }}
+              style={{ color: current === num ? "#000" : "#999", fontFamily: "var(--font-ibm-plex-mono), monospace" }}
             >
               {current === num && num !== 1 ? "<- Back" : `${num} ${label}`}
             </button>

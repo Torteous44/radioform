@@ -1,12 +1,14 @@
 "use client";
 
+import { memo } from "react";
+
 interface FolderProps {
   className?: string;
   onClick?: () => void;
   style?: React.CSSProperties;
 }
 
-export default function Folder({ className = "", onClick, style }: FolderProps) {
+export default memo(function Folder({ className = "", onClick, style }: FolderProps) {
   return (
     <div
       className={`relative w-[600px] h-[724px] ${onClick ? "cursor-pointer" : ""} ${className}`}
@@ -21,4 +23,4 @@ export default function Folder({ className = "", onClick, style }: FolderProps) 
       />
     </div>
   );
-}
+});

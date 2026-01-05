@@ -1,13 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import { memo } from "react";
 
 interface InstructionsProps {
   className?: string;
   onClick?: () => void;
 }
 
-export default function Instructions({ className = "", onClick }: InstructionsProps) {
+export default memo(function Instructions({ className = "", onClick }: InstructionsProps) {
   const instructions = [
     {
       image: "/instructions/frame1.png",
@@ -159,4 +160,4 @@ export default function Instructions({ className = "", onClick }: InstructionsPr
       </div>
     </div>
   );
-}
+});

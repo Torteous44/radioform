@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import Image from "next/image";
 import Polaroid from "./Polaroid";
 
@@ -18,7 +18,7 @@ interface HoverTooltipProps {
   visible: boolean;
 }
 
-function HoverTooltip({ src, alt, text, x, y, visible }: HoverTooltipProps) {
+const HoverTooltip = memo(function HoverTooltip({ src, alt, text, x, y, visible }: HoverTooltipProps) {
   if (!visible) return null;
 
   const isVideo = src.endsWith('.mp4') || src.includes('video/upload');
@@ -71,7 +71,7 @@ function HoverTooltip({ src, alt, text, x, y, visible }: HoverTooltipProps) {
       </div>
     </div>
   );
-}
+});
 
 export default function Card({ className = "", onClick }: CardProps) {
   const [hoverState, setHoverState] = useState<{

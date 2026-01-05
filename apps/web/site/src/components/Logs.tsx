@@ -158,7 +158,7 @@ export default async function Logs({ className = "" }: LogsProps) {
     <div
       className={`relative w-full max-w-[450px] aspect-[1/1.214] ${className}`}
       style={{
-        fontFamily: '"Courier New", Courier, monospace',
+        fontFamily: "var(--font-ibm-plex-mono), monospace",
         filter: `
           drop-shadow(0px 1px 1px rgba(0,0,0,0.1))
           drop-shadow(0px 2px 4px rgba(0,0,0,0.08))
@@ -269,7 +269,7 @@ export default async function Logs({ className = "" }: LogsProps) {
               <div className="text-[9px] text-gray-600">No changelog entries found</div>
             ) : (
               entries.map((entry, index) => (
-                <div key={index} className="text-[9px] leading-relaxed">
+                <div key={index} className="text-[9px] leading-relaxed text-black">
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="font-bold">{entry.type}:</span>{" "}

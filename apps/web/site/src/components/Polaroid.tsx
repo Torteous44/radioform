@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { memo } from "react";
 
 interface PolaroidProps {
   src: string;
@@ -9,7 +10,7 @@ interface PolaroidProps {
   className?: string;
 }
 
-export default function Polaroid({
+export default memo(function Polaroid({
   src,
   alt = "Polaroid photo",
   rotation = -3,
@@ -107,4 +108,4 @@ export default function Polaroid({
       </div>
     </div>
   );
-}
+});

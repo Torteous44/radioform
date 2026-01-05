@@ -65,7 +65,7 @@ struct VersionManager {
 		return FileManager.default.fileExists(atPath: driverPath)
 	}
 
-	/// Check if driver needs update (installed version != bundled version)
+	/// Check if driver needs update (bundled version > installed version)
 	static func driverNeedsUpdate() -> Bool {
 		guard let installedVersion = installedDriverVersion(),
 			  let bundledVersion = bundledDriverVersion() else {
@@ -73,7 +73,8 @@ struct VersionManager {
 			return false
 		}
 
-		return installedVersion != bundledVersion
+		// Only update if bundled version is newer than installed version
+		return isVersionOlder(installedVersion, than: bundledVersion)
 	}
 
 	// MARK: - Version Comparison

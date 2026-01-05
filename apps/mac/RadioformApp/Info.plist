@@ -6,20 +6,20 @@
 	<string>Radioform</string>
 	<key>CFBundleExecutable</key>
 	<string>RadioformApp</string>
+	<key>CFBundleIconFile</key>
+	<string>MyIcon.icns</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.radioform.menubar</string>
 	<key>CFBundleName</key>
 	<string>Radioform</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.15</string>
+	<string>1.0.31</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>1.0.31</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>CFBundleIconFile</key>
-	<string>MyIcon.icns</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>

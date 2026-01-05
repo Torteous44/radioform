@@ -21,7 +21,9 @@ extension View {
     }
 }
 
+#if DEBUG
 #Preview {
     VintagePaperBackground()
         .frame(width: 600, height: 500)
 }
+#endif

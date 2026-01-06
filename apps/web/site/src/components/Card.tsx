@@ -335,8 +335,8 @@ export default function Card({ className = "", onClick }: CardProps) {
             height={124}
             className="h-18 w-auto"
             style={{
-              height: "124px",
-              transform: "rotate(-16deg)",
+              height: isMobile ? "80px" : "124px",
+              transform: isMobile ? "rotate(-16deg) translateX(-8px)" : "rotate(-16deg)",
             }}
           />
         </div>

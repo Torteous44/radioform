@@ -40,7 +40,12 @@ class AudioEngine {
         try setRenderCallback()
         try initialize()
 
-        print("    ✓ Using device ID: \(deviceID)")
+        // Set physical device to maximum volume to give Radioform full control
+        // The Radioform driver device volume will be the user's control point
+        setPhysicalDeviceVolume(deviceID, volume: 1.0)
+
+        print("    Using device ID: \(deviceID)")
+        print("    Physical device set to 100% (Radioform driver controls volume)")
     }
 
     func start() throws {
@@ -196,6 +201,52 @@ class AudioEngine {
         let status = AudioUnitInitialize(unit)
         guard status == noErr else {
             throw AudioEngineError.initializationFailed
+        }
+    }
+
+    private func setPhysicalDeviceVolume(_ deviceID: AudioDeviceID, volume: Float32) {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // Try setting master volume
+        if AudioObjectHasProperty(deviceID, &address) {
+            var vol = volume
+            let status = AudioObjectSetPropertyData(
+                deviceID,
+                &address,
+                0,
+                nil,
+                UInt32(MemoryLayout<Float32>.size),
+                &vol
+            )
+
+            if status == noErr {
+                print("    Set physical device master volume to \(String(format: "%.0f%%", volume * 100))")
+                return
+            }
+        }
+
+        // Try setting per-channel volume (channel 0 and 1)
+        for channel: UInt32 in 0...1 {
+            address.mElement = channel
+            if AudioObjectHasProperty(deviceID, &address) {
+                var vol = volume
+                let status = AudioObjectSetPropertyData(
+                    deviceID,
+                    &address,
+                    0,
+                    nil,
+                    UInt32(MemoryLayout<Float32>.size),
+                    &vol
+                )
+
+                if status == noErr {
+                    print("    Set physical device channel \(channel) volume to \(String(format: "%.0f%%", volume * 100))")
+                }
+            }
         }
     }
 }

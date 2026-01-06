@@ -77,7 +77,7 @@ class PresetManager: ObservableObject {
 
         // Try bundle resources first (production)
         if let resourcePath = Bundle.main.resourcePath {
-            let bundlePath = (resourcePath as NSString).appendingPathComponent("Resources/Presets")
+            let bundlePath = (resourcePath as NSString).appendingPathComponent("Presets")
             print("[PresetManager] Trying bundle path: \(bundlePath)")
             if FileManager.default.fileExists(atPath: bundlePath) {
                 presetsPath = bundlePath

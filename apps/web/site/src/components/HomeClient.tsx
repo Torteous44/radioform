@@ -1,50 +1,89 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 
-// CONFIG - All positions relative to folder top
-const C = {
-  expandOffset: 300,
+// =============================================================================
+// CONFIG - All positioning values in one place
+// =============================================================================
 
-  // Folder defines the anchor point - everything is relative to folder.top
+const CONFIG = {
   folder: {
     width: 600,
     height: 724,
-    bottom: -250, // Folder bottom position (negative = partially off screen)
-    z: 10,
+    bottomOffset: -200, // How far below viewport bottom (negative = partially off screen)
   },
 
-  // Offsets from folder top (negative = above folder, positive = below/into folder)
-  card: { width: 480, y: -110, z: 5, hoverY: -40, scaleExp: 1.05, yExp: -35 },
-  logs: { width: 450, y: -215, x: -60, rotation: 8, scale: 0.85, scaleExp: 1.2, z: 4, hoverY: -20 },
-  instructions: { width: 1000, y: -220, x: 220, rotation: -8, scale: 0.55, scaleExp: 0.80, yExp: -56, z: 4, hoverY: -20 },
-};
+  // Offsets relative to folder top (negative = above folder)
+  card: {
+    width: 480,
+    offsetY: 700,
+    mobileOffsetY: 1200,
+    offsetX: 0,
+    mobileOffsetX: 0,
+    rotation: 0,
+    baseScale: 1,
+    expandedScale: 1.2,
+    expandedOffsetY: -270, // Adjust expanded Y position (negative = higher)
+    hoverLift: 40,
+  },
 
-const SCENE = (() => {
-  const cardHalf = C.card.width / 2;
-  const logsWidth = C.logs.width * C.logs.scale;
-  const instructionsWidth = C.instructions.width * C.instructions.scale;
-  const left = Math.min(-cardHalf, C.logs.x, C.instructions.x - instructionsWidth);
-  const right = Math.max(cardHalf, C.logs.x + logsWidth, C.instructions.x);
-  const above = Math.max(-C.card.y, -C.logs.y, -C.instructions.y);
-  const margin = 120;
+  logs: {
+    width: 450,
+    offsetY: 400,
+    mobileOffsetY: 502,
+    offsetX: 100,
+    mobileOffsetX: 110,
+    rotation: 8,
+    baseScale: 0.85,
+    expandedScale: 1.2,
+    expandedOffsetY: -100, // Adjust expanded Y position (negative = higher)
+    hoverLift: 20,
+  },
 
-  return {
-    minScale: 0.6,
-    maxScale: 1,
-    width: right - left + margin,
-    height: C.folder.height + C.folder.bottom + above + margin,
-  };
-})();
+  instructions: {
+    width: 1000,
+    offsetY: 170,
+    mobileOffsetY: 1200,
+    offsetX: -40,
+    mobileOffsetX: -40,
+    rotation: -8,
+    baseScale: 0.55,
+    expandedScale: 1,
+    mobileExpandedScale: 0.35,
+    expandedOffsetY: -150, // Adjust expanded Y position (negative = higher)
+    hoverLift: 20,
+  },
 
-const getSceneScale = (width: number, height: number) => {
-  const scale = Math.min(width / SCENE.width, height / SCENE.height);
-  return Math.min(SCENE.maxScale, Math.max(SCENE.minScale, scale));
-};
+  expandOffset: 400, // How far folder slides down when expanded
+  mobileExpandOffset: 400, // More slide on mobile
+
+  zIndex: {
+    logs: 1,
+    instructions: 2,
+    card: 3,
+    folder: 4,
+  },
+
+  // Scale bounds
+  minScale: 0.5,
+  maxScale: 1,
+
+  // Scene dimensions for scale calculation
+  sceneWidth: 1000,
+  sceneHeight: 900,
+
+  transition: {
+    duration: 300,
+    easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+  },
+} as const;
+
+// =============================================================================
+// TYPES
+// =============================================================================
 
 type Expanded = null | "card" | "logs" | "instructions";
-type IntroPhase = "slideUp" | "popOut" | "done";
 
 interface HomeClientProps {
   card: ReactNode;
@@ -53,66 +92,227 @@ interface HomeClientProps {
   folder: ReactNode;
 }
 
+interface StyleContext {
+  scale: number;
+  expanded: Expanded;
+  hovered: Expanded;
+  isMobile: boolean;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
+// =============================================================================
+// HOOKS
+// =============================================================================
+
+function useViewport(): { scale: number; width: number; height: number; isMobile: boolean } {
+  const [state, setState] = useState({ scale: 1, width: 1200, height: 800, isMobile: false });
+
+  useEffect(() => {
+    const calculate = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const margin = 120;
+
+      const scaleX = (vw - margin) / CONFIG.sceneWidth;
+      const scaleY = (vh - margin) / CONFIG.sceneHeight;
+      const scale = Math.min(CONFIG.maxScale, Math.max(CONFIG.minScale, Math.min(scaleX, scaleY)));
+
+      setState({ scale, width: vw, height: vh, isMobile: vw < 768 });
+    };
+
+    calculate();
+    window.addEventListener("resize", calculate);
+    return () => window.removeEventListener("resize", calculate);
+  }, []);
+
+  return state;
+}
+
+// =============================================================================
+// STYLE HELPERS
+// =============================================================================
+
+function getTransition(item?: "card" | "logs" | "instructions"): string {
+  const { duration, easing } = CONFIG.transition;
+  const base = `transform ${duration}ms ${easing}`;
+  // Add position transition for items that animate their left/right position
+  if (item === "logs") {
+    return `${base}, left ${duration}ms ${easing}`;
+  }
+  if (item === "instructions") {
+    return `${base}, right ${duration}ms ${easing}`;
+  }
+  return base;
+}
+
+function getFolderStyle({ scale, expanded, isMobile }: Omit<StyleContext, "hovered" | "viewportWidth" | "viewportHeight">): CSSProperties {
+  const expandOffset = isMobile ? CONFIG.mobileExpandOffset : CONFIG.expandOffset;
+  const slideY = expanded ? expandOffset * scale : 0;
+
+  return {
+    position: "relative",
+    width: `${CONFIG.folder.width * scale}px`,
+    height: `${CONFIG.folder.height * scale}px`,
+    transform: `translateY(${slideY}px)`,
+    transition: getTransition(),
+    zIndex: CONFIG.zIndex.folder,
+  };
+}
+
+// Scene anchor wrapper style - provides explicit height matching folder
+function getSceneAnchorStyle(scale: number): CSSProperties {
+  return {
+    bottom: CONFIG.folder.bottomOffset * scale,
+    height: `${CONFIG.folder.height * scale}px`,
+  };
+}
+
+function getItemStyle(
+  item: "card" | "logs" | "instructions",
+  { scale, expanded, hovered, isMobile, viewportWidth, viewportHeight }: StyleContext
+): CSSProperties {
+  const cfg = CONFIG[item];
+  const isExpanded = expanded === item;
+  const isHovered = hovered === item && !expanded;
+  const expandOffset = isMobile ? CONFIG.mobileExpandOffset : CONFIG.expandOffset;
+  const transition = getTransition(item);
+
+  // Calculate expanded scale
+  let expandedScale: number;
+  if (item === "instructions" && isMobile) {
+    expandedScale = Math.min(CONFIG.instructions.mobileExpandedScale, (viewportWidth - 32) / cfg.width);
+  } else {
+    expandedScale = cfg.expandedScale * scale;
+  }
+
+  // Common values
+  const bottom = `${CONFIG.folder.height * scale}px`;
+  const width = `${cfg.width}px`;
+
+  // When this item is expanded, calculate transform to center it in viewport
+  if (isExpanded) {
+    // Use mobile-specific offsets when on mobile
+    const effectiveOffsetY = isMobile ? cfg.mobileOffsetY : cfg.offsetY;
+    const effectiveBaseY = effectiveOffsetY * scale;
+    const itemCurrentY = (viewportHeight + CONFIG.folder.bottomOffset * scale) - CONFIG.folder.height * scale - effectiveBaseY;
+    const targetCenterY = viewportHeight / 2;
+    const itemHeight = item === "card" ? cfg.width * 1.414 : item === "logs" ? cfg.width * 1.214 : cfg.width * 0.5;
+    const scaledItemHeight = itemHeight * expandedScale;
+    // Add expandedOffsetY for manual adjustment (negative = higher on screen)
+    const translateY = targetCenterY - itemCurrentY - (scaledItemHeight / 2) + cfg.expandedOffsetY;
+
+    // Use consistent translateX percentage for smooth animation
+    // Card and Logs use left: 50% with translateX(-50%)
+    // Instructions uses right: 50% with translateX(50%)
+    if (item === "instructions") {
+      return {
+        position: "absolute",
+        right: "50%",
+        bottom,
+        width,
+        transform: `translateX(50%) translateY(${translateY}px) rotate(0deg) scale(${expandedScale})`,
+        transformOrigin: "center",
+        transition,
+        zIndex: CONFIG.zIndex[item],
+        pointerEvents: "auto",
+      };
+    }
+
+    return {
+      position: "absolute",
+      left: "50%",
+      bottom,
+      width,
+      transform: `translateX(-50%) translateY(${translateY}px) rotate(0deg) scale(${expandedScale})`,
+      transformOrigin: "center",
+      transition,
+      zIndex: CONFIG.zIndex[item],
+      pointerEvents: "auto",
+    };
+  }
+
+  // When another item is expanded, slide down with folder
+  const slideY = expanded ? expandOffset * scale : 0;
+  const hoverLift = isHovered ? cfg.hoverLift : 0;
+
+  // Use mobile-specific offsets when on mobile
+  const effectiveOffsetY = isMobile ? cfg.mobileOffsetY : cfg.offsetY;
+  const effectiveOffsetX = isMobile ? cfg.mobileOffsetX : cfg.offsetX;
+
+  const baseY = effectiveOffsetY * scale - hoverLift + slideY;
+  const rotation = cfg.rotation;
+  const itemScale = cfg.baseScale * scale;
+
+  // Card: centered, no horizontal offset needed
+  if (item === "card") {
+    return {
+      position: "absolute",
+      left: "50%",
+      bottom,
+      width,
+      transform: `translateX(-50%) translateY(${baseY}px) scale(${itemScale})`,
+      transformOrigin: "top center",
+      transition,
+      zIndex: CONFIG.zIndex[item],
+      pointerEvents: expanded ? "none" : "auto",
+    };
+  }
+
+  // Logs: positioned left of center
+  // Move horizontal offset from translateX to left position for smooth animation
+  // translateX stays as -50% in both states, left animates from calc(50% + offset) to 50%
+  if (item === "logs") {
+    const horizontalOffset = effectiveOffsetX * scale;
+    return {
+      position: "absolute",
+      left: `calc(50% + ${horizontalOffset}px)`,
+      bottom,
+      width,
+      transform: `translateX(-50%) translateY(${baseY}px) rotate(${rotation}deg) scale(${itemScale})`,
+      transformOrigin: "center",
+      transition,
+      zIndex: CONFIG.zIndex[item],
+      pointerEvents: expanded ? "none" : "auto",
+    };
+  }
+
+  // Instructions: positioned right of center
+  // Move horizontal offset from translateX to right position for smooth animation
+  // translateX stays as 50% in both states, right animates from calc(50% - offset) to 50%
+  const horizontalOffset = effectiveOffsetX * scale;
+  return {
+    position: "absolute",
+    right: `calc(50% - ${horizontalOffset}px)`,
+    bottom,
+    width,
+    transform: `translateX(50%) translateY(${baseY}px) rotate(${rotation}deg) scale(${itemScale})`,
+    transformOrigin: "center",
+    transition,
+    zIndex: CONFIG.zIndex[item],
+    pointerEvents: expanded ? "none" : "auto",
+  };
+}
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
+
 export default function HomeClient({ card, logs, instructions, folder }: HomeClientProps) {
-  const [sceneScale, setSceneScale] = useState(1);
-  const [viewportWidth, setViewportWidth] = useState(1200);
-  const [exp, setExp] = useState<Expanded>(null);
-  const [introPhase, setIntroPhase] = useState<IntroPhase>("slideUp");
+  const [expanded, setExpanded] = useState<Expanded>(null);
+  const [hovered, setHovered] = useState<Expanded>(null);
+  const { scale, width: viewportWidth, height: viewportHeight, isMobile } = useViewport();
 
-  const anyExp = exp !== null;
-  const offset = anyExp ? C.expandOffset * sceneScale : 0;
-  const scaled = (value: number) => value * sceneScale;
-  const folderTopPx = scaled(C.folder.height + C.folder.bottom);
+  // Nav state derived from expanded
+  const navMap = { card: 2, instructions: 3, logs: 4 } as const;
+  const current = expanded ? navMap[expanded] : 1;
 
-  useEffect(() => {
-    const handleResize = () => {
-      const nextScale = getSceneScale(window.innerWidth, window.innerHeight);
-      setSceneScale(nextScale);
-      setViewportWidth(window.innerWidth);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // Intro animation phases
-  useEffect(() => {
-    // After slide up (800ms), start pop out
-    const popTimer = setTimeout(() => setIntroPhase("popOut"), 600);
-    // After pop out settles (1500ms total), done
-    const doneTimer = setTimeout(() => setIntroPhase("done"), 1500);
-    return () => {
-      clearTimeout(popTimer);
-      clearTimeout(doneTimer);
-    };
-  }, []);
-
-  const nav = (n: 1 | 2 | 3 | 4) => setExp({ 1: null, 2: "card", 3: "instructions", 4: "logs" }[n] as Expanded);
-  const current = exp === "card" ? 2 : exp === "logs" ? 4 : exp === "instructions" ? 3 : 1;
-
-  // Calculate pop-out offsets for the expand animation
-  const getPopOffset = (item: "card" | "logs" | "instructions") => {
-    if (introPhase !== "popOut") return { x: 0, y: 0 };
-    const offsets = {
-      card: { x: 0, y: -30 },
-      logs: { x: -30, y: -25 },
-      instructions: { x: 30, y: -25 },
-    };
-    return offsets[item];
+  const handleNav = (num: 1 | 2 | 3 | 4) => {
+    const expandMap: Record<number, Expanded> = { 1: null, 2: "card", 3: "instructions", 4: "logs" };
+    setExpanded(expandMap[num]);
   };
 
-  const isInteractive = introPhase === "done";
-
-  // Calculate scale for expanded instructions
-  // On mobile (<768px): use fixed scale that fits, capped so it doesn't grow with viewport
-  // On desktop (>=768px): use normal scaling
-  const MOBILE_BREAKPOINT = 768;
-  const MOBILE_MAX_SCALE = 0.36; // Fixed size for mobile 2x2 layout
-
-  const instructionsExpandedScale = viewportWidth < MOBILE_BREAKPOINT
-    ? Math.min(MOBILE_MAX_SCALE, (viewportWidth - 32) / C.instructions.width)
-    : C.instructions.scaleExp * sceneScale;
+  const styleContext: StyleContext = { scale, expanded, hovered, isMobile, viewportWidth, viewportHeight };
 
   return (
     <div className="h-screen w-screen paper-texture relative overflow-hidden">
@@ -123,12 +323,14 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
           { num: 2, label: "Info" },
           { num: 3, label: "Instructions" },
           { num: 4, label: "Changelog" },
-          { num: 5, label: "Download", isLink: true },
-        ].map(({ num, label, isLink }) => (
+          { num: 5, label: isMobile ? "View Github" : "Download", isLink: true },
+        ].map(({ num, label, isLink }) =>
           isLink ? (
             <a
               key={num}
-              href="https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
+              href={isMobile ? "https://github.com/Torteous44/radioform" : "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"}
+              target={isMobile ? "_blank" : undefined}
+              rel={isMobile ? "noopener noreferrer" : undefined}
               className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
               style={{ color: "#999", fontFamily: "var(--font-ibm-plex-mono), monospace", textDecoration: "none" }}
             >
@@ -137,109 +339,74 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
           ) : (
             <button
               key={num}
-              onClick={() => nav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
+              onClick={() => handleNav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
               className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
               style={{ color: current === num ? "#000" : "#999", fontFamily: "var(--font-ibm-plex-mono), monospace" }}
             >
               {current === num && num !== 1 ? "<- Back" : `${num} ${label}`}
             </button>
           )
-        ))}
+        )}
       </div>
 
-      {anyExp && (
+      {/* Close overlay when expanded */}
+      {expanded && (
         <button
           type="button"
           aria-label="Close expanded view"
-          className="fixed inset-0 z-[2] cursor-pointer bg-transparent"
-          onClick={() => setExp(null)}
+          className="fixed inset-0 z-0 cursor-pointer bg-transparent"
+          onClick={() => setExpanded(null)}
         />
       )}
 
-      {/* Intro wrapper - handles the slide up animation */}
+      {/* Scene anchor - positioned at bottom center with explicit height */}
       <div
-        className={introPhase === "slideUp" ? "intro-slide-up" : ""}
+        className="absolute left-1/2 -translate-x-1/2"
         style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 5,
+          ...getSceneAnchorStyle(scale),
+          zIndex: CONFIG.zIndex.folder,
         }}
       >
-        {/* Card - relative to folder top */}
+        {/* Folder - the visual anchor */}
         <div
-          className={`fixed left-1/2 card-hover cursor-pointer ${isInteractive ? "transition-all duration-300" : "intro-pop-transition"}`}
-          data-expanded={exp === "card" || undefined}
-          onClick={() => isInteractive && !anyExp && setExp("card")}
-          style={{
-            width: `${C.card.width}px`,
-            zIndex: C.card.z,
-            top: exp === "card"
-              ? `calc(50% + ${scaled(C.card.yExp)}px)`
-              : `calc(100vh - ${folderTopPx}px + ${scaled(C.card.y)}px)`,
-            transform: exp === "card"
-              ? `translate(-50%, -50%) scale(${C.card.scaleExp * sceneScale})`
-              : `translateX(calc(-50% + ${getPopOffset("card").x}px)) translateY(calc(var(--hover-y, 0px) + ${offset}px + ${getPopOffset("card").y}px)) scale(${sceneScale})`,
-            transformOrigin: exp === "card" ? "center" : "top center",
-            pointerEvents: anyExp && exp !== "card" ? "none" : !isInteractive ? "none" : "auto",
-          }}
+          className={expanded ? "cursor-pointer" : ""}
+          onClick={expanded ? () => setExpanded(null) : undefined}
+          style={getFolderStyle({ scale, expanded, isMobile })}
+        >
+          {folder}
+        </div>
+
+        {/* Card */}
+        <div
+          className="cursor-pointer"
+          style={getItemStyle("card", styleContext)}
+          onClick={() => !expanded && setExpanded("card")}
+          onMouseEnter={() => setHovered("card")}
+          onMouseLeave={() => setHovered(null)}
         >
           {card}
         </div>
 
-        {/* Logs - relative to folder top */}
+        {/* Logs */}
         <div
-          className={`fixed left-1/2 logs-hover cursor-pointer ${isInteractive ? "transition-all duration-300" : "intro-pop-transition"}`}
-          data-expanded={exp === "logs" || undefined}
-          onClick={() => isInteractive && !anyExp && setExp("logs")}
-          style={{
-            width: `${C.logs.width}px`,
-            zIndex: C.logs.z,
-            top: exp === "logs" ? "50%" : `calc(100vh - ${folderTopPx}px + ${scaled(C.logs.y)}px)`,
-            transform: exp === "logs"
-              ? `translate(-50%, -50%) scale(${C.logs.scaleExp * sceneScale})`
-              : `translateX(calc(${scaled(C.logs.x)}px + ${getPopOffset("logs").x}px)) translateY(calc(var(--logs-hover-y, 0px) + ${offset}px + ${getPopOffset("logs").y}px)) rotate(${C.logs.rotation}deg) scale(${C.logs.scale * sceneScale})`,
-            transformOrigin: exp === "logs" ? "center" : "top left",
-            pointerEvents: anyExp && exp !== "logs" ? "none" : !isInteractive ? "none" : "auto",
-          }}
+          className="cursor-pointer"
+          style={getItemStyle("logs", styleContext)}
+          onClick={() => !expanded && setExpanded("logs")}
+          onMouseEnter={() => setHovered("logs")}
+          onMouseLeave={() => setHovered(null)}
         >
           {logs}
         </div>
 
-        {/* Instructions - relative to folder top */}
+        {/* Instructions */}
         <div
-          className={`fixed right-1/2 instructions-hover cursor-pointer ${isInteractive ? "transition-all duration-300" : "intro-pop-transition"}`}
-          data-expanded={exp === "instructions" || undefined}
-          onClick={() => isInteractive && !anyExp && setExp("instructions")}
-          style={{
-            width: `${C.instructions.width}px`,
-            zIndex: C.instructions.z,
-            top: exp === "instructions"
-              ? `calc(50% + ${scaled(C.instructions.yExp)}px)`
-              : `calc(100vh - ${folderTopPx}px + ${scaled(C.instructions.y)}px)`,
-            transform: exp === "instructions"
-              ? `translate(50%, -50%) scale(${instructionsExpandedScale})`
-              : `translateX(calc(${scaled(C.instructions.x)}px + ${getPopOffset("instructions").x}px)) translateY(calc(var(--instructions-hover-y, 0px) + ${offset}px + ${getPopOffset("instructions").y}px)) rotate(${C.instructions.rotation}deg) scale(${C.instructions.scale * sceneScale})`,
-            transformOrigin: exp === "instructions" ? "center" : "top right",
-            pointerEvents: anyExp && exp !== "instructions" ? "none" : !isInteractive ? "none" : "auto",
-          }}
+          className="cursor-pointer"
+          style={getItemStyle("instructions", styleContext)}
+          onClick={() => !expanded && setExpanded("instructions")}
+          onMouseEnter={() => setHovered("instructions")}
+          onMouseLeave={() => setHovered(null)}
         >
           {instructions}
-        </div>
-
-        {/* Folder - the anchor */}
-        <div
-          className={`absolute left-1/2 ${anyExp ? "cursor-pointer" : ""} ${isInteractive ? "transition-transform duration-300" : ""}`}
-          onClick={anyExp ? () => setExp(null) : undefined}
-          style={{
-            zIndex: C.folder.z,
-            bottom: scaled(C.folder.bottom),
-            transform: `translateX(-50%) translateY(${offset}px) scale(${sceneScale})`,
-            transformOrigin: "bottom center",
-            pointerEvents: anyExp ? "auto" : "none",
-          }}
-        >
-          {folder}
         </div>
       </div>
     </div>

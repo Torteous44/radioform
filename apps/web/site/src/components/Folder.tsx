@@ -11,7 +11,7 @@ interface FolderProps {
 export default memo(function Folder({ className = "", onClick, style }: FolderProps) {
   return (
     <div
-      className={`relative w-[600px] h-[724px] ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`relative w-full h-full ${onClick ? "cursor-pointer" : ""} ${className}`}
       onClick={onClick}
       style={style}
     >

@@ -42,45 +42,4 @@ body {
   z-index: 0;
 }
 
-.card-hover {
-  --hover-y: 0px;
-}
-
-.card-hover:not([data-expanded]):hover {
-  --hover-y: -40px;
-}
-
-.logs-hover {
-  --logs-hover-y: 0px;
-}
-
-.logs-hover:not([data-expanded]):hover {
-  --logs-hover-y: -20px;
-}
-
-.instructions-hover {
-  --instructions-hover-y: 0px;
-}
-
-.instructions-hover:not([data-expanded]):hover {
-  --instructions-hover-y: -20px;
-}
-
-/* Intro animations */
-@keyframes intro-slide-up {
-  0% {
-    transform: translateY(600px);
-  }
-  100% {
-    transform: translateY(0);
-  }
-}
-
-.intro-slide-up {
-  animation: intro-slide-up 600ms cubic-bezier(0.33, 1, 0.68, 1) forwards;
-}
-
-.intro-pop-transition {
-  transition: transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
 

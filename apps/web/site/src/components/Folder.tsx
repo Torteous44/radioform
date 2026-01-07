@@ -1,6 +1,5 @@
-"use client";
-
 import { memo } from "react";
+import Image from "next/image";
 
 interface FolderProps {
   className?: string;
@@ -15,11 +14,14 @@ export default memo(function Folder({ className = "", onClick, style }: FolderPr
       onClick={onClick}
       style={style}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src="/manilafolder.avif"
         alt="Manila folder"
-        className="block w-full h-full"
+        fill
+        className="object-cover"
+        priority
+        quality={85}
+        sizes="(max-width: 768px) 100vw, 600px"
       />
     </div>
   );

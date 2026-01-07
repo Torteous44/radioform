@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode, CSSProperties } from "react";
+import { throttle } from "@/utils/debounce";
 
 // =============================================================================
 // CONFIG - All positioning values in one place
@@ -105,8 +106,18 @@ interface StyleContext {
 // HOOKS
 // =============================================================================
 
-function useViewport(): { scale: number; width: number; height: number; isMobile: boolean } {
-  const [state, setState] = useState({ scale: 1, width: 1200, height: 800, isMobile: false });
+function useViewport(): {
+  scale: number;
+  width: number;
+  height: number;
+  isMobile: boolean;
+} {
+  const [state, setState] = useState({
+    scale: 1,
+    width: 1200,
+    height: 800,
+    isMobile: false,
+  });
 
   useEffect(() => {
     const calculate = () => {
@@ -116,14 +127,20 @@ function useViewport(): { scale: number; width: number; height: number; isMobile
 
       const scaleX = (vw - margin) / CONFIG.sceneWidth;
       const scaleY = (vh - margin) / CONFIG.sceneHeight;
-      const scale = Math.min(CONFIG.maxScale, Math.max(CONFIG.minScale, Math.min(scaleX, scaleY)));
+      const scale = Math.min(
+        CONFIG.maxScale,
+        Math.max(CONFIG.minScale, Math.min(scaleX, scaleY)),
+      );
 
       setState({ scale, width: vw, height: vh, isMobile: vw < 768 });
     };
 
+    // Throttle resize events to fire maximum once every 150ms
+    const throttledCalculate = throttle(calculate, 150);
+
     calculate();
-    window.addEventListener("resize", calculate);
-    return () => window.removeEventListener("resize", calculate);
+    window.addEventListener("resize", throttledCalculate);
+    return () => window.removeEventListener("resize", throttledCalculate);
   }, []);
 
   return state;
@@ -146,8 +163,17 @@ function getTransition(item?: "card" | "logs" | "instructions"): string {
   return base;
 }
 
-function getFolderStyle({ scale, expanded, isMobile }: Omit<StyleContext, "hovered" | "viewportWidth" | "viewportHeight">): CSSProperties {
-  const expandOffset = isMobile ? CONFIG.mobileExpandOffset : CONFIG.expandOffset;
+function getFolderStyle({
+  scale,
+  expanded,
+  isMobile,
+}: Omit<
+  StyleContext,
+  "hovered" | "viewportWidth" | "viewportHeight"
+>): CSSProperties {
+  const expandOffset = isMobile
+    ? CONFIG.mobileExpandOffset
+    : CONFIG.expandOffset;
   const slideY = expanded ? expandOffset * scale : 0;
 
   return {
@@ -170,18 +196,30 @@ function getSceneAnchorStyle(scale: number): CSSProperties {
 
 function getItemStyle(
   item: "card" | "logs" | "instructions",
-  { scale, expanded, hovered, isMobile, viewportWidth, viewportHeight }: StyleContext
+  {
+    scale,
+    expanded,
+    hovered,
+    isMobile,
+    viewportWidth,
+    viewportHeight,
+  }: StyleContext,
 ): CSSProperties {
   const cfg = CONFIG[item];
   const isExpanded = expanded === item;
   const isHovered = hovered === item && !expanded;
-  const expandOffset = isMobile ? CONFIG.mobileExpandOffset : CONFIG.expandOffset;
+  const expandOffset = isMobile
+    ? CONFIG.mobileExpandOffset
+    : CONFIG.expandOffset;
   const transition = getTransition(item);
 
   // Calculate expanded scale
   let expandedScale: number;
   if (item === "instructions" && isMobile) {
-    expandedScale = Math.min(CONFIG.instructions.mobileExpandedScale, (viewportWidth - 32) / cfg.width);
+    expandedScale = Math.min(
+      CONFIG.instructions.mobileExpandedScale,
+      (viewportWidth - 32) / cfg.width,
+    );
   } else {
     expandedScale = cfg.expandedScale * scale;
   }
@@ -195,12 +233,22 @@ function getItemStyle(
     // Use mobile-specific offsets when on mobile
     const effectiveOffsetY = isMobile ? cfg.mobileOffsetY : cfg.offsetY;
     const effectiveBaseY = effectiveOffsetY * scale;
-    const itemCurrentY = (viewportHeight + CONFIG.folder.bottomOffset * scale) - CONFIG.folder.height * scale - effectiveBaseY;
+    const itemCurrentY =
+      viewportHeight +
+      CONFIG.folder.bottomOffset * scale -
+      CONFIG.folder.height * scale -
+      effectiveBaseY;
     const targetCenterY = viewportHeight / 2;
-    const itemHeight = item === "card" ? cfg.width * 1.414 : item === "logs" ? cfg.width * 1.214 : cfg.width * 0.5;
+    const itemHeight =
+      item === "card"
+        ? cfg.width * 1.414
+        : item === "logs"
+          ? cfg.width * 1.214
+          : cfg.width * 0.5;
     const scaledItemHeight = itemHeight * expandedScale;
     // Add expandedOffsetY for manual adjustment (negative = higher on screen)
-    const translateY = targetCenterY - itemCurrentY - (scaledItemHeight / 2) + cfg.expandedOffsetY;
+    const translateY =
+      targetCenterY - itemCurrentY - scaledItemHeight / 2 + cfg.expandedOffsetY;
 
     // Use consistent translateX percentage for smooth animation
     // Card and Logs use left: 50% with translateX(-50%)
@@ -298,21 +346,43 @@ function getItemStyle(
 // COMPONENT
 // =============================================================================
 
-export default function HomeClient({ card, logs, instructions, folder }: HomeClientProps) {
+export default function HomeClient({
+  card,
+  logs,
+  instructions,
+  folder,
+}: HomeClientProps) {
   const [expanded, setExpanded] = useState<Expanded>(null);
   const [hovered, setHovered] = useState<Expanded>(null);
-  const { scale, width: viewportWidth, height: viewportHeight, isMobile } = useViewport();
+  const {
+    scale,
+    width: viewportWidth,
+    height: viewportHeight,
+    isMobile,
+  } = useViewport();
 
   // Nav state derived from expanded
   const navMap = { card: 2, instructions: 3, logs: 4 } as const;
   const current = expanded ? navMap[expanded] : 1;
 
   const handleNav = (num: 1 | 2 | 3 | 4) => {
-    const expandMap: Record<number, Expanded> = { 1: null, 2: "card", 3: "instructions", 4: "logs" };
+    const expandMap: Record<number, Expanded> = {
+      1: null,
+      2: "card",
+      3: "instructions",
+      4: "logs",
+    };
     setExpanded(expandMap[num]);
   };
 
-  const styleContext: StyleContext = { scale, expanded, hovered, isMobile, viewportWidth, viewportHeight };
+  const styleContext: StyleContext = {
+    scale,
+    expanded,
+    hovered,
+    isMobile,
+    viewportWidth,
+    viewportHeight,
+  };
 
   return (
     <div className="h-screen w-screen paper-texture relative overflow-hidden">
@@ -323,29 +393,48 @@ export default function HomeClient({ card, logs, instructions, folder }: HomeCli
           { num: 2, label: "Info" },
           { num: 3, label: "Instructions" },
           { num: 4, label: "Changelog" },
-          { num: 5, label: isMobile ? "View Github" : "Download", isLink: true },
+          {
+            num: 5,
+            label: isMobile ? "View Github" : "Download",
+            isLink: true,
+          },
         ].map(({ num, label, isLink }) =>
           isLink ? (
             <a
               key={num}
-              href={isMobile ? "https://github.com/Torteous44/radioform" : "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"}
+              href={
+                isMobile
+                  ? "https://github.com/Torteous44/radioform"
+                  : "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg"
+              }
               target={isMobile ? "_blank" : undefined}
               rel={isMobile ? "noopener noreferrer" : undefined}
               className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
-              style={{ color: "#999", fontFamily: "var(--font-ibm-plex-mono), monospace", textDecoration: "none" }}
+              style={{
+                color: "#999",
+                fontFamily: "var(--font-ibm-plex-mono), monospace",
+                textDecoration: "none",
+              }}
             >
               {num} {label}
             </a>
           ) : (
             <button
               key={num}
-              onClick={() => handleNav(current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4))}
+              onClick={() =>
+                handleNav(
+                  current === num && num !== 1 ? 1 : (num as 1 | 2 | 3 | 4),
+                )
+              }
               className="text-xs font-mono transition-all duration-300 cursor-pointer text-left"
-              style={{ color: current === num ? "#000" : "#999", fontFamily: "var(--font-ibm-plex-mono), monospace" }}
+              style={{
+                color: current === num ? "#000" : "#999",
+                fontFamily: "var(--font-ibm-plex-mono), monospace",
+              }}
             >
               {current === num && num !== 1 ? "<- Back" : `${num} ${label}`}
             </button>
-          )
+          ),
         )}
       </div>
 

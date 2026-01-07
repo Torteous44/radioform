@@ -1,3 +1,6 @@
+import { PaperTextureBackground } from "./PaperTextureBackground";
+import styles from "./Logs.module.css";
+
 interface LogsProps {
   className?: string;
 }
@@ -31,7 +34,7 @@ async function fetchEntries(): Promise<ChangelogEntry[]> {
   try {
     const response = await fetch(
       "https://api.github.com/repos/Torteous44/radioform/releases/latest",
-      { next: { revalidate: 3600 } }
+      { next: { revalidate: 3600 } },
     );
     if (!response.ok) {
       throw new Error("Failed to fetch release data");
@@ -45,7 +48,9 @@ async function fetchEntries(): Promise<ChangelogEntry[]> {
     const lines = body.split("\n");
 
     // Parse date from release
-    const releaseDate = data.published_at ? new Date(data.published_at) : new Date();
+    const releaseDate = data.published_at
+      ? new Date(data.published_at)
+      : new Date();
     const dateStr = releaseDate.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -82,7 +87,10 @@ async function fetchEntries(): Promise<ChangelogEntry[]> {
       }
 
       // Parse bullet points (* or -)
-      if ((trimmed.startsWith("* ") || trimmed.startsWith("- ")) && trimmed.length > 2) {
+      if (
+        (trimmed.startsWith("* ") || trimmed.startsWith("- ")) &&
+        trimmed.length > 2
+      ) {
         const description = trimmed.replace(/^[\*\-\s]+/, "").trim();
         if (description && description.length > 0) {
           parsedEntries.push({
@@ -146,7 +154,7 @@ async function fetchEntries(): Promise<ChangelogEntry[]> {
 
     // Limit to 4 entries for display
     return entries.slice(0, 4);
-  } catch (error) {
+  } catch {
     return fallbackEntries;
   }
 }
@@ -156,92 +164,33 @@ export default async function Logs({ className = "" }: LogsProps) {
 
   return (
     <div
-      className={`relative w-full max-w-[450px] aspect-[1/1.214] ${className}`}
-      style={{
-        fontFamily: "var(--font-ibm-plex-mono), monospace",
-        filter: `
-          drop-shadow(0px 1px 1px rgba(0,0,0,0.1))
-          drop-shadow(0px 2px 4px rgba(0,0,0,0.08))
-          drop-shadow(0px 4px 8px rgba(0,0,0,0.06))
-        `,
-        opacity: 1,
-      }}
+      className={`relative w-full max-w-[450px] aspect-[1/1.214] ${styles.container} ${className}`}
     >
       {/* Base paper with grid */}
       <div
-        className="relative bg-white pl-8 pr-4 py-4 h-full flex flex-col"
-        style={{
-          backgroundColor: "#ffffff",
-          backgroundImage: `
-            linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)
-          `,
-          backgroundSize: "14px 14px",
-        }}
+        className={`relative bg-white pl-8 pr-4 py-4 h-full flex flex-col ${styles.paper}`}
       >
+        {/* Paper texture background layer - z-0 */}
+        <PaperTextureBackground
+          seed={11.5}
+          colorBack="#ffffff"
+          colorFront="#f5f3ed"
+        />
+
+        {/* Grid pattern overlay - z-1 */}
+        <div
+          className={`absolute inset-0 z-[1] pointer-events-none ${styles.gridPattern}`}
+        />
+
         {/* Binder holes on left side */}
         <div className="absolute left-2 top-0 bottom-0 flex flex-col justify-evenly py-4 z-[15]">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="w-3 h-3 rounded-full bg-gray-200 border border-gray-300"
-              style={{
-                boxShadow: "inset 1px 1px 2px rgba(0,0,0,0.15), inset -1px -1px 1px rgba(255,255,255,0.5)",
-              }}
+              className={`w-3 h-3 rounded-full bg-gray-200 border border-gray-300 ${styles.binderHole}`}
             />
           ))}
         </div>
-        {/* Aging layer: corner wear */}
-        <div
-          className="absolute inset-0 pointer-events-none z-[1]"
-          style={{
-            background: `
-              radial-gradient(
-                ellipse 60px 60px at 8px 8px,
-                rgba(255, 245, 230, 0.3) 0%,
-                transparent 70%
-              ),
-              radial-gradient(
-                ellipse 50px 50px at calc(100% - 8px) 8px,
-                rgba(255, 245, 230, 0.2) 0%,
-                transparent 60%
-              ),
-              radial-gradient(
-                ellipse 70px 70px at 8px calc(100% - 8px),
-                rgba(255, 248, 235, 0.25) 0%,
-                transparent 70%
-              ),
-              radial-gradient(
-                ellipse 80px 80px at calc(100% - 8px) calc(100% - 8px),
-                rgba(255, 250, 240, 0.35) 0%,
-                transparent 70%
-              )
-            `,
-          }}
-        />
-
-        {/* Aging layer: edge darkening */}
-        <div
-          className="absolute inset-0 pointer-events-none z-[2]"
-          style={{
-            background: `
-              linear-gradient(90deg, rgba(0,0,0,0.03) 0%, transparent 3%),
-              linear-gradient(270deg, rgba(0,0,0,0.02) 0%, transparent 2%),
-              linear-gradient(0deg, rgba(0,0,0,0.03) 0%, transparent 3%),
-              linear-gradient(180deg, rgba(0,0,0,0.02) 0%, transparent 2%)
-            `,
-          }}
-        />
-
-        {/* Aging layer: noise/grain */}
-        <div
-          className="absolute inset-0 pointer-events-none z-[3]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-            opacity: 0.04,
-            mixBlendMode: "multiply",
-          }}
-        />
 
         {/* Content */}
         <div className="relative z-[10] flex flex-col flex-1">
@@ -256,8 +205,7 @@ export default async function Logs({ className = "" }: LogsProps) {
               VIEW GITHUB
             </a>
             <h1
-              className="text-xs font-bold tracking-widest text-black"
-              style={{ letterSpacing: "0.15em" }}
+              className={`text-xs font-bold tracking-widest text-black ${styles.headerText}`}
             >
               CHANGELOG
             </h1>
@@ -266,10 +214,15 @@ export default async function Logs({ className = "" }: LogsProps) {
           {/* Entries */}
           <div className="space-y-2 flex-1">
             {entries.length === 0 ? (
-              <div className="text-[9px] text-gray-600">No changelog entries found</div>
+              <div className="text-[9px] text-gray-600">
+                No changelog entries found
+              </div>
             ) : (
               entries.map((entry, index) => (
-                <div key={index} className="text-[9px] leading-relaxed text-black">
+                <div
+                  key={index}
+                  className="text-[9px] leading-relaxed text-black"
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="font-bold">{entry.type}:</span>{" "}

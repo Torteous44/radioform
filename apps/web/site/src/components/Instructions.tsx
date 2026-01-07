@@ -2,16 +2,21 @@
 
 import Image from "next/image";
 import { memo } from "react";
+import { PaperTexture } from "@paper-design/shaders-react";
+import styles from "./Instructions.module.css";
 
 interface InstructionsProps {
   className?: string;
   onClick?: () => void;
 }
 
-export default memo(function Instructions({ className = "", onClick }: InstructionsProps) {
+export default memo(function Instructions({
+  className = "",
+  onClick,
+}: InstructionsProps) {
   const instructions = [
     {
-      image: "/instructions/frame1.png",
+      image: "/instructions/frame1.avif",
       caption: (
         <>
           Step 1:{" "}
@@ -27,104 +32,53 @@ export default memo(function Instructions({ className = "", onClick }: Instructi
       ),
     },
     {
-      image: "/instructions/frame2.png",
+      image: "/instructions/frame2.avif",
       caption: "Step 2: Select your audio output device",
     },
     {
-      image: "/instructions/frame3.png",
+      image: "/instructions/frame3.avif",
       caption: "Step 3: Choose a preset or create your own custom EQ",
     },
     {
-      image: "/instructions/frame4.png",
+      image: "/instructions/frame4.avif",
       caption: "Step 4: Enjoy.",
     },
   ];
 
   return (
     <div
-      className={`relative w-full max-w-[900px] mx-auto ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`relative w-full max-w-[900px] mx-auto ${styles.container} ${onClick ? "cursor-pointer" : ""} ${className}`}
       onClick={onClick}
-      style={{
-        fontFamily: "var(--font-ibm-plex-mono), monospace",
-        filter: `
-          drop-shadow(0px 1px 1px rgba(0,0,0,0.1))
-          drop-shadow(0px 2px 4px rgba(0,0,0,0.08))
-          drop-shadow(0px 4px 8px rgba(0,0,0,0.06))
-        `,
-        opacity: 1,
-      }}
     >
       {/* Base paper with vintage faded background */}
-      <div
-        className="relative bg-white p-8 flex flex-col"
-        style={{
-          backgroundColor: "#faf9f6",
-          backgroundImage: `
-            linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px)
-          `,
-          backgroundSize: "20px 20px",
-        }}
-      >
-        {/* Aging layer: corner wear */}
-        <div
-          className="absolute inset-0 pointer-events-none z-[1]"
-          style={{
-            background: `
-              radial-gradient(
-                ellipse 80px 80px at 8px 8px,
-                rgba(255, 245, 230, 0.4) 0%,
-                transparent 70%
-              ),
-              radial-gradient(
-                ellipse 70px 70px at calc(100% - 8px) 8px,
-                rgba(255, 245, 230, 0.3) 0%,
-                transparent 60%
-              ),
-              radial-gradient(
-                ellipse 90px 90px at 8px calc(100% - 8px),
-                rgba(255, 248, 235, 0.35) 0%,
-                transparent 70%
-              ),
-              radial-gradient(
-                ellipse 100px 100px at calc(100% - 8px) calc(100% - 8px),
-                rgba(255, 250, 240, 0.45) 0%,
-                transparent 70%
-              )
-            `,
-          }}
-        />
-
-        {/* Aging layer: edge darkening */}
-        <div
-          className="absolute inset-0 pointer-events-none z-[2]"
-          style={{
-            background: `
-              linear-gradient(90deg, rgba(0,0,0,0.02) 0%, transparent 3%),
-              linear-gradient(270deg, rgba(0,0,0,0.015) 0%, transparent 2%),
-              linear-gradient(0deg, rgba(0,0,0,0.02) 0%, transparent 3%),
-              linear-gradient(180deg, rgba(0,0,0,0.015) 0%, transparent 2%)
-            `,
-          }}
-        />
-
-        {/* Aging layer: noise/grain */}
-        <div
-          className="absolute inset-0 pointer-events-none z-[3]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-            opacity: 0.03,
-            mixBlendMode: "multiply",
-          }}
-        />
+      <div className={`relative bg-white p-8 flex flex-col ${styles.paper}`}>
+        {/* Paper texture background layer - z-0 */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <PaperTexture
+            width="100%"
+            height="100%"
+            colorBack="#faf9f6"
+            colorFront="#f0ebe0"
+            contrast={0.8}
+            roughness={0.6}
+            fiber={0.75}
+            fiberSize={0.18}
+            crumples={0.25}
+            crumpleSize={0.32}
+            folds={0.4}
+            foldCount={10}
+            drops={0.15}
+            fade={0.9}
+            seed={82}
+            scale={0.65}
+            fit="cover"
+          />
+        </div>
 
         {/* Header */}
         <div className="relative z-[10] mb-6">
           <h1
-            className="text-left text-2xl font-semibold underline text-black"
-            style={{
-              fontFamily: "var(--font-ibm-plex-mono), monospace",
-            }}
+            className={`text-left text-2xl font-semibold underline text-black ${styles.header}`}
           >
             INSTRUCTIONS FOR ENJOYMENT
           </h1>
@@ -140,17 +94,11 @@ export default memo(function Instructions({ className = "", onClick }: Instructi
                   alt={`Step ${index + 1}`}
                   width={200}
                   height={200}
-                  className="w-full h-full object-cover rounded-sm"
-                  style={{
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-                  }}
+                  className={`w-full h-full object-cover rounded-sm ${styles.imageContainer}`}
                 />
               </div>
               <p
-                className="text-2xl md:text-xs leading-relaxed text-black text-left"
-                style={{
-                  fontFamily: "var(--font-ibm-plex-mono), monospace",
-                }}
+                className={`text-2xl md:text-xs leading-relaxed text-black text-left ${styles.caption}`}
               >
                 {instruction.caption}
               </p>

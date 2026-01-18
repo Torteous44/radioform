@@ -24,6 +24,7 @@ struct AdaptiveGlassMaterial: ViewModifier {
     var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
 
     func body(content: Content) -> some View {
+        #if compiler(>=6.1)
         if #available(macOS 26.0, *) {
             // Use Liquid Glass on macOS 26+
             // Note: Variant support is simulated via opacity for visual differentiation
@@ -34,15 +35,23 @@ struct AdaptiveGlassMaterial: ViewModifier {
                         .opacity(glassOpacity(for: variant))
                 }
         } else {
-            // Fallback to VisualEffectView on older macOS
-            content
-                .background {
-                    VisualEffectView(
-                        material: material ?? variant.fallbackMaterial,
-                        blendingMode: blendingMode
-                    )
-                }
+            fallbackView(content: content)
         }
+        #else
+        fallbackView(content: content)
+        #endif
+    }
+
+    @ViewBuilder
+    private func fallbackView(content: Content) -> some View {
+        // Fallback to VisualEffectView on older macOS or older SDK
+        content
+            .background {
+                VisualEffectView(
+                    material: material ?? variant.fallbackMaterial,
+                    blendingMode: blendingMode
+                )
+            }
     }
 
     private func glassOpacity(for variant: GlassVariant) -> Double {

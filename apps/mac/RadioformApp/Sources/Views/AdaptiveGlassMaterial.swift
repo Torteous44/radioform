@@ -16,6 +16,22 @@ enum GlassVariant {
     }
 }
 
+// MARK: - macOS 26+ Glass Effect Support
+// Define LIQUID_GLASS_AVAILABLE in Package.swift when building with macOS 26 SDK:
+//   swiftSettings: [.define("LIQUID_GLASS_AVAILABLE")]
+#if LIQUID_GLASS_AVAILABLE
+@available(macOS 26.0, *)
+private extension View {
+    func applyGlassEffect(shape: AnyShape, opacity: Double) -> some View {
+        self.background {
+            Color.clear
+                .glassEffect(in: shape)
+                .opacity(opacity)
+        }
+    }
+}
+#endif
+
 /// Adaptive glass material that uses Liquid Glass on macOS 26+ and falls back to VisualEffectView on older versions
 struct AdaptiveGlassMaterial: ViewModifier {
     var variant: GlassVariant = .regular
@@ -24,16 +40,11 @@ struct AdaptiveGlassMaterial: ViewModifier {
     var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
 
     func body(content: Content) -> some View {
-        #if compiler(>=6.1)
+        #if LIQUID_GLASS_AVAILABLE
         if #available(macOS 26.0, *) {
             // Use Liquid Glass on macOS 26+
             // Note: Variant support is simulated via opacity for visual differentiation
-            content
-                .background {
-                    Color.clear
-                        .glassEffect(in: shape)
-                        .opacity(glassOpacity(for: variant))
-                }
+            content.applyGlassEffect(shape: shape, opacity: glassOpacity(for: variant))
         } else {
             fallbackView(content: content)
         }

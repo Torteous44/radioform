@@ -46,6 +46,9 @@ constexpr int HEARTBEAT_INTERVAL_SEC = 1;
 constexpr int STATS_LOG_INTERVAL_SEC = 30;
 constexpr int HEARTBEAT_TIMEOUT_SEC = 5;
 
+// Device cycling prevention - minimum time between remove and re-add
+constexpr int DEVICE_COOLDOWN_SEC = 10;
+
 // Device states
 enum class DeviceState {
     Uninitialized,
@@ -635,6 +638,9 @@ struct RadioformGlobalState {
         std::chrono::steady_clock::time_point last_change{std::chrono::steady_clock::now()};
     };
     std::map<std::string, HostHeartbeatState> host_hb_cache;
+
+    // Track when devices were removed to prevent rapid cycling
+    std::map<std::string, std::chrono::steady_clock::time_point> device_removal_times;
 };
 
 static RadioformGlobalState* g_state = nullptr;
@@ -683,7 +689,23 @@ void RemoveDevice(const std::string& uid) {
     if (it != g_state->devices.end()) {
         g_state->plugin->RemoveDevice(it->second);
         g_state->devices.erase(it);
+        // Track removal time for cooldown
+        g_state->device_removal_times[uid] = std::chrono::steady_clock::now();
     }
+}
+
+bool IsDeviceInCooldown(const std::string& uid) {
+    if (!g_state) return false;
+
+    auto it = g_state->device_removal_times.find(uid);
+    if (it == g_state->device_removal_times.end()) {
+        return false;
+    }
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - it->second).count();
+
+    return elapsed < DEVICE_COOLDOWN_SEC;
 }
 
 std::map<std::string, std::string> ParseControlFile() {
@@ -764,7 +786,14 @@ void SyncDevices() {
 
     for (const auto& [uid, name] : desired) {
         if (g_state->devices.find(uid) == g_state->devices.end()) {
+            // Check cooldown to prevent rapid add/remove cycling
+            if (IsDeviceInCooldown(uid)) {
+                RF_LOG_INFO("SyncDevices: uid=%s in cooldown, skipping add", uid.c_str());
+                continue;
+            }
             AddDevice(name, uid);
+            // Clear removal time on successful add
+            g_state->device_removal_times.erase(uid);
         }
     }
 

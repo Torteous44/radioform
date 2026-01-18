@@ -195,7 +195,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Create popover with menu content
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: 340, height: 600)
         popover?.behavior = .transient
         popover?.contentViewController = NSHostingController(rootView: MenuBarView())
         
@@ -882,7 +881,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 popover.performClose(nil)
                 eventMonitor?.stop()
             } else {
+                // Position the popover directly below the menu bar button
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+
+                // On macOS 15+ (Tahoe/Sequoia), NSPopover positioning can be off on external
+                // monitors. Manually reposition if needed.
+                if #available(macOS 15.0, *) {
+                    if let popoverWindow = popover.contentViewController?.view.window,
+                       let buttonWindow = button.window {
+                        let buttonScreenFrame = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
+                        let popoverFrame = popoverWindow.frame
+
+                        // Calculate where the popover should be: directly below the button
+                        let targetY = buttonScreenFrame.minY - popoverFrame.height
+
+                        // Only adjust if there's a significant gap (more than 10 pixels)
+                        if abs(popoverFrame.maxY - buttonScreenFrame.minY) > 10 {
+                            popoverWindow.setFrameOrigin(NSPoint(x: popoverFrame.origin.x, y: targetY))
+                        }
+                    }
+                }
+
                 eventMonitor?.start()
             }
         }

@@ -31,11 +31,7 @@ struct MenuBarView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // Background with native popover material
-            VisualEffectView(material: .popover, blendingMode: .behindWindow)
-
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
                 // Header with toggle only (no title)
                 HStack {
                     Text("Radioform")
@@ -117,10 +113,10 @@ struct MenuBarView: View {
                 QuitButton()
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-            }
         }
         .frame(width: 340)
         .fixedSize(horizontal: false, vertical: true)
+        .adaptiveGlass(variant: .regular, material: .popover, blendingMode: .behindWindow)
     }
 }
 

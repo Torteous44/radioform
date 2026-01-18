@@ -456,8 +456,8 @@ private struct SkeuomorphicEnvelopeView: View {
         }
         .padding(32)
         .onAppear {
-            // Check if driver is already installed
-            if installer.isDriverLoaded() {
+            // Check if driver is already installed (fast file check)
+            if installer.isDriverInstalled() {
                 installer.state = .complete
                 installer.progress = 1.0
             }

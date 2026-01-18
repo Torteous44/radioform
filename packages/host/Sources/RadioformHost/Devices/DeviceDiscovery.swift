@@ -8,6 +8,8 @@ struct PhysicalDevice {
     let manufacturer: String
     let transportType: UInt32
     let isOutput: Bool
+    let validationPassed: Bool
+    let validationNote: String?
 }
 
 class DeviceDiscovery {
@@ -98,18 +100,33 @@ class DeviceDiscovery {
                 continue
             }
 
-            print("[DeviceEnum] ✓ ACCEPTED: Adding to device list")
+            // Enhanced validation for issue #34 - detect non-functional devices
+            let validation = validateDevice(deviceID, transportType: transportType)
+            print("[DeviceEnum]   Validation: \(validation.valid ? "PASSED" : "FAILED")")
+            if let reason = validation.reason {
+                print("[DeviceEnum]   Validation note: \(reason)")
+            }
+
+            if validation.valid {
+                print("[DeviceEnum] ✓ ACCEPTED: Adding to device list")
+            } else {
+                print("[DeviceEnum] ⚠ ACCEPTED WITH WARNING: Device may not work properly")
+            }
+
             devices.append(PhysicalDevice(
                 id: deviceID,
                 name: name,
                 uid: uid,
                 manufacturer: manufacturer,
                 transportType: transportType,
-                isOutput: true
+                isOutput: true,
+                validationPassed: validation.valid,
+                validationNote: validation.reason
             ))
         }
 
-        print("[DeviceEnum] ===== ENUMERATION COMPLETE: \(devices.count) devices accepted =====")
+        let validatedCount = devices.filter { $0.validationPassed }.count
+        print("[DeviceEnum] ===== ENUMERATION COMPLETE: \(devices.count) devices accepted (\(validatedCount) validated) =====")
         return devices
     }
 
@@ -224,5 +241,153 @@ class DeviceDiscovery {
 
         var streamSize: UInt32 = 0
         return AudioObjectGetPropertyDataSize(deviceID, &streamAddress, 0, nil, &streamSize) == noErr && streamSize > 0
+    }
+
+    /// Check if device has active output channels (not just streams that report existence)
+    private func deviceHasActiveChannels(_ deviceID: AudioDeviceID) -> Bool {
+        var configAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &configAddress, 0, nil, &dataSize) == noErr else {
+            return false
+        }
+
+        let bufferListPointer = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: Int(dataSize))
+        defer { bufferListPointer.deallocate() }
+
+        guard AudioObjectGetPropertyData(deviceID, &configAddress, 0, nil, &dataSize, bufferListPointer) == noErr else {
+            return false
+        }
+
+        let bufferList = bufferListPointer.pointee
+        let bufferCount = Int(bufferList.mNumberBuffers)
+
+        if bufferCount == 0 {
+            return false
+        }
+
+        // Check if at least one buffer has channels
+        let buffers = UnsafeMutableAudioBufferListPointer(bufferListPointer)
+        for buffer in buffers {
+            if buffer.mNumberChannels > 0 {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// Check jack connection status for HDMI/DisplayPort devices
+    /// Returns true for non-applicable transport types (built-in, USB, etc.)
+    private func isDeviceJackConnected(_ deviceID: AudioDeviceID, transportType: UInt32) -> Bool {
+        // Only check jack status for display-based connections
+        guard transportType == kAudioDeviceTransportTypeDisplayPort ||
+              transportType == kAudioDeviceTransportTypeHDMI else {
+            return true // Non-display devices don't need jack check
+        }
+
+        var jackAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyJackIsConnected,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // If property doesn't exist, assume connected (be permissive)
+        guard AudioObjectHasProperty(deviceID, &jackAddress) else {
+            return true
+        }
+
+        var isConnected: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+
+        guard AudioObjectGetPropertyData(deviceID, &jackAddress, 0, nil, &dataSize, &isConnected) == noErr else {
+            return true // If we can't read, assume connected
+        }
+
+        return isConnected != 0
+    }
+
+    /// Check if device supports the required audio format (48kHz, stereo, float32)
+    private func deviceSupportsRequiredFormat(_ deviceID: AudioDeviceID) -> Bool {
+        var formatAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamFormats,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // If property doesn't exist, try nominal sample rate check instead
+        guard AudioObjectHasProperty(deviceID, &formatAddress) else {
+            return checkNominalSampleRate(deviceID)
+        }
+
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &formatAddress, 0, nil, &dataSize) == noErr else {
+            return checkNominalSampleRate(deviceID)
+        }
+
+        let formatCount = Int(dataSize) / MemoryLayout<AudioStreamBasicDescription>.size
+        guard formatCount > 0 else {
+            return checkNominalSampleRate(deviceID)
+        }
+
+        var formats = [AudioStreamBasicDescription](repeating: AudioStreamBasicDescription(), count: formatCount)
+
+        guard AudioObjectGetPropertyData(deviceID, &formatAddress, 0, nil, &dataSize, &formats) == noErr else {
+            return checkNominalSampleRate(deviceID)
+        }
+
+        // Check for a compatible format
+        for format in formats {
+            // Accept if format supports stereo or more channels and reasonable sample rate
+            if format.mChannelsPerFrame >= 2 &&
+               format.mSampleRate >= 44100 && format.mSampleRate <= 192000 {
+                return true
+            }
+        }
+
+        // Fallback: check nominal sample rate
+        return checkNominalSampleRate(deviceID)
+    }
+
+    private func checkNominalSampleRate(_ deviceID: AudioDeviceID) -> Bool {
+        var rateAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var sampleRate: Float64 = 0
+        var dataSize = UInt32(MemoryLayout<Float64>.size)
+
+        guard AudioObjectGetPropertyData(deviceID, &rateAddress, 0, nil, &dataSize, &sampleRate) == noErr else {
+            return true // If we can't read, be permissive
+        }
+
+        // Accept reasonable sample rates
+        return sampleRate >= 44100 && sampleRate <= 192000
+    }
+
+    /// Combined validation that checks all criteria
+    func validateDevice(_ deviceID: AudioDeviceID, transportType: UInt32) -> (valid: Bool, reason: String?) {
+        // Check 1: Active channels
+        if !deviceHasActiveChannels(deviceID) {
+            return (false, "No active output channels")
+        }
+
+        // Check 2: Jack connection for HDMI/DisplayPort
+        if !isDeviceJackConnected(deviceID, transportType: transportType) {
+            return (false, "Jack not connected (display audio without speakers)")
+        }
+
+        // Check 3: Format support
+        if !deviceSupportsRequiredFormat(deviceID) {
+            return (false, "Unsupported audio format")
+        }
+
+        return (true, nil)
     }
 }

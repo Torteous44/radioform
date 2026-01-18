@@ -46,9 +46,19 @@ func main() {
         exit(1)
     }
 
-    print("[✓] Found \(devices.count) physical output device(s)")
+    let validatedDevices = devices.filter { $0.validationPassed }
+    print("[✓] Found \(devices.count) physical output device(s) (\(validatedDevices.count) validated)")
     for device in devices {
-        print("    - \(device.name) (\(device.uid))")
+        let status = device.validationPassed ? "✓" : "⚠"
+        var line = "    \(status) \(device.name) (\(device.uid))"
+        if let note = device.validationNote {
+            line += " - \(note)"
+        }
+        print(line)
+    }
+
+    if validatedDevices.isEmpty {
+        print("[WARNING] No validated devices found. Will attempt setup with available devices anyway.")
     }
 
     deviceRegistry.update(devices)
@@ -80,12 +90,29 @@ func main() {
         exit(1)
     }
 
-    print("[Step 9] Finding physical output device...")
-    print("[Step 10] Creating audio unit...")
+    print("[Step 9] Setting up audio engine with device fallback...")
+
+    // Get the user's preferred device from proxy manager (set during autoSelectProxy)
+    let preferredDeviceID = proxyManager.activePhysicalDeviceID
+    if preferredDeviceID != 0 {
+        if let preferredDevice = devices.first(where: { $0.id == preferredDeviceID }) {
+            print("    Preferred device: \(preferredDevice.name)")
+        } else {
+            print("    Preferred device ID \(preferredDeviceID) not in device list")
+        }
+    }
 
     do {
-        try audioEngine.setup()
+        try audioEngine.setup(devices: devices, preferredDeviceID: preferredDeviceID != 0 ? preferredDeviceID : nil)
         try audioEngine.start()
+        print("[✓] Audio engine started successfully")
+    } catch let error as AudioEngineError {
+        print("[ERROR] Audio engine setup failed: \(error.description)")
+        if case .allDevicesFailed = error {
+            print("[ERROR] All \(devices.count) device(s) failed to initialize.")
+            print("[ERROR] This may indicate no functional audio output devices are available.")
+        }
+        exit(1)
     } catch {
         print("[ERROR] Audio engine setup failed: \(error)")
         exit(1)

@@ -60,9 +60,9 @@ class DriverInstaller: ObservableObject {
     func installDriver() async throws {
         await MainActor.run { state = .checkingExisting; progress = 0.1 }
 
-        // Check if driver is already loaded
-        if isDriverLoaded() {
-            print("Driver already loaded, skipping installation")
+        // Check if driver is already installed (fast file check)
+        if isDriverInstalled() {
+            print("Driver already installed, skipping installation")
             await MainActor.run { state = .complete; progress = 1.0 }
             return
         }
@@ -83,30 +83,18 @@ class DriverInstaller: ObservableObject {
 
         await MainActor.run { state = .restartingAudio; progress = 0.7 }
 
-        // Wait for audio system to restart and load driver
+        // Wait for audio system to restart
         print("Waiting for audio system to restart...")
-        try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+        try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
 
         await MainActor.run { state = .verifying; progress = 0.9 }
 
-        // Verify installation - try multiple times
-        var attempts = 0
-        var loaded = false
-        while attempts < 3 && !loaded {
-            loaded = isDriverLoaded()
-            if !loaded {
-                print("Driver not loaded yet, retrying... (attempt \(attempts + 1)/3)")
-                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 more seconds
-                attempts += 1
-            }
-        }
-
-        if !loaded {
-            print("WARNING: Driver installed but not verified in system_profiler")
-            print("   This may be normal - driver might need code signing or system restart")
-            // Don't throw error - driver is installed, just not verified
+        // Verify installation by checking if file exists (fast check)
+        let driverPath = "\(driverDestination)/\(driverName)"
+        if FileManager.default.fileExists(atPath: driverPath) {
+            print("Driver verified: file exists at \(driverPath)")
         } else {
-            print("Driver verified in system_profiler")
+            throw DriverInstallError.copyFailed("Driver file not found after installation")
         }
 
         await MainActor.run { state = .complete; progress = 1.0 }
@@ -164,7 +152,6 @@ class DriverInstaller: ObservableObject {
     }
 
     /// Install driver with single admin prompt (combines copy, permissions, and restart)
-    @MainActor
     private func installDriverWithPrivileges(from source: String) async throws {
         // Escape single quotes in paths for shell
         let escapedSource = source.replacingOccurrences(of: "'", with: "'\\''")
@@ -180,19 +167,23 @@ class DriverInstaller: ObservableObject {
         killall coreaudiod" with administrator privileges
         """
 
-        let appleScript = NSAppleScript(source: script)
+        // Run AppleScript on background queue to avoid blocking UI
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let appleScript = NSAppleScript(source: script)
+                var errorDict: NSDictionary?
+                appleScript?.executeAndReturnError(&errorDict)
 
-        // Execute on main thread (AppleScript requires it)
-        var errorDict: NSDictionary?
-        appleScript?.executeAndReturnError(&errorDict)
-
-        if let errorDict = errorDict,
-           let errorMessage = errorDict["NSAppleScriptErrorMessage"] as? String {
-            print("Failed to install driver: \(errorMessage)")
-            throw DriverInstallError.copyFailed(errorMessage)
+                if let errorDict = errorDict,
+                   let errorMessage = errorDict["NSAppleScriptErrorMessage"] as? String {
+                    print("Failed to install driver: \(errorMessage)")
+                    continuation.resume(throwing: DriverInstallError.copyFailed(errorMessage))
+                } else {
+                    print("Driver installed and coreaudiod restarted")
+                    continuation.resume()
+                }
+            }
         }
-
-        print("Driver installed and coreaudiod restarted")
     }
 
     /// Copy driver using AppleScript with admin privileges

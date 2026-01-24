@@ -23,6 +23,10 @@ class PresetManager: ObservableObject {
     @Published var isEditingPresetName: Bool = false
     @Published var isSavingPreset: Bool = false
 
+    // Cached computed values (updated when presets change)
+    private(set) var allPresets: [EQPreset] = []
+    private(set) var userPresetIDs: Set<EQPreset.ID> = []
+
     private let userPresetsURL: URL
     private let standardFrequencies: [Float] = [
         32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
@@ -63,6 +67,9 @@ class PresetManager: ObservableObject {
     func loadAllPresets() {
         bundledPresets = loadBundledPresets()
         userPresets = loadUserPresets()
+        // Update cached values
+        allPresets = bundledPresets + userPresets
+        userPresetIDs = Set(userPresets.map { $0.id })
     }
 
     /// Load bundled presets from app Resources
@@ -312,15 +319,32 @@ class PresetManager: ObservableObject {
         }
     }
 
-    /// Update a single band and apply immediately
+    /// Update a single band and apply immediately (batched to avoid multiple redraws)
     func updateBand(index: Int, gainDb: Float) {
         guard index >= 0 && index < 10 else { return }
+
+        // Update band value without triggering @Published (direct array mutation)
+        // We'll manually notify once at the end
+        let needsCustomUpdate = !isCustomPreset && isEnabled
+        let needsPresetClear = currentPreset != nil && isEnabled
+
+        // Batch all state changes together
         currentBands[index] = gainDb
-        applyCurrentState()
+
+        // Only update these if needed (avoids redundant publishes during drag)
+        if needsPresetClear {
+            currentPreset = nil
+        }
+        if needsCustomUpdate {
+            isCustomPreset = true
+        }
+
+        // Apply to audio (doesn't trigger UI updates)
+        applyCurrentStateToAudio()
     }
 
-    /// Apply current state (either enabled with current bands, or disabled with all zeros)
-    func applyCurrentState() {
+    /// Apply current state to audio only (no UI state changes)
+    private func applyCurrentStateToAudio() {
         let bands = standardFrequencies.enumerated().map { index, frequency in
             let gain = isEnabled ? currentBands[index] : 0.0
             return EQBand(
@@ -342,13 +366,18 @@ class PresetManager: ObservableObject {
 
         do {
             try IPCController.shared.applyPreset(customPreset)
-            if isEnabled {
-                currentPreset = nil
-                isCustomPreset = true
-            }
         } catch {
             print("Failed to apply current state: \(error)")
         }
+    }
+
+    /// Apply current state (either enabled with current bands, or disabled with all zeros)
+    func applyCurrentState() {
+        if isEnabled {
+            currentPreset = nil
+            isCustomPreset = true
+        }
+        applyCurrentStateToAudio()
     }
 
     /// Toggle EQ enabled state

@@ -171,7 +171,7 @@ private struct SkeuomorphicEnvelopeView: View {
                 // Install UI (fades in on the right)
                 if showInstallUI {
                     installPromptView
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                         .padding(.leading, geo.size.width * 0.4)
                         .opacity(showInstallUI ? 1 : 0)
                 }
@@ -362,36 +362,43 @@ private struct SkeuomorphicEnvelopeView: View {
     @ViewBuilder
     private var installPromptView: some View {
         VStack(alignment: .leading, spacing: 24) {
-            if installer.state.isComplete {
-                // Post-install instructions
-                VStack(alignment: .leading, spacing: 16) {
+            // Title section - same VStack wrapper for consistent positioning
+            VStack(alignment: .leading, spacing: 8) {
+                if installer.state.isComplete {
                     Text("Select Radioform from your\nsounds in settings")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundColor(.primary)
                         .lineSpacing(4)
-                    
-                    // Instructions with SF Symbols
-                    HStack(spacing: 6) {
-                        Text("Go to")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        
-                        Image(systemName: "switch.2")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        
-                        Text("Control Center")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        
-                        Image(systemName: "speaker.wave.3.fill")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        
-                        Text("Sound")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
+                } else {
+                    Text("To begin we need to install an audio driver")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+            }
+
+            // Content section - differs based on state
+            if installer.state.isComplete {
+                // Post-install instructions
+                HStack(spacing: 6) {
+                    Text("Go to")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+
+                    Image(systemName: "switch.2")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+
+                    Text("Control Center")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+
+                    Image(systemName: "speaker.wave.3.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+
+                    Text("Sound")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
                 }
 
                 Button(action: {
@@ -405,15 +412,9 @@ private struct SkeuomorphicEnvelopeView: View {
                 .buttonStyle(.plain)
             } else {
                 // Pre-install / installing
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("To begin we need to install an audio driver")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.primary)
-                    
-                    Text("This enables Radioform to process your system audio")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
+                Text("This enables Radioform to process your system audio")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
 
                 VStack(alignment: .leading, spacing: 12) {
                     if installer.state != .notStarted {

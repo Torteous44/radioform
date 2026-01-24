@@ -196,6 +196,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create popover with menu content
         popover = NSPopover()
         popover?.behavior = .transient
+        popover?.animates = false
         popover?.contentViewController = NSHostingController(rootView: MenuBarView())
         
         // Set up event monitor to dismiss popover when clicking outside
@@ -883,6 +884,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 // Position the popover directly below the menu bar button
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+
+                // Make popover window key immediately for proper glass effect
+                if let popoverWindow = popover.contentViewController?.view.window {
+                    popoverWindow.makeKeyAndOrderFront(nil)
+                }
 
                 // On macOS 15+ (Tahoe/Sequoia), NSPopover positioning can be off on external
                 // monitors. Manually reposition if needed.

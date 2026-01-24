@@ -19,3 +19,8 @@ body {
   color: var(--foreground);
   font-family: var(--font-space-mono), monospace;
 }
+
+::selection {
+  background: #404040;
+  color: #ffffff;
+}

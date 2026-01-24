@@ -1,13 +1,134 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Image from "next/image";
 
 const DOWNLOAD_URL =
   "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg";
 const GITHUB_URL = "https://github.com/Torteous44/radioform";
 
+const VIDEOS = {
+  menubar:
+    "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614903/mb_1_mqccrc.mp4",
+  presets:
+    "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-preset_1_y7vonk.mp4",
+  custom:
+    "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4",
+};
+
+interface HoverState {
+  visible: boolean;
+  src: string;
+  x: number;
+  y: number;
+}
+
+interface FAQItem {
+  question: string;
+  answer: React.ReactNode;
+}
+
+function FAQ({ question, answer }: FAQItem) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="border-b border-neutral-200">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full py-4 flex justify-between items-center text-left text-sm font-medium"
+      >
+        {question}
+        <span
+          className="text-neutral-400 transition-transform duration-200"
+          style={{ transform: isOpen ? "rotate(45deg)" : "rotate(0deg)" }}
+        >
+          +
+        </span>
+      </button>
+      <div
+        className="grid transition-all duration-300 ease-out"
+        style={{
+          gridTemplateRows: isOpen ? "1fr" : "0fr",
+          opacity: isOpen ? 1 : 0,
+        }}
+      >
+        <div className="overflow-hidden">
+          <div className="text-sm text-neutral-600 leading-relaxed mb-6">
+            {answer}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HoverTooltip({ src, x, y, visible }: HoverState) {
+  return (
+    <div
+      className="fixed z-50 pointer-events-none transition-all duration-200 ease-out"
+      style={{
+        left: `${x}px`,
+        top: `${y}px`,
+        transform: "translate(16px, -50%)",
+        opacity: visible ? 1 : 0,
+        scale: visible ? "1" : "0.95",
+      }}
+    >
+      <div className="bg-white border border-neutral-200 rounded overflow-hidden shadow-lg w-[200px] h-[200px]">
+        {src && (
+          <video
+            key={src}
+            src={src}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
+  const [hoverState, setHoverState] = useState<HoverState>({
+    visible: false,
+    src: "",
+    x: 0,
+    y: 0,
+  });
+
+  const handleHover = (src: string) => {
+    setHoverState((prev) => ({ ...prev, visible: true, src }));
+  };
+
+  const handleMove = (e: React.MouseEvent) => {
+    setHoverState((prev) => ({
+      ...prev,
+      x: e.clientX,
+      y: e.clientY,
+    }));
+  };
+
+  const handleLeave = () => {
+    setHoverState((prev) => ({ ...prev, visible: false }));
+  };
+
+  // Preload videos
+  useEffect(() => {
+    Object.values(VIDEOS).forEach((url) => {
+      const video = document.createElement("video");
+      video.src = url;
+      video.preload = "auto";
+      video.muted = true;
+    });
+  }, []);
+
   return (
     <main className="min-h-screen px-6 py-16">
-      <div className="max-w-xs mx-auto">
+      <HoverTooltip {...hoverState} />
+      <div className="max-w-md mx-auto">
         {/* Header */}
         <h1
           className="text-3xl font-normal mb-6"
@@ -19,28 +140,48 @@ export default function Home() {
         {/* Copy */}
         <div className="text-sm leading-relaxed space-y-4 mb-8">
           <p>
-            You've got the headphones. You've got the speakers. But macOS still
-            outputs the same flat, unoptimized audio it always has. Radioform is
-            a macOS native equalizer that finally lets you shape your sound
+            Radioform is a macOS native equalizer that lets you shape your sound
             system-wide.
           </p>
           <p>
-            It tucks into your menubar and stays out of your way. Pick from
-            ready-made presets or craft your own EQ curves for different
-            gear—your studio monitors, your AirPods, your living room setup. One
-            app, every scenario.
+            It tucks into your{" "}
+            <span
+              className="underline cursor-pointer"
+              onMouseEnter={() => handleHover(VIDEOS.menubar)}
+              onMouseMove={handleMove}
+              onMouseLeave={handleLeave}
+            >
+              menubar
+            </span>{" "}
+            and stays out of your way. Pick from{" "}
+            <span
+              className="underline cursor-pointer"
+              onMouseEnter={() => handleHover(VIDEOS.presets)}
+              onMouseMove={handleMove}
+              onMouseLeave={handleLeave}
+            >
+              ready-made presets
+            </span>{" "}
+            or{" "}
+            <span
+              className="underline cursor-pointer"
+              onMouseEnter={() => handleHover(VIDEOS.custom)}
+              onMouseMove={handleMove}
+              onMouseLeave={handleLeave}
+            >
+              craft your own EQ curves
+            </span>{" "}
+            for different gear—your studio monitors, your AirPods, your living
+            room setup. One app, every scenario.
           </p>
-          <p>
-            Built in Swift, fully open source, and completely free. No bloat, no
-            secrets, no price tag.
-          </p>
+          <p>Built with C++ and Swift. Open source and free.</p>
         </div>
 
         {/* CTA Buttons */}
         <div className="flex gap-3 mb-12">
           <a
             href={DOWNLOAD_URL}
-            className="px-5 py-2.5 bg-black text-white text-sm rounded-full hover:bg-neutral-800 transition-colors inline-flex items-center gap-2"
+            className="px-5 py-2.5 bg-black text-white text-sm rounded-full inline-flex items-center gap-2 transition-[box-shadow] duration-200 ease-out shadow-[inset_0_-3px_6px_rgba(0,0,0,0.5)] hover:shadow-[inset_0_0_0_rgba(0,0,0,0)]"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -57,37 +198,84 @@ export default function Home() {
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-5 py-2.5 border border-black text-sm rounded-full hover:bg-black hover:text-white transition-colors"
+            className="px-5 py-2.5 border border-black text-sm rounded-full transition-[box-shadow] duration-200 ease-out shadow-[inset_0_-3px_6px_rgba(0,0,0,0.08)] hover:shadow-[inset_0_0_0_rgba(0,0,0,0)]"
           >
             GitHub
           </a>
         </div>
 
-        {/* Instructions */}
-        <h2
-          className="text-lg font-normal mb-6"
-          style={{ fontFamily: "var(--font-serif)" }}
-        >
-          Instructions for enjoyment
-        </h2>
-        <div className="grid grid-cols-2 gap-4">
-          {[
-            { img: "/instructions/frame1.avif", text: "Download & install" },
-            { img: "/instructions/frame2.avif", text: "Select audio device" },
-            { img: "/instructions/frame3.avif", text: "Choose preset or custom EQ" },
-            { img: "/instructions/frame4.avif", text: "Enjoy" },
-          ].map((step, i) => (
-            <div key={i}>
-              <Image
-                src={step.img}
-                alt={`Step ${i + 1}`}
-                width={200}
-                height={200}
-                className="w-full aspect-square object-cover rounded mb-2"
-              />
-              <p className="text-xs">{step.text}</p>
-            </div>
-          ))}
+        {/* FAQs */}
+        <div className="border-t border-neutral-200">
+          <FAQ
+            question="How do I get started?"
+            answer={
+              <div className="space-y-3 ">
+                <div className="grid grid-cols-2 gap-8  p-1">
+                  {[
+                    {
+                      img: "/instructions/frame1.avif",
+                      text: "1) Download & install",
+                    },
+                    {
+                      img: "/instructions/frame2.avif",
+                      text: "2) Select audio device",
+                    },
+                    {
+                      img: "/instructions/frame3.avif",
+                      text: "3) Choose a preset or custom EQ",
+                    },
+                    { img: "/instructions/frame4.avif", text: "4) Enjoy" },
+                  ].map((step, i) => (
+                    <div key={i}>
+                      <Image
+                        src={step.img}
+                        alt={`Step ${i + 1}`}
+                        width={200}
+                        height={200}
+                        className="w-full aspect-square object-cover rounded mb-2"
+                      />
+                      <p className="text-xs">{step.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            }
+          />
+          <FAQ
+            question="How does it work?"
+            answer={
+              <>
+                Radioform creates a virtual audio device that sits between your
+                apps and your speakers. All system audio passes through a
+                high-quality DSP engine where it gets shaped by your EQ settings
+                in real-time—then continues to your actual output device. Zero
+                added latency, sub-1% CPU usage.
+              </>
+            }
+          />
+          <FAQ
+            question="What's under the hood?"
+            answer={
+              <>
+                The audio engine is written in C++ using cascaded biquad filters
+                for precise EQ control. The virtual audio device uses Apple's
+                Audio Server Plugin (libASPL) framework. The menu bar app is
+                native Swift/SwiftUI. Everything talks through a clean C API and
+                shared memory for real-time safety.
+              </>
+            }
+          />
+          <FAQ
+            question="Is it really free?"
+            answer={
+              <>
+                Yes. Radioform is released under the GPLv3 license—fully open
+                source, no hidden costs, no subscriptions, no data collection.
+                You can read every line of code, build it yourself, or fork it
+                for your own projects.
+              </>
+            }
+          />
         </div>
 
         {/* Footer */}

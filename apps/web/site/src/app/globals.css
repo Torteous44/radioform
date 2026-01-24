@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light only;
   --background: #ffffff;
   --foreground: #000000;
   --font-serif: "New York", "Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, serif;

@@ -258,7 +258,7 @@ export default function Home() {
             answer={
               <>
                 The audio engine is written in C++ using cascaded biquad filters
-                for precise EQ control. The virtual audio device uses Apple's
+                for precise EQ control. The virtual audio device uses Apple&apos;s
                 Audio Server Plugin (libASPL) framework. The menu bar app is
                 native Swift/SwiftUI. Everything talks through a clean C API and
                 shared memory for real-time safety.

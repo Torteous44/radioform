@@ -67,8 +67,8 @@ const char* StateToString(DeviceState state) {
         case DeviceState::Negotiating: return "Negotiating";
         case DeviceState::Error: return "Error";
         case DeviceState::Disconnected: return "Disconnected";
+        default: return "Unknown";
     }
-    return "Unknown";
 }
 
 // Sample rate conversion (simple linear interpolation)
@@ -160,7 +160,7 @@ public:
         , last_host_hb_change_(std::chrono::steady_clock::now())
         , current_sample_rate_(DEFAULT_SAMPLE_RATE)
         , current_channels_(DEFAULT_CHANNELS)
-        , resampler_(nullptr)
+        , resampler_()
     {
         std::string safe_uid = deviceUID;
         for (char& c : safe_uid) {
@@ -352,8 +352,14 @@ private:
             return;
         }
 
-        // Map with expected V2 size
+        // Validate file size before mapping
         size_t min_size = sizeof(RFSharedAudioV2);
+        if ((size_t)st.st_size < min_size) {
+            RF_LOG_ERROR("File too small: %lld < %zu", (long long)st.st_size, min_size);
+            close(fd);
+            return;
+        }
+
         void* mem = mmap(nullptr, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         close(fd);
 
@@ -391,10 +397,7 @@ private:
             shared_memory_ = nullptr;
         }
 
-        if (resampler_) {
-            delete resampler_;
-            resampler_ = nullptr;
-        }
+        resampler_.reset();
     }
 
     bool ValidateConnection() {
@@ -502,11 +505,7 @@ private:
 
         // Update or create resampler if needed
         if (shared_memory_ && new_fmt.mSampleRate != shared_memory_->sample_rate) {
-            if (resampler_) {
-                delete resampler_;
-            }
-
-            resampler_ = new SimpleResampler(
+            resampler_ = std::make_unique<SimpleResampler>(
                 (uint32_t)new_fmt.mSampleRate,
                 shared_memory_->sample_rate,
                 new_fmt.mChannelsPerFrame);
@@ -619,7 +618,7 @@ private:
     uint32_t current_sample_rate_;
     uint32_t current_channels_;
 
-    SimpleResampler* resampler_;
+    std::unique_ptr<SimpleResampler> resampler_;
 
     AudioStats stats_;
 };

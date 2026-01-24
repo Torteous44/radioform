@@ -1,41 +1,32 @@
 import SwiftUI
 
+// Cache font lookup once at launch
+private let radioformFont: Font = {
+    let size: CGFloat = 22
+    let possibleNames = [
+        "SignPainterHouseScript",
+        "SignPainter-HouseScript",
+        "SignPainter House Script",
+        "SignPainter"
+    ]
+    for name in possibleNames {
+        if NSFont(name: name, size: size) != nil {
+            return .custom(name, size: size)
+        }
+    }
+    return .system(size: size, weight: .bold)
+}()
+
 struct MenuBarView: View {
     @ObservedObject private var presetManager = PresetManager.shared
     @State private var showPresets = false
-    @State private var radioformFontSize: CGFloat = 22
-    
-    // Try to find the SignPainter font with fallback
-    func fontForRadioform(size: CGFloat) -> Font {
-        // Try the expected name first
-        if NSFont(name: "SignPainterHouseScript", size: size) != nil {
-            return .custom("SignPainterHouseScript", size: size)
-        }
-        
-        // Try variations
-        let possibleNames = [
-            "SignPainterHouseScript",
-            "SignPainter-HouseScript",
-            "SignPainter House Script",
-            "SignPainter"
-        ]
-        
-        for name in possibleNames {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        
-        // Fallback to system font
-        return .system(size: size, weight: .bold)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
                 // Header with toggle only (no title)
                 HStack {
                     Text("Radioform")
-                        .font(fontForRadioform(size: radioformFontSize))
+                        .font(radioformFont)
                         
                     Spacer()
 
@@ -80,14 +71,12 @@ struct MenuBarView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
 
-                    // Preset list (shown when expanded)
+                    // Preset list (animated expand/collapse)
                     if showPresets {
                         PresetList(
-                            presets: (presetManager.bundledPresets + presetManager.userPresets).filter { preset in
-                                preset.id != presetManager.currentPreset?.id
-                            },
+                            presets: presetManager.allPresets.filter { $0.id != presetManager.currentPreset?.id },
                             activeID: presetManager.currentPreset?.id,
-                            userPresetIDs: Set(presetManager.userPresets.map { $0.id }),
+                            userPresetIDs: presetManager.userPresetIDs,
                             onSelect: { preset in
                                 presetManager.applyPreset(preset)
                                 showPresets = false
@@ -95,7 +84,6 @@ struct MenuBarView: View {
                             onDelete: { preset in
                                 do {
                                     try presetManager.deletePreset(preset)
-                                    // If deleted preset was active, clear it
                                     if preset.id == presetManager.currentPreset?.id {
                                         presetManager.currentPreset = nil
                                     }
@@ -116,7 +104,7 @@ struct MenuBarView: View {
         }
         .frame(width: 340)
         .fixedSize(horizontal: false, vertical: true)
-        .adaptiveGlass(variant: .regular, material: .popover, blendingMode: .behindWindow)
+        .transaction { $0.animation = nil }
     }
 }
 

@@ -227,7 +227,7 @@ export default function Home() {
           ) : (
             <a
               href={DOWNLOAD_URL}
-              className="btn-primary px-5 py-2.5 text-white text-sm rounded-full inline-flex items-center justify-center gap-2  "
+              className="btn-primary px-4 py-1 text-white text-sm rounded-full inline-flex items-center justify-center gap-2  "
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -246,7 +246,7 @@ export default function Home() {
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-secondary px-5 py-2.5 border border-neutral-300 text-sm rounded-full text-center"
+            className="btn-secondary px-5 py-1.5 border border-neutral-300 text-sm rounded-full text-center"
           >
             GitHub
           </a>
@@ -329,10 +329,7 @@ export default function Home() {
         {/* Footer */}
         <p className="text-xs text-neutral-500 mt-16">
           Made by{" "}
-          <a
-            href="mailto:contact@pavloscompany.com"
-            className="underline"
-          >
+          <a href="mailto:contact@pavloscompany.com" className="underline">
             Pavlos Company RSA
           </a>
         </p>

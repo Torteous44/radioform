@@ -31,6 +31,13 @@ const VIDEOS = {
     "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4",
 };
 
+const FAQ_IMAGES = [
+  "/instructions/frame1.avif",
+  "/instructions/frame2.avif",
+  "/instructions/frame3.avif",
+  "/instructions/frame4.avif",
+];
+
 interface HoverState {
   visible: boolean;
   src: string;
@@ -131,7 +138,7 @@ export default function Home() {
     setHoverState((prev) => ({ ...prev, visible: false }));
   };
 
-  // Preload videos
+  // Preload videos and images
   useEffect(() => {
     Object.values(VIDEOS).forEach((url) => {
       const video = document.createElement("video");
@@ -139,12 +146,16 @@ export default function Home() {
       video.preload = "auto";
       video.muted = true;
     });
+    FAQ_IMAGES.forEach((src) => {
+      const img = new window.Image();
+      img.src = src;
+    });
   }, []);
 
   return (
     <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
       {!isMobile && <HoverTooltip {...hoverState} />}
-      <div className="max-w-md mx-auto">
+      <div className="max-w-lg mx-auto">
         {/* Header */}
         <h1
           className="text-3xl font-normal mb-6"
@@ -194,7 +205,7 @@ export default function Home() {
               craft your own EQ curves
             </span>{" "}
             for different gear—your studio monitors, your AirPods, your living
-            room setup. One app, every scenario.
+            room setup.
           </p>
           <p>Built with C++ and Swift. Open source and free.</p>
         </div>
@@ -258,21 +269,18 @@ export default function Home() {
             question="How do I get started?"
             answer={
               <div className="space-y-3 ">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 p-1 sm:gap-4 sm:p-0">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
+                    { img: FAQ_IMAGES[0], text: "First, Download & install" },
                     {
-                      img: "/instructions/frame1.avif",
-                      text: "1. Download & install",
+                      img: FAQ_IMAGES[1],
+                      text: "Then, select an audio device",
                     },
                     {
-                      img: "/instructions/frame2.avif",
-                      text: "2. Select audio device",
+                      img: FAQ_IMAGES[2],
+                      text: "Select a preset or make your own",
                     },
-                    {
-                      img: "/instructions/frame3.avif",
-                      text: "3. Choose a preset or design your own",
-                    },
-                    { img: "/instructions/frame4.avif", text: "4. Enjoy" },
+                    { img: FAQ_IMAGES[3], text: "Finally, Enjoy" },
                   ].map((step, i) => (
                     <div key={i}>
                       <Image

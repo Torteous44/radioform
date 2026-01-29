@@ -36,9 +36,9 @@ body {
         radial-gradient(75% 50% at 50% 0%, #787777, transparent),
         radial-gradient(75% 35% at 50% 90%, #222, transparent);
     box-shadow:
-        inset 0 -2px 2px 2px rgba(255, 255, 255, 0),
-        inset 0 -4px 2px 1px #222,
-        inset 0 0 1px 1px rgba(255, 255, 255, 0.19);
+        inset 0 -2px 4px 1px rgba(255, 255, 255, 0),
+        inset 0 -4px 4px 0px #222,
+        inset 0 0 1px 2px rgba(255, 255, 255, 0.19);
     transition:
         box-shadow 0.3s ease,
         background-color 0.3s ease;
@@ -46,9 +46,9 @@ body {
 
 .btn-primary:hover {
     box-shadow:
-        inset 0 -4px 8px 2px rgba(255, 255, 255, 0.005),
-        inset 0 -8px 8px 8px #333,
-        inset 0 0 0.5px 0.5px rgba(255, 255, 255, 0.0015);
+        inset 0 -4px 4px 1px rgba(255, 255, 255, 0.2),
+        inset 0 -8px 8px 2px #333,
+        inset 0 0 4px 0.5px rgba(255, 255, 255, 0.01);
 }
 
 .btn-primary:active {
@@ -65,9 +65,9 @@ body {
         radial-gradient(75% 50% at 50% 0%, #ffffff, transparent),
         radial-gradient(75% 35% at 50% 80%, #d4d4d4, transparent);
     box-shadow:
-        inset 0 -2px 2px 1px rgba(0, 0, 0, 0.08),
-        inset 0 -4px 2px 1px #d4d4d4,
-        inset 0 0 1px 1px rgba(255, 255, 255, 0.5);
+        inset 0 -2px 4px 1px rgba(0, 0, 0, 0.08),
+        inset 0 -4px 4px 1px #d4d4d4,
+        inset 0 0 1px 2px rgba(255, 255, 255, 0.5);
     transition:
         box-shadow 0.3s ease,
         background-color 0.3s ease;

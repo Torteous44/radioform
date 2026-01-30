@@ -108,8 +108,13 @@ class AudioEngine {
         try setRenderCallback()
         try initialize()
 
-        // Set physical device to maximum volume to give Radioform full control
-        // The Radioform driver device volume will be the user's control point
+        // VOLUME CONTROL ARCHITECTURE:
+        // macOS pre-Radioform: User controls physical device volume (0-100%)
+        // macOS with Radioform: Physical device locked at 100%, Radioform driver controls volume
+        //
+        // This gives Radioform full dynamic range to work with. The user controls volume
+        // through the Radioform virtual device (via menu bar app), which applies DSP-based
+        // volume control with the full bit depth of the audio signal.
         setPhysicalDeviceVolume(device.id, volume: 1.0)
 
         print("    Using device ID: \(device.id)")
@@ -317,6 +322,19 @@ class AudioEngine {
         return nil
     }
 
+    /// Sets the physical audio device volume to maximize Radioform's dynamic range control.
+    ///
+    /// Volume Control Architecture:
+    /// - **Before Radioform**: User adjusts physical device volume (0-100%) via System Settings
+    /// - **With Radioform**: Physical device locked at 100%, user controls Radioform virtual device
+    ///
+    /// This approach ensures:
+    /// 1. Maximum dynamic range - no signal degradation from reduced hardware volume
+    /// 2. Consistent audio quality - DSP operates on full-resolution signal
+    /// 3. Single control point - users adjust volume via Radioform driver in Sound settings
+    ///
+    /// If the device cannot reach 95%+ volume, a warning is displayed as the max volume
+    /// will be limited by the physical device's maximum.
     private func setPhysicalDeviceVolume(_ deviceID: AudioDeviceID, volume: Float32) {
         // Read initial volume for comparison
         let initialVolume = getPhysicalDeviceVolume(deviceID)

@@ -6,6 +6,8 @@ class AudioEngine {
     private let renderer: AudioRenderer
     private let registry: DeviceRegistry
     private var outputUnit: AudioUnit?
+    private var currentDeviceID: AudioDeviceID?
+    private var isRelockingVolume = false
 
     init(renderer: AudioRenderer, registry: DeviceRegistry) {
         self.renderer = renderer
@@ -108,9 +110,16 @@ class AudioEngine {
         try setRenderCallback()
         try initialize()
 
-        // Set physical device to maximum volume to give Radioform full control
-        // The Radioform driver device volume will be the user's control point
+        // VOLUME CONTROL ARCHITECTURE:
+        // macOS pre-Radioform: User controls physical device volume (0-100%)
+        // macOS with Radioform: Physical device locked at 100%, Radioform driver controls volume
+        //
+        // This gives Radioform full dynamic range to work with. The user controls volume
+        // through the Radioform virtual device (via menu bar app), which applies DSP-based
+        // volume control with the full bit depth of the audio signal.
         setPhysicalDeviceVolume(device.id, volume: 1.0)
+        currentDeviceID = device.id
+        addVolumeListener(for: device.id)
 
         print("    Using device ID: \(device.id)")
         print("    Physical device set to 100% (Radioform driver controls volume)")
@@ -118,10 +127,14 @@ class AudioEngine {
 
     /// Cleanup after a failed setup attempt
     private func cleanupFailedSetup() {
+        if let deviceID = currentDeviceID {
+            removeVolumeListener(for: deviceID)
+        }
         guard let unit = outputUnit else { return }
         AudioUnitUninitialize(unit)
         AudioComponentInstanceDispose(unit)
         outputUnit = nil
+        currentDeviceID = nil
     }
 
     func start() throws {
@@ -136,6 +149,10 @@ class AudioEngine {
     }
 
     func stop() {
+        if let deviceID = currentDeviceID {
+            removeVolumeListener(for: deviceID)
+        }
+
         guard let unit = outputUnit else { return }
 
         print("[Cleanup] Stopping audio unit...")
@@ -143,11 +160,17 @@ class AudioEngine {
         AudioUnitUninitialize(unit)
         AudioComponentInstanceDispose(unit)
         outputUnit = nil
+        currentDeviceID = nil
     }
 
     func switchDevice(_ deviceID: AudioDeviceID) throws {
         guard let unit = outputUnit else {
             throw AudioEngineError.unitNotInitialized
+        }
+
+        // Remove listener from old device
+        if let oldDeviceID = currentDeviceID {
+            removeVolumeListener(for: oldDeviceID)
         }
 
         var isRunning: UInt32 = 0
@@ -178,6 +201,11 @@ class AudioEngine {
         guard status == noErr else {
             throw AudioEngineError.deviceSwitchFailed(status)
         }
+
+        // Lock new device to 100% and start monitoring
+        setPhysicalDeviceVolume(deviceID, volume: 1.0)
+        currentDeviceID = deviceID
+        addVolumeListener(for: deviceID)
 
         if wasRunning {
             AudioOutputUnitStart(unit)
@@ -272,6 +300,68 @@ class AudioEngine {
         }
     }
 
+    // MARK: - Volume Listener
+
+    private func addVolumeListener(for deviceID: AudioDeviceID) {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+
+        // Listen on master channel
+        if AudioObjectHasProperty(deviceID, &address) {
+            AudioObjectAddPropertyListener(deviceID, &address, volumeChangedCallback, selfPtr)
+        }
+
+        // Listen on channels 1 and 2
+        for channel: UInt32 in 1...2 {
+            address.mElement = channel
+            if AudioObjectHasProperty(deviceID, &address) {
+                AudioObjectAddPropertyListener(deviceID, &address, volumeChangedCallback, selfPtr)
+            }
+        }
+    }
+
+    private func removeVolumeListener(for deviceID: AudioDeviceID) {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+
+        if AudioObjectHasProperty(deviceID, &address) {
+            AudioObjectRemovePropertyListener(deviceID, &address, volumeChangedCallback, selfPtr)
+        }
+
+        for channel: UInt32 in 1...2 {
+            address.mElement = channel
+            if AudioObjectHasProperty(deviceID, &address) {
+                AudioObjectRemovePropertyListener(deviceID, &address, volumeChangedCallback, selfPtr)
+            }
+        }
+    }
+
+    fileprivate func handleVolumeChanged() {
+        guard let deviceID = currentDeviceID else { return }
+        guard !isRelockingVolume else { return }
+
+        guard let currentVolume = getPhysicalDeviceVolume(deviceID), currentVolume < 0.95 else {
+            return
+        }
+
+        print("[AudioEngine] Physical device volume changed to \(String(format: "%.0f%%", currentVolume * 100)), re-locking to 100%")
+        isRelockingVolume = true
+        setPhysicalDeviceVolume(deviceID, volume: 1.0)
+        isRelockingVolume = false
+    }
+
+    // MARK: - Volume Queries
+
     private func getPhysicalDeviceVolume(_ deviceID: AudioDeviceID) -> Float32? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyVolumeScalar,
@@ -317,6 +407,19 @@ class AudioEngine {
         return nil
     }
 
+    /// Sets the physical audio device volume to maximize Radioform's dynamic range control.
+    ///
+    /// Volume Control Architecture:
+    /// - **Before Radioform**: User adjusts physical device volume (0-100%) via System Settings
+    /// - **With Radioform**: Physical device locked at 100%, user controls Radioform virtual device
+    ///
+    /// This approach ensures:
+    /// 1. Maximum dynamic range - no signal degradation from reduced hardware volume
+    /// 2. Consistent audio quality - DSP operates on full-resolution signal
+    /// 3. Single control point - users adjust volume via Radioform driver in Sound settings
+    ///
+    /// If the device cannot reach 95%+ volume, a warning is displayed as the max volume
+    /// will be limited by the physical device's maximum.
     private func setPhysicalDeviceVolume(_ deviceID: AudioDeviceID, volume: Float32) {
         // Read initial volume for comparison
         let initialVolume = getPhysicalDeviceVolume(deviceID)
@@ -387,6 +490,19 @@ class AudioEngine {
             print("    ⚠ This device may not support software volume control.")
         }
     }
+}
+
+// C-level callback for CoreAudio property listener — bridges to AudioEngine.handleVolumeChanged()
+private func volumeChangedCallback(
+    _ objectID: AudioObjectID,
+    _ numberAddresses: UInt32,
+    _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
+    _ clientData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let clientData = clientData else { return noErr }
+    let engine = Unmanaged<AudioEngine>.fromOpaque(clientData).takeUnretainedValue()
+    engine.handleVolumeChanged()
+    return noErr
 }
 
 enum AudioEngineError: Error, CustomStringConvertible {

@@ -52,9 +52,6 @@ Radioform is designed to be invisible:
 
 For development details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Technical Documentation
-
-- [Volume Control Architecture](docs/VOLUME_CONTROL_ARCHITECTURE.md) - How Radioform manages volume control and the relationship between macOS system volume and Radioform's volume control
 
 ## License
 

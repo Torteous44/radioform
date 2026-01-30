@@ -207,7 +207,13 @@ export default function Home() {
             for different gear—your studio monitors, your AirPods, your living
             room setup.
           </p>
-          <p>Built with C++ and Swift. Open source and free.</p>
+          <p>
+            Built with C++ and Swift. Open source and free. Learn more{" "}
+            <a href="/technology" className="underline">
+              here
+            </a>
+            .
+          </p>
         </div>
 
         {/* CTA Buttons */}

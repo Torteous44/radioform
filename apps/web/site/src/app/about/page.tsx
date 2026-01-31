@@ -84,7 +84,7 @@ export default function Technology() {
           </section>
           <section>
             <h2
-              className="text-xl font-normal mb-6"
+              className="text-2xl font-normal mb-6"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               What you can do
@@ -147,7 +147,7 @@ export default function Technology() {
           {/* How it works */}
           <section>
             <h2
-              className="text-xl font-normal mb-4"
+              className="text-2xl font-normal mb-4"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               Under the hood
@@ -167,7 +167,7 @@ export default function Technology() {
           {/* Performance */}
           <section>
             <h2
-              className="text-xl font-normal mb-4"
+              className="text-2xl font-normal mb-4"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               Performance
@@ -181,7 +181,7 @@ export default function Technology() {
           {/* Built with */}
           <section>
             <h2
-              className="text-xl font-normal mb-4"
+              className="text-2xl font-normal mb-4"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               Built with
@@ -196,7 +196,7 @@ export default function Technology() {
           {/* Platform */}
           <section>
             <h2
-              className="text-xl font-normal mb-4"
+              className="text-2xl font-normal mb-4"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               Compatibility
@@ -271,7 +271,7 @@ export default function Technology() {
         <p className="text-xs text-neutral-500 mt-16">
           Made by{" "}
           <a href="mailto:contact@pavloscompany.com" className="underline">
-            Pavlos Company RSA
+            Pavlos RSA
           </a>
         </p>
       </div>

@@ -4,9 +4,7 @@
     color-scheme: light only;
     --background: #ffffff;
     --foreground: #000000;
-    --font-serif:
-        "New York", "Iowan Old Style", "Palatino Linotype", "URW Palladio L",
-        P052, serif;
+    --font-serif: var(--font-instrument-serif), serif;
     --font-space-mono:
         "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
         "Liberation Mono", "Courier New";

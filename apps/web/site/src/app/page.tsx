@@ -57,7 +57,7 @@ function FAQ({ question, answer }: FAQItem) {
     <div className="border-b border-neutral-200">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full py-4 flex justify-between items-center text-left text-sm font-medium"
+        className="w-full py-3 flex justify-between items-center text-left text-sm font-medium"
       >
         {question}
         <span
@@ -75,7 +75,7 @@ function FAQ({ question, answer }: FAQItem) {
         }}
       >
         <div className="overflow-hidden">
-          <div className="text-sm text-neutral-600 leading-relaxed mb-6">
+          <div className="text-sm text-neutral-600 leading-relaxed mb-4">
             {answer}
           </div>
         </div>
@@ -158,7 +158,7 @@ export default function Home() {
       <div className="max-w-lg mx-auto">
         {/* Header */}
         <h1
-          className="text-3xl font-normal mb-6"
+          className="text-4xl font-normal mb-6"
           style={{ fontFamily: "var(--font-serif)" }}
         >
           Radioform
@@ -243,7 +243,7 @@ export default function Home() {
           ) : (
             <a
               href={DOWNLOAD_URL}
-              className="btn-primary px-4 py-1.5 text-white text-sm rounded-full inline-flex items-center justify-center gap-2"
+              className="btn-primary  px-4 py-1.5 text-white text-sm rounded-full inline-flex items-center justify-center gap-2"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -343,7 +343,7 @@ export default function Home() {
         <p className="text-xs text-neutral-500 mt-16">
           Made by{" "}
           <a href="mailto:contact@pavloscompany.com" className="underline">
-            Pavlos Company RSA
+            Pavlos RSA
           </a>
         </p>
       </div>

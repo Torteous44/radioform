@@ -184,29 +184,11 @@ export default function Home() {
       video.preload = "auto";
       video.muted = true;
     });
-    FAQ_IMAGES.forEach((src) => {
-      const img = new window.Image();
-      img.src = src;
-    });
   }, []);
 
   return (
     <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
       {!isMobile && <HoverTooltip {...hoverState} />}
-
-      {/* Corner dots - diagonal toward center */}
-      <div className="fixed top-4 left-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed top-7 left-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed top-10 left-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed top-4 right-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed top-7 right-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed top-10 right-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed bottom-4 left-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed bottom-7 left-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed bottom-10 left-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed bottom-4 right-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed bottom-7 right-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
-      <div className="fixed bottom-10 right-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
 
       <div className="max-w-lg mx-auto">
         {/* Hero */}
@@ -352,6 +334,7 @@ export default function Home() {
                         alt={`Step ${i + 1}`}
                         width={200}
                         height={200}
+                        priority
                         className="w-full aspect-square object-cover rounded mb-2"
                       />
                       <p className="text-xs">{step.text}</p>

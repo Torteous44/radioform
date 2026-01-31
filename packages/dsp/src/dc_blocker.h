@@ -14,6 +14,8 @@
 
 namespace radioform {
 
+static constexpr float DC_BLOCKER_PI = 3.14159265358979323846f;
+
 /**
  * @brief DC blocking filter (one-pole HPF at ~5Hz)
  *
@@ -36,7 +38,7 @@ public:
         // Calculate coefficient for one-pole HPF
         // coeff = 1 - (2 * pi * fc / fs)
         // For 5Hz @ 48kHz: coeff ~= 0.9993
-        const float w_c = 2.0f * M_PI * cutoff_hz / sample_rate;
+        const float w_c = 2.0f * DC_BLOCKER_PI * cutoff_hz / sample_rate;
         coeff_ = 1.0f - w_c;
 
         // Clamp to valid range

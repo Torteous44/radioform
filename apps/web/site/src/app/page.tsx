@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 
 function useIsMobile() {
@@ -16,6 +16,44 @@ function useIsMobile() {
   }, []);
 
   return isMobile;
+}
+
+function StretchedTitle() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+
+  const updateScale = useCallback(() => {
+    const container = containerRef.current;
+    const text = textRef.current;
+    if (!container || !text) return;
+    text.style.transform = "scaleX(1)";
+    const containerWidth = container.offsetWidth;
+    const textWidth = text.offsetWidth;
+    if (textWidth > 0) {
+      text.style.transform = `scaleX(${containerWidth / textWidth})`;
+    }
+  }, []);
+
+  useEffect(() => {
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, [updateScale]);
+
+  return (
+    <div ref={containerRef} className="mb-6 w-full">
+      <span
+        ref={textRef}
+        className="text-4xl font-normal whitespace-nowrap inline-block"
+        style={{
+          fontFamily: "var(--font-serif)",
+          transformOrigin: "left",
+        }}
+      >
+        Radioform
+      </span>
+    </div>
+  );
 }
 
 const DOWNLOAD_URL =
@@ -156,19 +194,25 @@ export default function Home() {
     <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
       {!isMobile && <HoverTooltip {...hoverState} />}
       <div className="max-w-lg mx-auto">
-        {/* Header */}
-        <h1
-          className="text-4xl font-normal mb-6"
-          style={{ fontFamily: "var(--font-serif)" }}
-        >
-          Radioform
-        </h1>
+        {/* Hero */}
+        <div className="w-full overflow-hidden hidden min-[480px]:block">
+          <Image
+            src="/painting1.avif"
+            alt=""
+            width={800}
+            height={1100}
+            priority
+            className="w-full -my-32 contrast-1000 blur-[0.5px] grayscale scale-y-[0.3] scale-x-[1.08]"
+          />
+        </div>
+
+        <StretchedTitle />
 
         {/* Copy */}
         <div className="text-sm leading-relaxed space-y-4 mb-8">
           <p>
-            Radioform is a macOS native equalizer that lets you shape your sound
-            system-wide.
+            Radioform is a free, open-source macOS native equalizer that lets
+            you shape your sound system-wide.
           </p>
           <p>
             It tucks into your{" "}
@@ -208,7 +252,7 @@ export default function Home() {
             room setup.
           </p>
           <p>
-            Built with C++ and Swift. Open source and free. Learn more{" "}
+            Created with C++ and Swift. Learn more{" "}
             <a href="/about" className="underline">
               here
             </a>
@@ -217,11 +261,11 @@ export default function Home() {
         </div>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-10">
+        <div className="grid grid-cols-2 gap-3 mb-10">
           {isMobile ? (
             <button
               disabled
-              className="px-5 py-1.5 bg-neutral-300 text-neutral-500 text-sm rounded-full inline-flex items-center justify-center gap-2 cursor-not-allowed"
+              className="px-5 py-1.5 bg-neutral-300 text-neutral-500 text-sm squircle inline-flex items-center justify-center gap-2 cursor-not-allowed"
               style={{
                 backgroundImage:
                   "radial-gradient(75% 50% at 50% 0%, rgba(255,255,255,0.3) 12%, transparent), radial-gradient(75% 50% at 50% 85%, rgba(255,255,255,0.15), transparent)",
@@ -243,7 +287,7 @@ export default function Home() {
           ) : (
             <a
               href={DOWNLOAD_URL}
-              className="btn-primary  px-4 py-1.5 text-white text-sm rounded-full inline-flex items-center justify-center gap-2"
+              className="btn-primary rounded-none  px-4 py-0 text-white text-sm rounded-full inline-flex items-center justify-center gap-2"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -251,7 +295,7 @@ export default function Home() {
                 height="14"
                 fill="currentColor"
                 viewBox="0 0 16 16"
-                className="mb-[2px]"
+                className="mb-[1px] scale-[0.9]"
               >
                 <path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282" />
               </svg>
@@ -262,7 +306,7 @@ export default function Home() {
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-secondary px-5 py-1.5 border border-neutral-300 text-sm rounded-full inline-flex items-center justify-center gap-2"
+            className="btn-secondary rounded-none px-5 py-0 border border-neutral-300 text-sm rounded-full inline-flex items-center justify-center gap-2"
           >
             GitHub
           </a>

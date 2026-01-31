@@ -39,13 +39,8 @@ struct radioform_dsp_engine {
     // Parameter smoothing
     ParameterSmoother preamp_smoother;
 
-    // Per-band parameter smoothers (for freq, Q, gain)
-    struct BandSmoothers {
-        ParameterSmoother frequency;
-        ParameterSmoother q_factor;
-        ParameterSmoother gain;
-    };
-    std::array<BandSmoothers, RADIOFORM_MAX_BANDS> band_smoothers;
+    // Coefficient interpolation duration in samples (~10ms)
+    int coeff_transition_samples;
 
     // Limiter
     SoftLimiter limiter;
@@ -92,12 +87,8 @@ struct radioform_dsp_engine {
         preamp_smoother.init(static_cast<float>(sample_rate), 10.0f); // 10ms ramp
         preamp_smoother.setValue(1.0f); // 0dB = gain of 1.0
 
-        // Initialize per-band parameter smoothers
-        for (auto& smoother : band_smoothers) {
-            smoother.frequency.init(static_cast<float>(sample_rate), 10.0f);
-            smoother.q_factor.init(static_cast<float>(sample_rate), 10.0f);
-            smoother.gain.init(static_cast<float>(sample_rate), 10.0f);
-        }
+        // Coefficient transition duration: ~10ms worth of samples
+        coeff_transition_samples = static_cast<int>(sample_rate * 0.01f);
 
         // Initialize limiter
         limiter.init(-0.1f); // -0.1 dB threshold
@@ -159,6 +150,9 @@ radioform_error_t radioform_dsp_set_sample_rate(
     // Reinitialize smoothers with new sample rate
     engine->preamp_smoother.init(static_cast<float>(sample_rate), 10.0f);
 
+    // Recalculate coefficient transition duration
+    engine->coeff_transition_samples = static_cast<int>(sample_rate * 0.01f);
+
     // Reinitialize DC blocker with new sample rate
     engine->dc_blocker.init(static_cast<float>(sample_rate), 5.0f);
 
@@ -187,6 +181,15 @@ void radioform_dsp_process_interleaved(
         if (input != output) {
             std::memcpy(output, input, num_frames * 2 * sizeof(float));
         }
+
+        // Decay peak meters so they don't hold stale values
+        constexpr float peak_decay_time_ms = 300.0f;
+        const float peak_decay_samples = peak_decay_time_ms * static_cast<float>(engine->sample_rate) / 1000.0f;
+        const float peak_decay = std::exp(-static_cast<float>(num_frames) / peak_decay_samples);
+        engine->peak_left.store(engine->peak_left.load(std::memory_order_relaxed) * peak_decay, std::memory_order_relaxed);
+        engine->peak_right.store(engine->peak_right.load(std::memory_order_relaxed) * peak_decay, std::memory_order_relaxed);
+
+        engine->frames_processed.fetch_add(num_frames, std::memory_order_relaxed);
         return;
     }
 
@@ -194,14 +197,18 @@ void radioform_dsp_process_interleaved(
     float buffer_peak_left = 0.0f;
     float buffer_peak_right = 0.0f;
 
+    // Check if preamp smoother has settled (skip per-sample ticks when stable)
+    const bool preamp_stable = engine->preamp_smoother.isStable();
+    const float preamp_gain_cached = preamp_stable ? engine->preamp_smoother.getCurrent() : 0.0f;
+
     // Process each frame
     for (uint32_t i = 0; i < num_frames; i++) {
         // Deinterleave
         float left = input[i * 2];
         float right = input[i * 2 + 1];
 
-        // Apply preamp (with smoothing)
-        const float preamp_gain = engine->preamp_smoother.next();
+        // Apply preamp (skip smoother ticks when stable)
+        const float preamp_gain = preamp_stable ? preamp_gain_cached : engine->preamp_smoother.next();
         left *= preamp_gain;
         right *= preamp_gain;
 
@@ -230,13 +237,17 @@ void radioform_dsp_process_interleaved(
         output[i * 2 + 1] = right;
     }
 
-    // Update peak meters with exponential decay (ballistics)
-    constexpr float peak_decay = 0.9999f;  // Very slow decay for peak hold behavior
+    // Update peak meters with sample-rate-independent exponential decay
+    // Decay time constant: 300ms (meter falls to ~37% of peak in 300ms)
+    constexpr float peak_decay_time_ms = 300.0f;
+    const float peak_decay_samples = peak_decay_time_ms * static_cast<float>(engine->sample_rate) / 1000.0f;
+    const float peak_decay = std::exp(-static_cast<float>(num_frames) / peak_decay_samples);
+
     float current_peak_left = engine->peak_left.load(std::memory_order_relaxed);
     float current_peak_right = engine->peak_right.load(std::memory_order_relaxed);
 
     // Attack: instant rise to new peak
-    // Decay: exponential fall
+    // Decay: exponential fall (consistent regardless of buffer size)
     float new_peak_left = std::max(buffer_peak_left, current_peak_left * peak_decay);
     float new_peak_right = std::max(buffer_peak_right, current_peak_right * peak_decay);
 
@@ -253,9 +264,12 @@ void radioform_dsp_process_interleaved(
     // Calculate CPU load as percentage
     float instant_load = static_cast<float>((elapsed.count() / available_time) * 100.0);
 
-    // Apply exponential moving average (alpha = 0.1 for smoothing)
+    // Buffer-size-independent EMA: smoothing time constant ~500ms
+    constexpr float cpu_smooth_time_ms = 500.0f;
+    const float cpu_smooth_samples = cpu_smooth_time_ms * static_cast<float>(engine->sample_rate) / 1000.0f;
+    const float cpu_alpha = 1.0f - std::exp(-static_cast<float>(num_frames) / cpu_smooth_samples);
     float current_load = engine->cpu_load_percent.load(std::memory_order_relaxed);
-    float smoothed_load = 0.9f * current_load + 0.1f * instant_load;
+    float smoothed_load = current_load + cpu_alpha * (instant_load - current_load);
     engine->cpu_load_percent.store(smoothed_load, std::memory_order_relaxed);
 
     // Update statistics
@@ -286,6 +300,15 @@ void radioform_dsp_process_planar(
         if (input_right != output_right) {
             std::memcpy(output_right, input_right, num_frames * sizeof(float));
         }
+
+        // Decay peak meters so they don't hold stale values
+        constexpr float peak_decay_time_ms = 300.0f;
+        const float peak_decay_samples = peak_decay_time_ms * static_cast<float>(engine->sample_rate) / 1000.0f;
+        const float peak_decay = std::exp(-static_cast<float>(num_frames) / peak_decay_samples);
+        engine->peak_left.store(engine->peak_left.load(std::memory_order_relaxed) * peak_decay, std::memory_order_relaxed);
+        engine->peak_right.store(engine->peak_right.load(std::memory_order_relaxed) * peak_decay, std::memory_order_relaxed);
+
+        engine->frames_processed.fetch_add(num_frames, std::memory_order_relaxed);
         return;
     }
 
@@ -297,11 +320,20 @@ void radioform_dsp_process_planar(
         std::memcpy(output_right, input_right, num_frames * sizeof(float));
     }
 
-    // Apply preamp (with smoothing)
-    for (uint32_t i = 0; i < num_frames; i++) {
-        const float preamp_gain = engine->preamp_smoother.next();
-        output_left[i] *= preamp_gain;
-        output_right[i] *= preamp_gain;
+    // Apply preamp (skip smoother ticks when stable)
+    const bool preamp_stable = engine->preamp_smoother.isStable();
+    if (preamp_stable) {
+        const float gain = engine->preamp_smoother.getCurrent();
+        for (uint32_t i = 0; i < num_frames; i++) {
+            output_left[i] *= gain;
+            output_right[i] *= gain;
+        }
+    } else {
+        for (uint32_t i = 0; i < num_frames; i++) {
+            const float preamp_gain = engine->preamp_smoother.next();
+            output_left[i] *= preamp_gain;
+            output_right[i] *= preamp_gain;
+        }
     }
 
     // Process through EQ bands
@@ -336,13 +368,16 @@ void radioform_dsp_process_planar(
         buffer_peak_right = std::max(buffer_peak_right, std::abs(output_right[i]));
     }
 
-    // Update peak meters with exponential decay (ballistics)
-    constexpr float peak_decay = 0.9999f;  // Very slow decay for peak hold behavior
+    // Update peak meters with sample-rate-independent exponential decay
+    constexpr float peak_decay_time_ms = 300.0f;
+    const float peak_decay_samples = peak_decay_time_ms * static_cast<float>(engine->sample_rate) / 1000.0f;
+    const float peak_decay = std::exp(-static_cast<float>(num_frames) / peak_decay_samples);
+
     float current_peak_left = engine->peak_left.load(std::memory_order_relaxed);
     float current_peak_right = engine->peak_right.load(std::memory_order_relaxed);
 
     // Attack: instant rise to new peak
-    // Decay: exponential fall
+    // Decay: exponential fall (consistent regardless of buffer size)
     float new_peak_left = std::max(buffer_peak_left, current_peak_left * peak_decay);
     float new_peak_right = std::max(buffer_peak_right, current_peak_right * peak_decay);
 
@@ -359,9 +394,12 @@ void radioform_dsp_process_planar(
     // Calculate CPU load as percentage
     float instant_load = static_cast<float>((elapsed.count() / available_time) * 100.0);
 
-    // Apply exponential moving average (alpha = 0.1 for smoothing)
+    // Buffer-size-independent EMA: smoothing time constant ~500ms
+    constexpr float cpu_smooth_time_ms = 500.0f;
+    const float cpu_smooth_samples = cpu_smooth_time_ms * static_cast<float>(engine->sample_rate) / 1000.0f;
+    const float cpu_alpha = 1.0f - std::exp(-static_cast<float>(num_frames) / cpu_smooth_samples);
     float current_load = engine->cpu_load_percent.load(std::memory_order_relaxed);
-    float smoothed_load = 0.9f * current_load + 0.1f * instant_load;
+    float smoothed_load = current_load + cpu_alpha * (instant_load - current_load);
     engine->cpu_load_percent.store(smoothed_load, std::memory_order_relaxed);
 
     // Update statistics
@@ -395,20 +433,10 @@ radioform_error_t radioform_dsp_apply_preset(
         const radioform_band_t& band = preset->bands[i];
 
         if (band.enabled) {
+            // Instant coefficient set on preset load (no smoothing needed)
             engine->bands[i].setCoeffs(band, static_cast<float>(engine->sample_rate));
-
-            // Set smoother targets for this band
-            engine->band_smoothers[i].frequency.setTarget(band.frequency_hz);
-            engine->band_smoothers[i].q_factor.setTarget(band.q_factor);
-            engine->band_smoothers[i].gain.setTarget(band.gain_db);
         } else {
-            // Disabled band - set to flat response
             engine->bands[i].setCoeffsFlat();
-
-            // Reset smoothers to neutral values
-            engine->band_smoothers[i].frequency.setValue(1000.0f);
-            engine->band_smoothers[i].q_factor.setValue(1.0f);
-            engine->band_smoothers[i].gain.setValue(0.0f);
         }
     }
 
@@ -464,13 +492,12 @@ void radioform_dsp_update_band_gain(
     // Update preset
     engine->current_preset.bands[band_index].gain_db = gain_db;
 
-    // Set smoothing target (will be applied gradually)
-    engine->band_smoothers[band_index].gain.setTarget(gain_db);
-
-    // Also update coefficients immediately for instant response
-    // The smoother will handle gradual transitions on subsequent updates
+    // Smoothly interpolate coefficients to prevent zipper noise
     const radioform_band_t& band = engine->current_preset.bands[band_index];
-    engine->bands[band_index].setCoeffs(band, static_cast<float>(engine->sample_rate));
+    engine->bands[band_index].setCoeffsSmooth(
+        band, static_cast<float>(engine->sample_rate),
+        engine->coeff_transition_samples
+    );
 }
 
 void radioform_dsp_update_preamp(
@@ -503,12 +530,12 @@ void radioform_dsp_update_band_frequency(
     // Update preset
     engine->current_preset.bands[band_index].frequency_hz = frequency_hz;
 
-    // Set smoothing target (will be applied gradually)
-    engine->band_smoothers[band_index].frequency.setTarget(frequency_hz);
-
-    // Update coefficients immediately for instant response
+    // Smoothly interpolate coefficients to prevent zipper noise
     const radioform_band_t& band = engine->current_preset.bands[band_index];
-    engine->bands[band_index].setCoeffs(band, static_cast<float>(engine->sample_rate));
+    engine->bands[band_index].setCoeffsSmooth(
+        band, static_cast<float>(engine->sample_rate),
+        engine->coeff_transition_samples
+    );
 }
 
 void radioform_dsp_update_band_q(
@@ -524,12 +551,12 @@ void radioform_dsp_update_band_q(
     // Update preset
     engine->current_preset.bands[band_index].q_factor = q_factor;
 
-    // Set smoothing target (will be applied gradually)
-    engine->band_smoothers[band_index].q_factor.setTarget(q_factor);
-
-    // Update coefficients immediately for instant response
+    // Smoothly interpolate coefficients to prevent zipper noise
     const radioform_band_t& band = engine->current_preset.bands[band_index];
-    engine->bands[band_index].setCoeffs(band, static_cast<float>(engine->sample_rate));
+    engine->bands[band_index].setCoeffsSmooth(
+        band, static_cast<float>(engine->sample_rate),
+        engine->coeff_transition_samples
+    );
 }
 
 // ============================================================================

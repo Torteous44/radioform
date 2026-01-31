@@ -209,7 +209,7 @@ export default function Home() {
           </p>
           <p>
             Built with C++ and Swift. Open source and free. Learn more{" "}
-            <a href="/technology" className="underline">
+            <a href="/about" className="underline">
               here
             </a>
             .
@@ -221,12 +221,11 @@ export default function Home() {
           {isMobile ? (
             <button
               disabled
-              className="px-5 py-2.5 bg-neutral-300 text-neutral-500 text-sm rounded-full inline-flex items-center justify-center gap-2 cursor-not-allowed"
+              className="px-5 py-1.5 bg-neutral-300 text-neutral-500 text-sm rounded-full inline-flex items-center justify-center gap-2 cursor-not-allowed"
               style={{
                 backgroundImage:
                   "radial-gradient(75% 50% at 50% 0%, rgba(255,255,255,0.3) 12%, transparent), radial-gradient(75% 50% at 50% 85%, rgba(255,255,255,0.15), transparent)",
-                boxShadow:
-                  "inset 0 0 2px 1px rgba(255, 255, 255, 0.2), 0 1px 4px 1px rgba(0, 0, 0, 0.1)",
+                boxShadow: "inset 0 0 2px 1px rgba(255, 255, 255, 0.2)",
               }}
             >
               <svg

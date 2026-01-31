@@ -48,9 +48,11 @@ packages/dsp/
 │   └── radioform_dsp.h      # Engine API
 ├── src/                  # C++ implementation
 │   ├── engine.cpp           # DSP engine
-│   ├── biquad.h             # RBJ biquad filters (7 types)
-│   ├── smoothing.h          # Parameter smoothing
-│   ├── limiter.h            # Soft limiter
+│   ├── biquad.h / .cpp      # RBJ biquad filters (7 types)
+│   ├── smoothing.h / .cpp   # Parameter smoothing
+│   ├── limiter.h / .cpp     # Soft limiter
+│   ├── dc_blocker.h         # DC offset removal filter
+│   ├── cpu_util.h           # Denormal suppression (x86/ARM)
 │   ├── preset.cpp           # Preset validation
 │   └── version.cpp          # Version info
 ├── bridge/               # Objective-C++ bridge
@@ -68,11 +70,6 @@ packages/dsp/
 │   └── test_frequency_response.cpp  # Accuracy validation
 ├── tools/                # Command-line tools
 │   └── wav_processor.cpp        # Audio file processor
-├── docs/                 # Documentation
-│   ├── SWIFT_INTEGRATION.md     # Swift guide
-│   └── AUDIT_REPORT.md          # Audit report
-├── vendor/               # Third-party (empty)
-│   └── README.md
 └── CMakeLists.txt        # Build configuration
 ```
 
@@ -103,7 +100,7 @@ cmake --build .
 
 ## Swift Usage
 
-See `docs/SWIFT_INTEGRATION.md` for the full guide. Quick example:
+See `bridge/SwiftUsageExample.swift` for a full example. Quick usage:
 
 ```swift
 let engine = try RadioformDSPEngine(sampleRate: 48000)
@@ -162,6 +159,8 @@ void radioform_dsp_process_interleaved(...);
 void radioform_dsp_process_planar(...);
 void radioform_dsp_set_bypass(...);
 void radioform_dsp_update_band_gain(...);
+void radioform_dsp_update_band_frequency(...);
+void radioform_dsp_update_band_q(...);
 void radioform_dsp_update_preamp(...);
 ```
 
@@ -187,8 +186,6 @@ cmake .. -DBUILD_TOOLS=OFF           # Skip command-line tools
 
 ## Documentation
 
-- `docs/SWIFT_INTEGRATION.md` — Swift integration guide
-- `docs/AUDIT_REPORT.md` — Audit report
 - `bridge/README.md` — ObjC++ bridge overview
 - `bridge/SwiftUsageExample.swift` — Usage examples
 

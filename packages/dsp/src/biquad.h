@@ -1,6 +1,6 @@
 /**
  * @file biquad.h
- * @brief Biquad filter implementation wrapping lsp-dsp-lib
+ * @brief Self-contained biquad filter using RBJ cookbook formulas
  */
 
 #ifndef RADIOFORM_BIQUAD_H
@@ -11,6 +11,8 @@
 #include <cstring>
 
 namespace radioform {
+
+static constexpr float PI = 3.14159265358979323846f;
 
 /**
  * @brief Biquad filter coefficients
@@ -47,6 +49,7 @@ public:
     void reset() {
         state_left_ = {};
         state_right_ = {};
+        transition_remaining_ = 0;
     }
 
     /**
@@ -58,13 +61,43 @@ public:
         coeffs_.b2 = 0.0f;
         coeffs_.a1 = 0.0f;
         coeffs_.a2 = 0.0f;
+        transition_remaining_ = 0;
     }
 
     /**
-     * @brief Set coefficients from band configuration
+     * @brief Set coefficients from band configuration (instant, no smoothing)
      */
     void setCoeffs(const radioform_band_t& band, float sample_rate) {
         coeffs_ = calculateCoeffs(band, sample_rate);
+        transition_remaining_ = 0;
+    }
+
+    /**
+     * @brief Set coefficients with linear interpolation to prevent zipper noise
+     *
+     * Linearly interpolates from current coefficients to target over
+     * transition_samples. Zero overhead once transition completes.
+     *
+     * @param band Band configuration
+     * @param sample_rate Sample rate in Hz
+     * @param transition_samples Number of samples to interpolate over (~10ms)
+     */
+    void setCoeffsSmooth(const radioform_band_t& band, float sample_rate, int transition_samples) {
+        target_coeffs_ = calculateCoeffs(band, sample_rate);
+
+        if (transition_samples <= 0) {
+            coeffs_ = target_coeffs_;
+            transition_remaining_ = 0;
+            return;
+        }
+
+        const float inv_n = 1.0f / static_cast<float>(transition_samples);
+        coeffs_delta_.b0 = (target_coeffs_.b0 - coeffs_.b0) * inv_n;
+        coeffs_delta_.b1 = (target_coeffs_.b1 - coeffs_.b1) * inv_n;
+        coeffs_delta_.b2 = (target_coeffs_.b2 - coeffs_.b2) * inv_n;
+        coeffs_delta_.a1 = (target_coeffs_.a1 - coeffs_.a1) * inv_n;
+        coeffs_delta_.a2 = (target_coeffs_.a2 - coeffs_.a2) * inv_n;
+        transition_remaining_ = transition_samples;
     }
 
     /**
@@ -92,78 +125,28 @@ public:
 private:
     /**
      * @brief Process one sample (mono) using Direct Form 2 Transposed
+     *
+     * During coefficient transitions, linearly interpolates coefficients
+     * per sample to prevent zipper noise. Zero overhead when stable.
      */
     inline float processSampleMono(float input, BiquadState& state) {
+        // Interpolate coefficients during transition (branch predicted not-taken when stable)
+        if (transition_remaining_ > 0) {
+            coeffs_.b0 += coeffs_delta_.b0;
+            coeffs_.b1 += coeffs_delta_.b1;
+            coeffs_.b2 += coeffs_delta_.b2;
+            coeffs_.a1 += coeffs_delta_.a1;
+            coeffs_.a2 += coeffs_delta_.a2;
+            if (--transition_remaining_ == 0) {
+                // Snap to target to prevent float drift
+                coeffs_ = target_coeffs_;
+            }
+        }
+
         float output = coeffs_.b0 * input + state.z1;
         state.z1 = coeffs_.b1 * input - coeffs_.a1 * output + state.z2;
         state.z2 = coeffs_.b2 * input - coeffs_.a2 * output;
         return output;
-    }
-
-    /**
-     * @brief Calculate shelving filter using matched z-transform
-     *
-     * Matched transform gives more accurate analog-like response for shelving filters
-     * compared to bilinear transform. It eliminates cramping at high frequencies.
-     *
-     * @param band Band configuration
-     * @param sample_rate Sample rate in Hz
-     * @param is_low_shelf true for low shelf, false for high shelf
-     * @return Biquad coefficients
-     */
-    BiquadCoeffs calculateShelfMatchedTransform(
-        const radioform_band_t& band,
-        float sample_rate,
-        bool is_low_shelf
-    ) {
-        BiquadCoeffs c;
-
-        const float freq = band.frequency_hz;
-        const float gain_db = band.gain_db;
-        const float Q = band.q_factor;
-
-        // Linear gain (not sqrt)
-        const float A = std::pow(10.0f, gain_db / 20.0f);
-
-        // Prewarped frequency
-        const float w0 = 2.0f * M_PI * freq / sample_rate;
-        const float tan_w0_2 = std::tan(w0 / 2.0f);
-
-        // Analog shelf pole/zero calculation
-        const float alpha = std::sqrt(A);
-        const float beta = std::sqrt(A) / Q;
-
-        if (is_low_shelf) {
-            // Low shelf matched transform
-            const float b0_analog = A;
-            const float b1_analog = beta * alpha;
-            const float a0_analog = 1.0f;
-            const float a1_analog = beta / alpha;
-
-            // Map to digital domain using matched transform
-            const float norm = a0_analog + a1_analog * tan_w0_2;
-            c.b0 = (b0_analog + b1_analog * tan_w0_2) / norm;
-            c.b1 = (b0_analog - b1_analog * tan_w0_2) / norm;
-            c.b2 = 0.0f;
-            c.a1 = (a0_analog - a1_analog * tan_w0_2) / norm;
-            c.a2 = 0.0f;
-        } else {
-            // High shelf matched transform
-            const float b0_analog = 1.0f;
-            const float b1_analog = beta / alpha;
-            const float a0_analog = A;
-            const float a1_analog = beta * alpha;
-
-            // Map to digital domain using matched transform
-            const float norm = a0_analog * tan_w0_2 + a1_analog;
-            c.b0 = (b0_analog * tan_w0_2 + b1_analog) / norm;
-            c.b1 = (b0_analog * tan_w0_2 - b1_analog) / norm;
-            c.b2 = 0.0f;
-            c.a1 = (a0_analog * tan_w0_2 - a1_analog) / norm;
-            c.a2 = 0.0f;
-        }
-
-        return c;
     }
 
     /**
@@ -181,7 +164,7 @@ private:
         const float gain_db = band.gain_db;
         const float Q = band.q_factor;
 
-        const float w0 = 2.0f * M_PI * freq / sample_rate;
+        const float w0 = 2.0f * PI * freq / sample_rate;
         const float cos_w0 = std::cos(w0);
         const float sin_w0 = std::sin(w0);
 
@@ -289,6 +272,9 @@ private:
     }
 
     BiquadCoeffs coeffs_;
+    BiquadCoeffs target_coeffs_;
+    BiquadCoeffs coeffs_delta_;
+    int transition_remaining_ = 0;
     BiquadState state_left_;
     BiquadState state_right_;
 };

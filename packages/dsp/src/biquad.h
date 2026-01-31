@@ -47,6 +47,7 @@ public:
     void reset() {
         state_left_ = {};
         state_right_ = {};
+        transition_remaining_ = 0;
     }
 
     /**
@@ -58,13 +59,43 @@ public:
         coeffs_.b2 = 0.0f;
         coeffs_.a1 = 0.0f;
         coeffs_.a2 = 0.0f;
+        transition_remaining_ = 0;
     }
 
     /**
-     * @brief Set coefficients from band configuration
+     * @brief Set coefficients from band configuration (instant, no smoothing)
      */
     void setCoeffs(const radioform_band_t& band, float sample_rate) {
         coeffs_ = calculateCoeffs(band, sample_rate);
+        transition_remaining_ = 0;
+    }
+
+    /**
+     * @brief Set coefficients with linear interpolation to prevent zipper noise
+     *
+     * Linearly interpolates from current coefficients to target over
+     * transition_samples. Zero overhead once transition completes.
+     *
+     * @param band Band configuration
+     * @param sample_rate Sample rate in Hz
+     * @param transition_samples Number of samples to interpolate over (~10ms)
+     */
+    void setCoeffsSmooth(const radioform_band_t& band, float sample_rate, int transition_samples) {
+        target_coeffs_ = calculateCoeffs(band, sample_rate);
+
+        if (transition_samples <= 0) {
+            coeffs_ = target_coeffs_;
+            transition_remaining_ = 0;
+            return;
+        }
+
+        const float inv_n = 1.0f / static_cast<float>(transition_samples);
+        coeffs_delta_.b0 = (target_coeffs_.b0 - coeffs_.b0) * inv_n;
+        coeffs_delta_.b1 = (target_coeffs_.b1 - coeffs_.b1) * inv_n;
+        coeffs_delta_.b2 = (target_coeffs_.b2 - coeffs_.b2) * inv_n;
+        coeffs_delta_.a1 = (target_coeffs_.a1 - coeffs_.a1) * inv_n;
+        coeffs_delta_.a2 = (target_coeffs_.a2 - coeffs_.a2) * inv_n;
+        transition_remaining_ = transition_samples;
     }
 
     /**
@@ -92,8 +123,24 @@ public:
 private:
     /**
      * @brief Process one sample (mono) using Direct Form 2 Transposed
+     *
+     * During coefficient transitions, linearly interpolates coefficients
+     * per sample to prevent zipper noise. Zero overhead when stable.
      */
     inline float processSampleMono(float input, BiquadState& state) {
+        // Interpolate coefficients during transition (branch predicted not-taken when stable)
+        if (transition_remaining_ > 0) {
+            coeffs_.b0 += coeffs_delta_.b0;
+            coeffs_.b1 += coeffs_delta_.b1;
+            coeffs_.b2 += coeffs_delta_.b2;
+            coeffs_.a1 += coeffs_delta_.a1;
+            coeffs_.a2 += coeffs_delta_.a2;
+            if (--transition_remaining_ == 0) {
+                // Snap to target to prevent float drift
+                coeffs_ = target_coeffs_;
+            }
+        }
+
         float output = coeffs_.b0 * input + state.z1;
         state.z1 = coeffs_.b1 * input - coeffs_.a1 * output + state.z2;
         state.z2 = coeffs_.b2 * input - coeffs_.a2 * output;
@@ -289,6 +336,9 @@ private:
     }
 
     BiquadCoeffs coeffs_;
+    BiquadCoeffs target_coeffs_;
+    BiquadCoeffs coeffs_delta_;
+    int transition_remaining_ = 0;
     BiquadState state_left_;
     BiquadState state_right_;
 };

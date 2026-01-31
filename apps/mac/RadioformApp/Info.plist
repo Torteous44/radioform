@@ -13,9 +13,9 @@
 	<key>CFBundleName</key>
 	<string>Radioform</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.7</string>
+	<string>1.1.8</string>
 	<key>CFBundleVersion</key>
-	<string>1.1.7</string>
+	<string>1.1.8</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSPrincipalClass</key>

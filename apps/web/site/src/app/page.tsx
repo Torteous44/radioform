@@ -193,6 +193,21 @@ export default function Home() {
   return (
     <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
       {!isMobile && <HoverTooltip {...hoverState} />}
+
+      {/* Corner dots - diagonal toward center */}
+      <div className="fixed top-4 left-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed top-7 left-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed top-10 left-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed top-4 right-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed top-7 right-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed top-10 right-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed bottom-4 left-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed bottom-7 left-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed bottom-10 left-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed bottom-4 right-4 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed bottom-7 right-7 w-1.5 h-1.5 bg-black rounded-full z-50" />
+      <div className="fixed bottom-10 right-10 w-1.5 h-1.5 bg-black rounded-full z-50" />
+
       <div className="max-w-lg mx-auto">
         {/* Hero */}
         <div className="w-full overflow-hidden hidden min-[480px]:block">

@@ -31,7 +31,7 @@ export default function Technology() {
         <div className="relative mt-6 mb-12 hover-underline">
           <Link
             href="/"
-            className="absolute top-0 left-0 z-10 text-[10px] text-black hover:border-b hover:border-black"
+            className="absolute top-0 left-0 z-10 text-[10px] text-black  hover:border-black"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

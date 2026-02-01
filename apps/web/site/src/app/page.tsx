@@ -1,42 +1,29 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 
 function StretchedTitle() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
-
-  const updateScale = useCallback(() => {
-    const container = containerRef.current;
-    const text = textRef.current;
-    if (!container || !text) return;
-    text.style.transform = "scaleX(1)";
-    const containerWidth = container.offsetWidth;
-    const textWidth = text.offsetWidth;
-    if (textWidth > 0) {
-      text.style.transform = `scaleX(${containerWidth / textWidth})`;
-    }
-  }, []);
-
-  useLayoutEffect(() => {
-    updateScale();
-    window.addEventListener("resize", updateScale);
-    return () => window.removeEventListener("resize", updateScale);
-  }, [updateScale]);
-
   return (
-    <div ref={containerRef} className="mb-6 w-full">
-      <span
-        ref={textRef}
-        className="text-4xl font-normal whitespace-nowrap inline-block"
-        style={{
-          fontFamily: "var(--font-serif)",
-          transformOrigin: "left",
-        }}
+    <div className="mb-6 w-full">
+      <svg
+        className="w-full h-12"
+        viewBox="0 0 600 48"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Radioform"
       >
-        Radioform
-      </span>
+        <text
+          x="0"
+          y="36"
+          textLength="600"
+          lengthAdjust="spacingAndGlyphs"
+          style={{ fontFamily: "var(--font-serif)", fontSize: "36px" }}
+          fill="currentColor"
+        >
+          Radioform
+        </text>
+      </svg>
     </div>
   );
 }
@@ -180,12 +167,12 @@ export default function Home() {
         {/* Hero */}
         <div className="w-full overflow-hidden hidden min-[480px]:block">
           <Image
-            src="/painting1.avif"
+            src="/painting1_baked.avif"
             alt=""
             width={800}
-            height={1100}
+            height={330}
             priority
-            className="w-full -my-32 contrast-1000 blur-[0.5px] grayscale scale-y-[0.3] scale-x-[1.08]"
+            className="w-full object-cover scale-x-[1.1]"
           />
         </div>
 

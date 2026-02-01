@@ -1,42 +1,28 @@
-"use client";
-
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import Image from "next/image";
+import HoverCopy from "./components/HoverCopy";
+import FAQ from "./components/FAQ";
 
 function StretchedTitle() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
-
-  const updateScale = useCallback(() => {
-    const container = containerRef.current;
-    const text = textRef.current;
-    if (!container || !text) return;
-    text.style.transform = "scaleX(1)";
-    const containerWidth = container.offsetWidth;
-    const textWidth = text.offsetWidth;
-    if (textWidth > 0) {
-      text.style.transform = `scaleX(${containerWidth / textWidth})`;
-    }
-  }, []);
-
-  useLayoutEffect(() => {
-    updateScale();
-    window.addEventListener("resize", updateScale);
-    return () => window.removeEventListener("resize", updateScale);
-  }, [updateScale]);
-
   return (
-    <div ref={containerRef} className="mb-6 w-full">
-      <span
-        ref={textRef}
-        className="text-4xl font-normal whitespace-nowrap inline-block"
-        style={{
-          fontFamily: "var(--font-serif)",
-          transformOrigin: "left",
-        }}
+    <div className="mb-6 w-full">
+      <svg
+        className="w-full h-12"
+        viewBox="0 0 600 48"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Radioform"
       >
-        Radioform
-      </span>
+        <text
+          x="0"
+          y="36"
+          textLength="600"
+          lengthAdjust="spacingAndGlyphs"
+          style={{ fontFamily: "var(--font-serif)", fontSize: "36px" }}
+          fill="currentColor"
+        >
+          Radioform
+        </text>
+      </svg>
     </div>
   );
 }
@@ -45,15 +31,6 @@ const DOWNLOAD_URL =
   "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg";
 const GITHUB_URL = "https://github.com/Torteous44/radioform";
 
-const VIDEOS = {
-  menubar:
-    "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614903/mb_1_mqccrc.mp4",
-  presets:
-    "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-preset_1_y7vonk.mp4",
-  custom:
-    "https://res.cloudinary.com/dwgn0lwli/video/upload/v1767614904/mb-custom_1_psrdyb.mp4",
-};
-
 const FAQ_IMAGES = [
   "/instructions/frame1.avif",
   "/instructions/frame2.avif",
@@ -61,131 +38,25 @@ const FAQ_IMAGES = [
   "/instructions/frame4.avif",
 ];
 
-interface HoverState {
-  visible: boolean;
-  src: string;
-  x: number;
-  y: number;
-}
-
 interface FAQItem {
   question: string;
   answer: React.ReactNode;
 }
 
-function FAQ({ question, answer }: FAQItem) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="border-b border-neutral-200">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full py-3 flex justify-between items-center text-left text-sm font-medium"
-      >
-        {question}
-        <span
-          className="text-neutral-400 transition-transform duration-200"
-          style={{ transform: isOpen ? "rotate(45deg)" : "rotate(0deg)" }}
-        >
-          +
-        </span>
-      </button>
-      <div
-        className="grid transition-all duration-300 ease-out"
-        style={{
-          gridTemplateRows: isOpen ? "1fr" : "0fr",
-          opacity: isOpen ? 1 : 0,
-        }}
-      >
-        <div className="overflow-hidden">
-          <div className="text-sm text-neutral-600 leading-relaxed mb-4">
-            {answer}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HoverTooltip({ src, x, y, visible }: HoverState) {
-  return (
-    <div
-      className="fixed z-50 pointer-events-none transition-all duration-200 ease-out"
-      style={{
-        left: `${x}px`,
-        top: `${y}px`,
-        transform: "translate(16px, -50%)",
-        opacity: visible ? 1 : 0,
-        scale: visible ? "1" : "0.95",
-      }}
-    >
-      <div className="bg-white border border-neutral-200 rounded overflow-hidden shadow-lg w-[200px] h-[200px]">
-        {src && (
-          <video
-            key={src}
-            src={src}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover"
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function Home() {
-  const [hoverState, setHoverState] = useState<HoverState>({
-    visible: false,
-    src: "",
-    x: 0,
-    y: 0,
-  });
-
-  const handleHover = (src: string) => {
-    setHoverState((prev) => ({ ...prev, visible: true, src }));
-  };
-
-  const handleMove = (e: React.MouseEvent) => {
-    setHoverState((prev) => ({
-      ...prev,
-      x: e.clientX,
-      y: e.clientY,
-    }));
-  };
-
-  const handleLeave = () => {
-    setHoverState((prev) => ({ ...prev, visible: false }));
-  };
-
-  // Preload videos and images
-  useEffect(() => {
-    Object.values(VIDEOS).forEach((url) => {
-      const video = document.createElement("video");
-      video.src = url;
-      video.preload = "auto";
-      video.muted = true;
-    });
-  }, []);
-
   return (
     <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
-      <div className="hidden md:block">
-        <HoverTooltip {...hoverState} />
-      </div>
-
       <div className="max-w-lg mx-auto">
         {/* Hero */}
         <div className="w-full overflow-hidden hidden min-[480px]:block">
           <Image
-            src="/painting1.avif"
+            src="/painting1_baked.avif"
             alt=""
             width={800}
-            height={1100}
+            height={330}
             priority
-            className="w-full -my-32 contrast-1000 blur-[0.5px] grayscale scale-y-[0.3] scale-x-[1.08]"
+            sizes="(min-width: 768px) 512px, 100vw"
+            className="w-full object-cover scale-x-[1.1]"
           />
         </div>
 
@@ -197,37 +68,7 @@ export default function Home() {
             Radioform is a free, open-source macOS native equalizer that lets
             you shape your sound system-wide.
           </p>
-          <p>
-            It tucks into your{" "}
-            <span
-              className="md:underline md:cursor-pointer"
-              onMouseEnter={() => handleHover(VIDEOS.menubar)}
-              onMouseMove={handleMove}
-              onMouseLeave={handleLeave}
-            >
-              menubar
-            </span>{" "}
-            and stays out of your way. Pick from{" "}
-            <span
-              className="md:underline md:cursor-pointer"
-              onMouseEnter={() => handleHover(VIDEOS.presets)}
-              onMouseMove={handleMove}
-              onMouseLeave={handleLeave}
-            >
-              ready-made presets
-            </span>{" "}
-            or{" "}
-            <span
-              className="md:underline md:cursor-pointer"
-              onMouseEnter={() => handleHover(VIDEOS.custom)}
-              onMouseMove={handleMove}
-              onMouseLeave={handleLeave}
-            >
-              craft your own EQ curves
-            </span>{" "}
-            for different gear—your studio monitors, your AirPods, your living
-            room setup.
-          </p>
+          <HoverCopy />
           <p>
             Created with C++ and Swift. Learn more{" "}
             <a href="/about" className="underline">
@@ -311,7 +152,7 @@ export default function Home() {
                         alt={`Step ${i + 1}`}
                         width={200}
                         height={200}
-                        priority
+                        sizes="(min-width: 640px) 128px, 25vw"
                         className="w-full aspect-square object-cover rounded mb-2"
                       />
                       <p className="text-xs">{step.text}</p>

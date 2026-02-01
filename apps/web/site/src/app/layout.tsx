@@ -43,6 +43,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://res.cloudinary.com" />
+      </head>
       <body className={`${instrumentSerif.variable} antialiased`}>
         {children}
         <Analytics />

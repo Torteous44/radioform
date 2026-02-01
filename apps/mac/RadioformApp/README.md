@@ -16,4 +16,4 @@ User interface for system EQ control. Contains no realtime audio code.
 
 ## Architecture
 
-Communicates with RadioformHost via file-based IPC (`/tmp/radioform-preset.json`). The app can quit and relaunch without interrupting audio processing.
+Communicates with RadioformHost via file-based IPC (`~/Library/Application Support/Radioform/preset.json`). The app can quit and relaunch without interrupting audio processing.

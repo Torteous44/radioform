@@ -32,7 +32,7 @@ export default function Technology() {
             Back
           </Link>
           <Image
-            src="/demo/radioform_sharp1.png"
+            src="/demo/radioform.png"
             alt="Radioform menu bar app showing a 10-band equalizer and genre presets"
             width={1024}
             height={1024}

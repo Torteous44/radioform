@@ -1,5 +1,43 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "How Radioform Works — System-Wide macOS Equalizer",
+  description:
+    "Learn how Radioform works: a native C++ audio engine, virtual audio device, 10-band EQ, built-in presets, and zero-latency system-wide sound processing for macOS.",
+  alternates: {
+    canonical: "/about",
+  },
+  openGraph: {
+    title: "How Radioform Works — System-Wide macOS Equalizer",
+    description:
+      "Learn how Radioform works: a native C++ audio engine, virtual audio device, 10-band EQ, built-in presets, and zero-latency system-wide sound processing for macOS.",
+    url: "https://radioform.app/about",
+    images: [
+      {
+        url: "/demo/radioform.png",
+        width: 1024,
+        height: 1024,
+        alt: "Radioform menu bar app showing a 10-band equalizer and genre presets",
+      },
+    ],
+  },
+};
+
+const aboutJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "AboutPage",
+  name: "How Radioform Works",
+  description:
+    "Technical details about Radioform's system-wide macOS equalizer: C++ audio engine, virtual audio device, native Swift app, and zero-latency processing.",
+  url: "https://radioform.app/about",
+  mainEntity: {
+    "@type": "SoftwareApplication",
+    name: "Radioform",
+    url: "https://radioform.app",
+  },
+};
 
 const DOWNLOAD_URL =
   "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg";
@@ -8,6 +46,10 @@ const GITHUB_URL = "https://github.com/Torteous44/radioform";
 export default function Technology() {
   return (
     <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutJsonLd) }}
+      />
       <div className="max-w-lg mx-auto">
         <div className="relative mt-6 mb-12 hover-underline">
           <Link
@@ -247,12 +289,12 @@ export default function Technology() {
         </div>
 
         {/* Footer */}
-        <p className="text-xs text-neutral-500 mt-16">
+        <footer className="text-xs text-neutral-500 mt-16">
           Made by{" "}
           <a href="mailto:contact@pavloscompany.com" className="underline">
             Pavlos RSA
           </a>
-        </p>
+        </footer>
       </div>
     </main>
   );

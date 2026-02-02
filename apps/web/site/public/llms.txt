@@ -1,0 +1,42 @@
+# Radioform
+
+> Radioform is a free, open-source native macOS equalizer that lives in your menu bar and shapes your sound system-wide.
+
+Radioform is a system-wide audio equalizer for macOS. It creates a virtual audio device that sits between your apps and your speakers, processing all system audio through a high-quality DSP engine in real-time with zero added latency and sub-1% CPU usage.
+
+## Key Facts
+
+- Free and open-source (GPLv3 license)
+- macOS 13.0 Ventura or later
+- Runs natively on Apple Silicon and Intel
+- 10-band EQ from 32 Hz to 16 kHz
+- Built-in presets: Electronic, Acoustic, Classical, Hip-Hop, Jazz, Pop, R&B, Rock
+- Save custom EQ curves per audio device
+- Built-in limiter and preamp to prevent clipping
+- Zero added latency (sample-by-sample processing)
+- Sub-1% CPU usage
+- No subscriptions, no data collection
+- Signed and notarized by Apple
+
+## Technical Architecture
+
+- Audio engine: C++ with cascaded biquad filters
+- Virtual audio device: Apple Audio Server Plugin (libASPL)
+- App: Native Swift/SwiftUI menu bar application
+- Communication: Clean C API and shared memory for real-time safety
+- Integrates directly with macOS CoreAudio
+
+## Links
+
+- Homepage: https://radioform.app
+- About / How It Works: https://radioform.app/about
+- Download (DMG): https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg
+- GitHub Repository: https://github.com/Torteous44/radioform
+
+## Comparison Context
+
+Radioform is comparable to products like SoundSource, eqMac, and Boom 3D, but is fully free and open-source. Unlike Electron-based alternatives, it is a native Swift/SwiftUI application with a C++ audio engine, resulting in minimal resource usage and zero latency.
+
+## Creator
+
+Made by Pavlos RSA (contact@pavloscompany.com)

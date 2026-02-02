@@ -9,15 +9,44 @@ const instrumentSerif = Instrument_Serif({
   variable: "--font-serif",
 });
 
-
 export const metadata: Metadata = {
+  metadataBase: new URL("https://radioform.app"),
   title: "Radioform: A macOS EQ App",
   description:
     "Radioform is an open source macOS EQ app that lives in your menubar.",
+  applicationName: "Radioform",
+  keywords: [
+    "macOS equalizer",
+    "mac EQ app",
+    "system-wide equalizer",
+    "macOS audio equalizer",
+    "free equalizer mac",
+    "open source equalizer",
+    "menu bar EQ",
+    "macOS sound equalizer",
+    "parametric equalizer mac",
+    "audio EQ macOS",
+    "mac sound enhancer",
+    "system audio equalizer",
+  ],
+  authors: [{ name: "Pavlos RSA" }],
+  creator: "Pavlos RSA",
+  publisher: "Pavlos RSA",
+  category: "Software",
+  alternates: {
+    canonical: "/",
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
   openGraph: {
     title: "Radioform: A macOS EQ App",
     description:
       "Radioform is an open source macOS EQ app that lives in your menubar.",
+    url: "https://radioform.app",
+    siteName: "Radioform",
+    type: "website",
+    locale: "en_US",
     images: [
       {
         url: "/socialpreview.png",
@@ -33,6 +62,14 @@ export const metadata: Metadata = {
     description:
       "Radioform is an open source macOS EQ app that lives in your menubar.",
     images: ["/socialpreview.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
   },
 };
 

@@ -2,6 +2,93 @@ import Image from "next/image";
 import HoverCopy from "./components/HoverCopy";
 import FAQ from "./components/FAQ";
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name: "Radioform",
+      description:
+        "A free, open-source native macOS equalizer that lives in your menu bar and shapes your sound system-wide.",
+      applicationCategory: "MultimediaApplication",
+      operatingSystem: "macOS 13.0+",
+      url: "https://radioform.app",
+      downloadUrl:
+        "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg",
+      softwareVersion: "latest",
+      license: "https://www.gnu.org/licenses/gpl-3.0.html",
+      isAccessibleForFree: true,
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      featureList: [
+        "10-band system-wide equalizer (32 Hz to 16 kHz)",
+        "Built-in presets for Electronic, Acoustic, Classical, Hip-Hop, Jazz, Pop, R&B, Rock",
+        "Custom EQ curves per audio device",
+        "Built-in limiter and preamp",
+        "Zero added latency",
+        "Sub-1% CPU usage",
+        "Native Swift/SwiftUI menu bar app",
+        "C++ audio engine with cascaded biquad filters",
+        "Apple Silicon and Intel support",
+      ],
+      screenshot: "https://radioform.app/demo/radioform.png",
+      author: {
+        "@type": "Person",
+        name: "Pavlos RSA",
+        email: "contact@pavloscompany.com",
+      },
+      codeRepository: "https://github.com/Torteous44/radioform",
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: [
+        {
+          "@type": "Question",
+          name: "How do I get started with Radioform?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Download and install Radioform, then select an audio device, choose a preset or create your own EQ curve, and enjoy your customized sound.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "How does Radioform work?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Radioform creates a virtual audio device that sits between your apps and your speakers. All system audio passes through a high-quality DSP engine where it gets shaped by your EQ settings in real-time—then continues to your actual output device. Zero added latency, sub-1% CPU usage.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "What technology is Radioform built with?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "The audio engine is written in C++ using cascaded biquad filters for precise EQ control. The virtual audio device uses Apple's Audio Server Plugin (libASPL) framework. The menu bar app is native Swift/SwiftUI. Everything communicates through a clean C API and shared memory for real-time safety.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Is Radioform really free?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Yes. Radioform is released under the GPLv3 license—fully open source, no hidden costs, no subscriptions, no data collection. You can read every line of code, build it yourself, or fork it for your own projects.",
+          },
+        },
+      ],
+    },
+    {
+      "@type": "WebSite",
+      url: "https://radioform.app",
+      name: "Radioform",
+      description:
+        "Radioform is an open source macOS EQ app that lives in your menubar.",
+    },
+  ],
+};
+
 function StretchedTitle() {
   return (
     <div className="mb-6 w-full">
@@ -46,6 +133,10 @@ interface FAQItem {
 export default function Home() {
   return (
     <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="max-w-lg mx-auto">
         {/* Hero */}
         <div className="w-full overflow-hidden hidden min-[480px]:block">
@@ -61,6 +152,7 @@ export default function Home() {
         </div>
 
         <StretchedTitle />
+        <h1 className="sr-only">Radioform: A free, open-source macOS equalizer</h1>
 
         {/* Copy */}
         <div className="text-sm leading-relaxed space-y-4 mb-8">
@@ -128,7 +220,7 @@ export default function Home() {
         </div>
 
         {/* FAQs */}
-        <div className="border-t border-neutral-200">
+        <section aria-label="Frequently asked questions" className="border-t border-neutral-200">
           <FAQ
             question="How do I get started?"
             answer={
@@ -197,15 +289,15 @@ export default function Home() {
               </>
             }
           />
-        </div>
+        </section>
 
         {/* Footer */}
-        <p className="text-xs text-neutral-500 mt-16">
+        <footer className="text-xs text-neutral-500 mt-16">
           Made by{" "}
           <a href="mailto:contact@pavloscompany.com" className="underline">
             Pavlos RSA
           </a>
-        </p>
+        </footer>
       </div>
     </main>
   );

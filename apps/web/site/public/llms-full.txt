@@ -1,0 +1,110 @@
+# Radioform — Complete Reference
+
+> Radioform is a free, open-source native macOS equalizer that lives in your menu bar and shapes your sound system-wide.
+
+## What Is Radioform?
+
+Radioform is a system-wide equalizer application for macOS. It installs a virtual audio device on your Mac so that all system sound—from Spotify, SoundCloud, FaceTime, games, and any other app—passes through a high-quality DSP engine where it gets shaped by your EQ settings in real-time, then continues to your actual output device (speakers, headphones, etc.).
+
+It runs from your menu bar. You pick a preset or tweak the sliders yourself, and then you mostly just leave it alone.
+
+## Who Is It For?
+
+- Mac users who want better sound from their speakers or headphones
+- Music listeners who want to customize their EQ across all apps at once
+- Audiophiles looking for a lightweight, native macOS equalizer
+- Professionals who need per-device EQ profiles (e.g., different settings for studio monitors vs AirPods)
+- Anyone frustrated that macOS doesn't include a built-in system-wide equalizer
+
+## Features
+
+### 10-Band Equalizer
+- Frequency range: 32 Hz to 16 kHz
+- Boost low end, pull back harsh highs, or add warmth
+- Applies to all audio on your Mac simultaneously—no per-app configuration needed
+
+### Built-In Presets
+- Electronic
+- Acoustic
+- Classical
+- Hip-Hop
+- Jazz
+- Pop
+- R&B
+- Rock
+
+These are solid starting points. You can also save your own custom curves for specific headphones or speakers.
+
+### Multi-Device Support
+- AirPods, desk speakers, living room setup—Radioform follows your output device
+- Save different EQ curves per device
+- Switching devices does not require restarting the app
+
+### Built-In Limiter
+- Limiter and preamp guard prevent clipping
+- You can push the EQ aggressively without worrying about distortion
+
+### Performance
+- Sub-1% CPU usage
+- Zero added latency (sample-by-sample processing, no intermediate buffering)
+- You won't notice it's running, except that things sound better
+
+## Technical Architecture
+
+### Audio Engine
+The audio engine is written in C++ using cascaded biquad filters for precise EQ control. It processes audio sample-by-sample with no intermediate buffering, ensuring zero added latency.
+
+### Virtual Audio Device
+Radioform installs a virtual audio device using Apple's Audio Server Plugin (libASPL) framework. All system sound passes through this device, gets processed by the EQ engine, and continues to your actual speakers or headphones.
+
+### Native Application
+The menu bar app is built with native Swift and SwiftUI—not Electron or a web wrapper. It plugs directly into macOS CoreAudio, so it feels like something that should have shipped with the OS.
+
+### Inter-Process Communication
+The app and audio engine communicate through a clean C API and shared memory for real-time safety.
+
+## System Requirements
+
+- macOS 13.0 Ventura or later
+- Runs natively on Apple Silicon and Intel
+- Signed and notarized by Apple
+- Updates happen automatically
+
+## Licensing & Privacy
+
+- Open source under GPLv3
+- Completely free—no subscriptions, no hidden costs
+- No data collection whatsoever
+- Full source code available on GitHub
+
+## How To Get Started
+
+1. Download and install the DMG from GitHub Releases
+2. Open Radioform—it appears in your menu bar
+3. Select your audio output device
+4. Choose a preset or create your own EQ curve
+5. Enjoy your customized sound
+
+## Comparison With Alternatives
+
+| Feature | Radioform | SoundSource | eqMac | Boom 3D |
+|---|---|---|---|---|
+| Price | Free | $39 | Free/Paid | $19.99 |
+| Open Source | Yes (GPLv3) | No | Partially | No |
+| Native App | Yes (Swift) | Yes | Electron | Yes |
+| System-Wide EQ | Yes | Yes | Yes | Yes |
+| Per-Device Profiles | Yes | Yes | Limited | No |
+| CPU Usage | Sub-1% | Low | Moderate | Moderate |
+| Latency | Zero | Low | Low | Low |
+
+## Links
+
+- Homepage: https://radioform.app
+- About / How It Works: https://radioform.app/about
+- Download: https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg
+- GitHub: https://github.com/Torteous44/radioform
+
+## Creator
+
+Made by Pavlos RSA
+Contact: contact@pavloscompany.com

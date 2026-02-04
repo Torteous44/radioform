@@ -56,4 +56,4 @@ For development details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 Radioform is released under the GNU General Public License v3.0.  
-See `LICENSE` for details.
+See [LICENSE](https://github.com/Torteous44/radioform/blob/main/LICENSE) for details.

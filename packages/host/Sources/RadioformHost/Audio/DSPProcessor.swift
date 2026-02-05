@@ -36,7 +36,6 @@ class DSPProcessor {
     func createFlatPreset() -> radioform_preset_t {
         var preset = radioform_preset_t()
         radioform_dsp_preset_init_flat(&preset)
-        preset.num_bands = 0
         preset.preamp_db = 0.0
         preset.limiter_enabled = true
         preset.limiter_threshold_db = -0.1

@@ -61,39 +61,54 @@ struct MenuBarView: View {
 
                 // Only show EQ controls and preset dropdown when enabled
                 if presetManager.isEnabled {
-                    // 10-Band EQ
+                    // 10-Band EQ + Preamp
                     TenBandEQ()
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
 
-                    // Control Center-style Preset Dropdown
-                    PresetDropdown(isExpanded: $showPresets)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
+                    // Contextual area: band controls (focused) or presets (default)
+                    if let focusedIndex = presetManager.focusedBandIndex {
+                        if focusedIndex < 10 {
+                            // Per-band: filter type pills
+                            FilterTypePills(bandIndex: focusedIndex)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                        } else {
+                            // Preamp (index 10): limiter controls
+                            LimiterControls()
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                        }
+                    } else {
+                        // Default: preset dropdown
+                        PresetDropdown(isExpanded: $showPresets)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
 
-                    // Preset list (animated expand/collapse)
-                    if showPresets {
-                        PresetList(
-                            presets: presetManager.allPresets.filter { $0.id != presetManager.currentPreset?.id },
-                            activeID: presetManager.currentPreset?.id,
-                            userPresetIDs: presetManager.userPresetIDs,
-                            onSelect: { preset in
-                                presetManager.applyPreset(preset)
-                                showPresets = false
-                            },
-                            onDelete: { preset in
-                                do {
-                                    try presetManager.deletePreset(preset)
-                                    if preset.id == presetManager.currentPreset?.id {
-                                        presetManager.currentPreset = nil
+                        // Preset list (animated expand/collapse)
+                        if showPresets {
+                            PresetList(
+                                presets: presetManager.allPresets.filter { $0.id != presetManager.currentPreset?.id },
+                                activeID: presetManager.currentPreset?.id,
+                                userPresetIDs: presetManager.userPresetIDs,
+                                onSelect: { preset in
+                                    presetManager.applyPreset(preset)
+                                    showPresets = false
+                                },
+                                onDelete: { preset in
+                                    do {
+                                        try presetManager.deletePreset(preset)
+                                        if preset.id == presetManager.currentPreset?.id {
+                                            presetManager.currentPreset = nil
+                                        }
+                                    } catch {
+                                        print("Failed to delete preset: \(error)")
                                     }
-                                } catch {
-                                    print("Failed to delete preset: \(error)")
                                 }
-                            }
-                        )
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 6)
+                            )
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 6)
+                        }
                     }
                 }
 
@@ -454,6 +469,108 @@ struct MenuItemButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
+    }
+}
+
+// MARK: - Band Focus Controls
+
+struct FilterTypePills: View {
+    let bandIndex: Int
+    @ObservedObject private var presetManager = PresetManager.shared
+
+    private let filterOptions: [(FilterType, String)] = [
+        (.peak, "Peak"),
+        (.lowShelf, "LoS"),
+        (.highShelf, "HiS"),
+        (.lowPass, "LP"),
+        (.highPass, "HP"),
+        (.notch, "Notch"),
+        (.bandPass, "BP"),
+    ]
+
+    var body: some View {
+        VStack(spacing: 6) {
+            // Filter type pills
+            HStack(spacing: 4) {
+                ForEach(filterOptions, id: \.0) { (filterType, label) in
+                    let isActive = presetManager.currentFilterTypes[bandIndex] == filterType
+                    Button {
+                        presetManager.updateBandFilterType(index: bandIndex, filterType: filterType)
+                    } label: {
+                        Text(label)
+                            .font(.system(size: 10, weight: isActive ? .semibold : .regular))
+                            .foregroundColor(isActive ? .white : .secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(isActive ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.3))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Q factor slider
+            HStack(spacing: 6) {
+                Text("Q")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.secondary)
+
+                Slider(
+                    value: Binding(
+                        get: { Double(presetManager.currentQFactors[bandIndex]) },
+                        set: { presetManager.updateBandQ(index: bandIndex, qFactor: Float($0)) }
+                    ),
+                    in: 0.1...10.0
+                )
+
+                Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+    }
+}
+
+struct LimiterControls: View {
+    @ObservedObject private var presetManager = PresetManager.shared
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle("", isOn: Binding(
+                get: { presetManager.currentLimiterEnabled },
+                set: { presetManager.updateLimiterEnabled($0) }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .controlSize(.small)
+
+            Text("Limiter")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Text(String(format: "%.1f dB", presetManager.currentLimiterThresholdDb))
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 50, alignment: .trailing)
+
+            Slider(
+                value: Binding(
+                    get: { Double(presetManager.currentLimiterThresholdDb) },
+                    set: { presetManager.updateLimiterThreshold(db: Float($0)) }
+                ),
+                in: -6.0...0.0
+            )
+            .frame(width: 100)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
     }
 }
 

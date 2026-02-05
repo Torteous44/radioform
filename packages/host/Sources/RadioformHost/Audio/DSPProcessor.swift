@@ -33,26 +33,13 @@ class DSPProcessor {
         radioform_dsp_process_interleaved(engine, input, &output, frameCount)
     }
 
-    func createBassBoostPreset() -> radioform_preset_t {
+    func createFlatPreset() -> radioform_preset_t {
         var preset = radioform_preset_t()
         radioform_dsp_preset_init_flat(&preset)
-        preset.num_bands = 2
-
-        preset.bands.0.frequency_hz = 100
-        preset.bands.0.gain_db = 6.0
-        preset.bands.0.q_factor = 0.707
-        preset.bands.0.type = RADIOFORM_FILTER_LOW_SHELF
-        preset.bands.0.enabled = true
-
-        preset.bands.1.frequency_hz = 60
-        preset.bands.1.gain_db = 3.0
-        preset.bands.1.q_factor = 1.0
-        preset.bands.1.type = RADIOFORM_FILTER_PEAK
-        preset.bands.1.enabled = true
-
+        preset.num_bands = 0
         preset.preamp_db = 0.0
         preset.limiter_enabled = true
-        preset.limiter_threshold_db = -1.0
+        preset.limiter_threshold_db = -0.1
 
         return preset
     }

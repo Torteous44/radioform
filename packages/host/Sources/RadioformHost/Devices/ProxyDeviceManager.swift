@@ -7,6 +7,7 @@ class ProxyDeviceManager {
 
     var activeProxyUID: String?
     var activePhysicalDeviceID: AudioDeviceID = 0
+    var activeProxyDeviceID: AudioDeviceID = 0
 
     init(registry: DeviceRegistry) {
         self.registry = registry
@@ -104,11 +105,21 @@ class ProxyDeviceManager {
             return
         }
 
+        // Capture physical volume and sync to proxy BEFORE switching
+        let originalVolume = getDeviceVolume(currentDeviceID)
+        if let volume = originalVolume {
+            print("[AutoSelect] Physical device volume: \(String(format: "%.0f%%", volume * 100))")
+            if setDeviceVolume(proxyID, volume: volume) {
+                print("[AutoSelect] ✓ Set proxy volume to \(String(format: "%.0f%%", volume * 100))")
+            }
+        }
+
         print("[AutoSelect] Switching to proxy device...")
         if setDefaultOutputDevice(proxyID) {
             print("[AutoSelect] ✓ Successfully switched to proxy")
             activeProxyUID = uid
             activePhysicalDeviceID = currentDeviceID
+            activeProxyDeviceID = proxyID
         } else {
             print("[AutoSelect] ERROR: Failed to set proxy as default")
         }
@@ -127,11 +138,17 @@ class ProxyDeviceManager {
     }
 
     func handlePhysicalSelection(_ physicalUID: String) {
-        if !isAutoSwitching && registry.find(uid: physicalUID) != nil {
+        if !isAutoSwitching, let physicalDevice = registry.find(uid: physicalUID) {
             if let proxyID = findProxyDevice(forPhysicalUID: physicalUID) {
+                // Sync volume before switching
+                if let volume = getDeviceVolume(physicalDevice.id) {
+                    _ = setDeviceVolume(proxyID, volume: volume)
+                }
+
                 print("Auto-switching to Radioform proxy")
                 isAutoSwitching = true
                 _ = setDefaultOutputDevice(proxyID)
+                activeProxyDeviceID = proxyID
             } else {
                 print("Warning: No proxy found for this device")
             }
@@ -234,5 +251,96 @@ class ProxyDeviceManager {
         }
 
         return deviceName as String
+    }
+
+    private func getDeviceVolume(_ deviceID: AudioDeviceID) -> Float32? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // Try getting master volume
+        if AudioObjectHasProperty(deviceID, &address) {
+            var volume: Float32 = 0
+            var dataSize = UInt32(MemoryLayout<Float32>.size)
+            let status = AudioObjectGetPropertyData(
+                deviceID,
+                &address,
+                0,
+                nil,
+                &dataSize,
+                &volume
+            )
+            if status == noErr {
+                return volume
+            }
+        }
+
+        // Try getting channel 1 volume (left channel)
+        address.mElement = 1
+        if AudioObjectHasProperty(deviceID, &address) {
+            var volume: Float32 = 0
+            var dataSize = UInt32(MemoryLayout<Float32>.size)
+            let status = AudioObjectGetPropertyData(
+                deviceID,
+                &address,
+                0,
+                nil,
+                &dataSize,
+                &volume
+            )
+            if status == noErr {
+                return volume
+            }
+        }
+
+        return nil
+    }
+
+    private func setDeviceVolume(_ deviceID: AudioDeviceID, volume: Float32) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // Try setting master volume
+        if AudioObjectHasProperty(deviceID, &address) {
+            var vol = volume
+            let status = AudioObjectSetPropertyData(
+                deviceID,
+                &address,
+                0,
+                nil,
+                UInt32(MemoryLayout<Float32>.size),
+                &vol
+            )
+            if status == noErr {
+                return true
+            }
+        }
+
+        // Try setting per-channel volume (channel 1 and 2) if master failed
+        var channelSet = false
+        for channel: UInt32 in 1...2 {
+            address.mElement = channel
+            if AudioObjectHasProperty(deviceID, &address) {
+                var vol = volume
+                let status = AudioObjectSetPropertyData(
+                    deviceID,
+                    &address,
+                    0,
+                    nil,
+                    UInt32(MemoryLayout<Float32>.size),
+                    &vol
+                )
+                if status == noErr {
+                    channelSet = true
+                }
+            }
+        }
+
+        return channelSet
     }
 }

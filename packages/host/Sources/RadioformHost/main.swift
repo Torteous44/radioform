@@ -84,8 +84,8 @@ func main() {
     proxyManager.autoSelectProxy()
 
     print("[Step 8] Initializing DSP engine...")
-    let bassBoost = dspProcessor.createBassBoostPreset()
-    guard dspProcessor.applyPreset(bassBoost) else {
+    let flatPreset = dspProcessor.createFlatPreset()
+    guard dspProcessor.applyPreset(flatPreset) else {
         print("[ERROR] Failed to apply EQ preset")
         exit(1)
     }

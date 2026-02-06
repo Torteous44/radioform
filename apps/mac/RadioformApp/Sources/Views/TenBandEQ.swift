@@ -4,7 +4,8 @@ import AppKit
 struct TenBandEQ: View {
     @ObservedObject private var presetManager = PresetManager.shared
 
-    let frequencies = ["32", "64", "125", "250", "500", "1K", "2K", "4K", "8K", "16K", "Pre"]
+    let bandFrequencies = ["32", "64", "125", "250", "500", "1K", "2K", "4K", "8K", "16K"]
+    let displayOrder = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -31,15 +32,7 @@ struct TenBandEQ: View {
 
                 // Sliders on top of grid
                 HStack(spacing: 0) {
-                    ForEach(0..<11, id: \.self) { index in
-                        if index == 10 {
-                            // Subtle separator before preamp knob
-                            Rectangle()
-                                .fill(Color(NSColor.separatorColor).opacity(0.3))
-                                .frame(width: 1, height: 80)
-                                .padding(.horizontal, 4)
-                        }
-
+                    ForEach(displayOrder, id: \.self) { index in
                         VStack(spacing: 4) {
                             VerticalSlider(
                                 value: index < 10
@@ -64,12 +57,20 @@ struct TenBandEQ: View {
                             .frame(width: 20, height: 100)
 
                             // Frequency label
-                            Text(frequencies[index])
+                            Text(index == 10 ? "Pre" : bandFrequencies[index])
                                 .font(.system(size: 9))
                                 .foregroundColor(index == 10 ? .accentColor.opacity(0.7) : .secondary)
                                 .frame(minWidth: 22)
                         }
                         .padding(.horizontal, 3)
+
+                        if index == 10 {
+                            // Subtle separator after preamp knob
+                            Rectangle()
+                                .fill(Color(NSColor.separatorColor).opacity(0.3))
+                                .frame(width: 1, height: 80)
+                                .padding(.horizontal, 4)
+                        }
                     }
                 }
             }

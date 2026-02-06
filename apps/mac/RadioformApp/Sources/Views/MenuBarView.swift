@@ -69,8 +69,8 @@ struct MenuBarView: View {
                     // Contextual area: band controls (focused) or presets (default)
                     if let focusedIndex = presetManager.focusedBandIndex {
                         if focusedIndex < 10 {
-                            // Per-band: filter type pills
-                            FilterTypePills(bandIndex: focusedIndex)
+                            // Per-band: Q factor control
+                            BandQControl(bandIndex: focusedIndex)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 6)
                         } else {
@@ -474,62 +474,28 @@ struct MenuItemButton: View {
 
 // MARK: - Band Focus Controls
 
-struct FilterTypePills: View {
+struct BandQControl: View {
     let bandIndex: Int
     @ObservedObject private var presetManager = PresetManager.shared
 
-    private let filterOptions: [(FilterType, String)] = [
-        (.peak, "Peak"),
-        (.lowShelf, "LoS"),
-        (.highShelf, "HiS"),
-        (.lowPass, "LP"),
-        (.highPass, "HP"),
-        (.notch, "Notch"),
-        (.bandPass, "BP"),
-    ]
-
     var body: some View {
-        VStack(spacing: 6) {
-            // Filter type pills
-            HStack(spacing: 4) {
-                ForEach(filterOptions, id: \.0) { (filterType, label) in
-                    let isActive = presetManager.currentFilterTypes[bandIndex] == filterType
-                    Button {
-                        presetManager.updateBandFilterType(index: bandIndex, filterType: filterType)
-                    } label: {
-                        Text(label)
-                            .font(.system(size: 10, weight: isActive ? .semibold : .regular))
-                            .foregroundColor(isActive ? .white : .secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .fill(isActive ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.3))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+        HStack(spacing: 6) {
+            Text("Q")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.secondary)
 
-            // Q factor slider
-            HStack(spacing: 6) {
-                Text("Q")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+            Slider(
+                value: Binding(
+                    get: { Double(presetManager.currentQFactors[bandIndex]) },
+                    set: { presetManager.updateBandQ(index: bandIndex, qFactor: Float($0)) }
+                ),
+                in: 0.1...10.0
+            )
 
-                Slider(
-                    value: Binding(
-                        get: { Double(presetManager.currentQFactors[bandIndex]) },
-                        set: { presetManager.updateBandQ(index: bandIndex, qFactor: Float($0)) }
-                    ),
-                    in: 0.1...10.0
-                )
-
-                Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .frame(width: 36, alignment: .trailing)
-            }
+            Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(.primary)
+                .frame(width: 36, alignment: .trailing)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)

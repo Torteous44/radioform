@@ -53,7 +53,6 @@ class PresetManager: ObservableObject {
     ]
 
     // Timers
-    private var inactivityTimer: Timer?
     private var audioApplyTimer: Timer?
 
     private init() {
@@ -499,21 +498,14 @@ class PresetManager: ObservableObject {
         }
     }
 
-    /// Reset the 6-second inactivity timer
+    /// Reset the inactivity timer (no-op, timeout removed)
     func resetInactivityTimer() {
-        inactivityTimer?.invalidate()
-        guard focusedBandIndex != nil else { return }
-        inactivityTimer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.focusedBandIndex = nil
-            }
-        }
+        // No timeout - band stays focused until user clicks elsewhere
     }
 
-    /// Cancel the inactivity timer
+    /// Cancel the inactivity timer (no-op, timeout removed)
     func cancelInactivityTimer() {
-        inactivityTimer?.invalidate()
-        inactivityTimer = nil
+        // No timeout to cancel
     }
 
 

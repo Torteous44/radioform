@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <mutex>
 #include <algorithm>
+#include <cstdarg>
 
 // Logging
 static os_log_t rf_log = os_log_create("com.radioform.driver.v2", "default");
@@ -32,6 +33,20 @@ static os_log_t rf_log = os_log_create("com.radioform.driver.v2", "default");
 #define RF_LOG_ERROR(fmt, ...) os_log_error(rf_log, "[Radioform V2 ERROR] " fmt, ##__VA_ARGS__)
 #define RF_LOG_INFO(fmt, ...) os_log_info(rf_log, "[Radioform V2 INFO] " fmt, ##__VA_ARGS__)
 #define RF_LOG_DEBUG(fmt, ...) os_log_debug(rf_log, "[Radioform V2 DEBUG] " fmt, ##__VA_ARGS__)
+
+// Fallback file logger for debugging when unified logs are unavailable.
+static void RF_DebugLog(const char* fmt, ...) {
+    static std::mutex log_mutex;
+    std::lock_guard<std::mutex> lock(log_mutex);
+    FILE* f = fopen("/tmp/radioform-driver-debug.log", "a");
+    if (!f) return;
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(f, fmt, args);
+    fprintf(f, "\n");
+    va_end(args);
+    fclose(f);
+}
 
 namespace {
 
@@ -183,6 +198,7 @@ public:
         int32_t count = ++io_client_count_;
         stats_.client_starts++;
 
+        RF_DebugLog("OnStartIO() client #%d (state: %s)", count, StateToString(state_.load()));
         RF_LOG_INFO("OnStartIO() client #%d (state: %s)", count, StateToString(state_.load()));
 
         if (count == 1) {
@@ -197,6 +213,7 @@ public:
 
                 if (shared_memory_) {
                     if (ValidateConnection()) {
+                        RF_DebugLog("OnStartIO: Connected on attempt %d (uid=%s)", attempt, device_uid_.c_str());
                         RF_LOG_INFO("✓ Connected on attempt %d", attempt);
                         state_ = DeviceState::Connected;
 
@@ -338,16 +355,19 @@ public:
 
 private:
     void OpenSharedMemory() {
+        RF_DebugLog("OpenSharedMemory: %s", shm_file_path_.c_str());
         RF_LOG_INFO("Opening: %s", shm_file_path_.c_str());
 
         struct stat st;
         if (stat(shm_file_path_.c_str(), &st) != 0) {
+            RF_DebugLog("OpenSharedMemory: stat failed: %s", strerror(errno));
             RF_LOG_ERROR("File not found: %s", shm_file_path_.c_str());
             return;
         }
 
         int fd = open(shm_file_path_.c_str(), O_RDWR);
         if (fd == -1) {
+            RF_DebugLog("OpenSharedMemory: open failed: %s", strerror(errno));
             RF_LOG_ERROR("open() failed: %s", strerror(errno));
             return;
         }
@@ -355,6 +375,7 @@ private:
         // Validate file size before mapping
         size_t min_size = sizeof(RFSharedAudioV2);
         if ((size_t)st.st_size < min_size) {
+            RF_DebugLog("OpenSharedMemory: size too small: %lld < %zu", (long long)st.st_size, min_size);
             RF_LOG_ERROR("File too small: %lld < %zu", (long long)st.st_size, min_size);
             close(fd);
             return;
@@ -364,12 +385,15 @@ private:
         close(fd);
 
         if (mem == MAP_FAILED) {
+            RF_DebugLog("OpenSharedMemory: mmap failed: %s", strerror(errno));
             RF_LOG_ERROR("mmap() failed: %s", strerror(errno));
             return;
         }
 
         shared_memory_ = reinterpret_cast<RFSharedAudioV2*>(mem);
 
+        RF_DebugLog("OpenSharedMemory: mapped %p size=%lld rate=%u ch=%u fmt=%u",
+            mem, (long long)st.st_size, shared_memory_->sample_rate, shared_memory_->channels, shared_memory_->format);
         RF_LOG_INFO("✓ Mapped at %p (size: %lld)", mem, (long long)st.st_size);
         RF_LOG_INFO("  Format: %uHz, %uch, format=%u",
             shared_memory_->sample_rate,
@@ -405,6 +429,8 @@ private:
 
         // Check protocol version
         if (shared_memory_->protocol_version != RF_AUDIO_PROTOCOL_VERSION_V2) {
+            RF_DebugLog("ValidateConnection: protocol mismatch 0x%x expected 0x%x",
+                shared_memory_->protocol_version, RF_AUDIO_PROTOCOL_VERSION_V2);
             RF_LOG_ERROR("Protocol mismatch: 0x%x (expected 0x%x)",
                 shared_memory_->protocol_version, RF_AUDIO_PROTOCOL_VERSION_V2);
             return false;
@@ -412,18 +438,21 @@ private:
 
         // Check sample rate
         if (!rf_is_sample_rate_supported(shared_memory_->sample_rate)) {
+            RF_DebugLog("ValidateConnection: unsupported sample rate %u", shared_memory_->sample_rate);
             RF_LOG_ERROR("Unsupported sample rate: %u", shared_memory_->sample_rate);
             return false;
         }
 
         // Check channels
         if (shared_memory_->channels == 0 || shared_memory_->channels > RF_MAX_CHANNELS) {
+            RF_DebugLog("ValidateConnection: invalid channels %u", shared_memory_->channels);
             RF_LOG_ERROR("Invalid channel count: %u", shared_memory_->channels);
             return false;
         }
 
         // Mark driver as connected
         atomic_store(&shared_memory_->driver_connected, 1);
+        RF_DebugLog("ValidateConnection: OK (driver_connected=1)");
 
         return true;
     }

@@ -371,6 +371,26 @@ class DeviceDiscovery {
         return sampleRate >= 44100 && sampleRate <= 192000
     }
 
+    /// Get the nominal sample rate of a device, snapped to nearest standard rate
+    func getDeviceNominalSampleRate(_ deviceID: AudioDeviceID) -> UInt32 {
+        var rateAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var sampleRate: Float64 = 0
+        var dataSize = UInt32(MemoryLayout<Float64>.size)
+
+        guard AudioObjectGetPropertyData(deviceID, &rateAddress, 0, nil, &dataSize, &sampleRate) == noErr else {
+            return 48000
+        }
+
+        // Snap to nearest standard rate
+        let supported: [UInt32] = [44100, 48000, 88200, 96000, 176400, 192000]
+        let rate = UInt32(sampleRate)
+        return supported.min(by: { abs(Int($0) - Int(rate)) < abs(Int($1) - Int(rate)) }) ?? 48000
+    }
+
     /// Combined validation that checks all criteria
     func validateDevice(_ deviceID: AudioDeviceID, transportType: UInt32) -> (valid: Bool, reason: String?) {
         // Check 1: Active channels

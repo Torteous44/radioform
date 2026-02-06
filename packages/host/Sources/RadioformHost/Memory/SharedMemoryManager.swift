@@ -35,8 +35,9 @@ class SharedMemoryManager {
 
         fchmod(fd, 0o666)
 
+        let sampleRate = RadioformConfig.activeSampleRate
         let frames = rf_frames_for_duration(
-            RadioformConfig.defaultSampleRate,
+            sampleRate,
             RadioformConfig.defaultDurationMs
         )
         let bytesPerSample = rf_bytes_per_sample(RadioformConfig.defaultFormat)
@@ -46,7 +47,7 @@ class SharedMemoryManager {
             bytesPerSample
         )
 
-        print("[RadioformHost V2] Size: \(shmSize) bytes (\(frames) frames @ \(RadioformConfig.defaultSampleRate)Hz)")
+        print("[RadioformHost V2] Size: \(shmSize) bytes (\(frames) frames @ \(sampleRate)Hz)")
 
         guard ftruncate(fd, Int64(shmSize)) == 0 else {
             print("[RadioformHost V2] ERROR: Failed to set size: \(String(cString: strerror(errno)))")
@@ -66,7 +67,7 @@ class SharedMemoryManager {
 
         rf_shared_audio_v2_init(
             sharedMem,
-            RadioformConfig.defaultSampleRate,
+            sampleRate,
             RadioformConfig.defaultChannels,
             RadioformConfig.defaultFormat,
             RadioformConfig.defaultDurationMs
@@ -76,7 +77,7 @@ class SharedMemoryManager {
 
         print("[RadioformHost V2] ✓ SUCCESS")
         print("[RadioformHost V2]   Protocol: V2")
-        print("[RadioformHost V2]   Format: \(RadioformConfig.defaultSampleRate)Hz, \(RadioformConfig.defaultChannels)ch, float32")
+        print("[RadioformHost V2]   Format: \(sampleRate)Hz, \(RadioformConfig.defaultChannels)ch, float32")
         print("[RadioformHost V2]   Buffer: \(RadioformConfig.defaultDurationMs)ms (\(frames) frames)")
         print("[RadioformHost V2]   Capabilities: Multi-rate, Multi-format, Heartbeat")
 

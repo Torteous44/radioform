@@ -238,7 +238,7 @@ class AudioEngine {
         }
 
         var format = AudioStreamBasicDescription(
-            mSampleRate: Double(RadioformConfig.defaultSampleRate),
+            mSampleRate: Double(RadioformConfig.activeSampleRate),
             mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved,
             mBytesPerPacket: 4,
@@ -260,6 +260,24 @@ class AudioEngine {
 
         guard status == noErr else {
             throw AudioEngineError.setFormatFailed(status)
+        }
+
+        // Read back the actual format to confirm what the audio unit accepted.
+        var actualFormat = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        let getStatus = AudioUnitGetProperty(
+            unit,
+            kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Input,
+            0,
+            &actualFormat,
+            &size
+        )
+
+        if getStatus == noErr {
+            print("[AudioEngine] Stream format: \(actualFormat.mSampleRate) Hz, ch=\(actualFormat.mChannelsPerFrame), flags=0x\(String(actualFormat.mFormatFlags, radix: 16))")
+        } else {
+            print("[AudioEngine] WARNING: Failed to read back stream format (OSStatus: \(getStatus))")
         }
     }
 
@@ -473,6 +491,29 @@ class AudioEngine {
                         volumeSet = true
                     }
                 }
+            }
+        }
+
+        // Clear mute if supported (some Bluetooth devices default to muted)
+        var muteAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        if AudioObjectHasProperty(deviceID, &muteAddress) {
+            var mute: UInt32 = 0
+            let status = AudioObjectSetPropertyData(
+                deviceID,
+                &muteAddress,
+                0,
+                nil,
+                UInt32(MemoryLayout<UInt32>.size),
+                &mute
+            )
+            if status == noErr {
+                print("    Cleared physical device mute")
+            } else {
+                print("    Failed to clear mute (OSStatus: \(status))")
             }
         }
 

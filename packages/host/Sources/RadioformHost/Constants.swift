@@ -2,6 +2,9 @@ import Foundation
 import CRadioformAudio
 
 struct RadioformConfig {
+    /// Active sample rate - set at runtime to match physical device for HiFi/lossless playback
+    static var activeSampleRate: UInt32 = 48000
+    /// Fallback sample rate if device query fails
     static let defaultSampleRate: UInt32 = 48000
     static let defaultChannels: UInt32 = 2
     static let defaultFormat = RF_FORMAT_FLOAT32

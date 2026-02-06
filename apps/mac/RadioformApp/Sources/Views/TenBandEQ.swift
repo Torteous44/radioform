@@ -1,9 +1,11 @@
 import SwiftUI
+import AppKit
 
 struct TenBandEQ: View {
     @ObservedObject private var presetManager = PresetManager.shared
 
-    let frequencies = ["32", "64", "125", "250", "500", "1K", "2K", "4K", "8K", "16K"]
+    let bandFrequencies = ["32", "64", "125", "250", "500", "1K", "2K", "4K", "8K", "16K"]
+    let displayOrder = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -16,7 +18,7 @@ struct TenBandEQ: View {
 
                     // Draw grid lines every 3 dB (-12 to +12 = 9 lines)
                     ForEach(0..<9, id: \.self) { index in
-                        let dbValue = 12 - (Float(index) * 3) // +12, +9, +6, +3, 0, -3, -6, -9, -12
+                        let dbValue = 12 - (Float(index) * 3)
                         let yPosition = topPadding + (sliderHeight * CGFloat(index) / 8.0)
                         let isCenterLine = (dbValue == 0)
 
@@ -29,31 +31,66 @@ struct TenBandEQ: View {
                 .frame(height: 100)
 
                 // Sliders on top of grid
-                HStack(spacing: 6) {
-                    ForEach(0..<10, id: \.self) { index in
+                HStack(spacing: 0) {
+                    ForEach(displayOrder, id: \.self) { index in
                         VStack(spacing: 4) {
-                            // Vertical slider
                             VerticalSlider(
-                                value: Binding(
-                                    get: { presetManager.currentBands[index] },
-                                    set: { newValue in
-                                        presetManager.updateBand(index: index, gainDb: newValue)
-                                    }
-                                ),
-                                range: -12...12
+                                value: index < 10
+                                    ? Binding(
+                                        get: { presetManager.currentBands[index] },
+                                        set: { newValue in
+                                            presetManager.updateBand(index: index, gainDb: newValue)
+                                        }
+                                    )
+                                    : Binding(
+                                        get: { presetManager.currentPreampDb },
+                                        set: { newValue in
+                                            presetManager.updatePreamp(gainDb: newValue)
+                                        }
+                                    ),
+                                range: -12...12,
+                                isFocused: presetManager.focusedBandIndex == index,
+                                onDoubleTap: {
+                                    presetManager.toggleFocusedBand(index)
+                                }
                             )
                             .frame(width: 20, height: 100)
 
                             // Frequency label
-                            Text(frequencies[index])
+                            Text(index == 10 ? "Pre" : bandFrequencies[index])
                                 .font(.system(size: 9))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(index == 10 ? .accentColor.opacity(0.7) : .secondary)
                                 .frame(minWidth: 22)
+                        }
+                        .padding(.horizontal, 3)
+
+                        if index == 10 {
+                            // Subtle separator after preamp knob
+                            Rectangle()
+                                .fill(Color(NSColor.separatorColor).opacity(0.3))
+                                .frame(width: 1, height: 80)
+                                .padding(.horizontal, 4)
                         }
                     }
                 }
             }
-            .padding(.horizontal, 12)
+            .background(
+                // Scroll wheel receiver for Q factor — active when a band (0-9) is focused
+                Group {
+                    if let focusedIndex = presetManager.focusedBandIndex, focusedIndex < 10 {
+                        ScrollWheelReceiver { delta in
+                            let currentQ = presetManager.currentQFactors[focusedIndex]
+                            let newQ = currentQ + Float(delta) * 0.1
+                            presetManager.updateBandQ(index: focusedIndex, qFactor: newQ)
+                        }
+                    }
+                }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                presetManager.setFocusedBand(nil)
+            }
+            .padding(.horizontal, 8)
             .padding(.vertical, 6)
         }
     }
@@ -62,16 +99,33 @@ struct TenBandEQ: View {
 struct VerticalSlider: View {
     @Binding var value: Float
     let range: ClosedRange<Float>
+    let isFocused: Bool
+    let onDoubleTap: () -> Void
+
+    private let normalKnobSize: CGFloat = 16
+    private let focusedKnobSize: CGFloat = 22
+
+    private var knobSize: CGFloat {
+        isFocused ? focusedKnobSize : normalKnobSize
+    }
+
+    private var knobDisplayText: String {
+        if value >= 0 {
+            return String(format: "+%.1f", value)
+        } else {
+            return String(format: "%.1f", value)
+        }
+    }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
-                // Track background - static, no animation
+                // Track background
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color(NSColor.separatorColor))
                     .frame(width: 4)
 
-                // Center line (0 dB) - static
+                // Center line (0 dB)
                 let centerY = geometry.size.height / 2
                 Rectangle()
                     .fill(Color(NSColor.tertiaryLabelColor))
@@ -82,7 +136,6 @@ struct VerticalSlider: View {
                 let normalizedValue = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
                 let knobY = geometry.size.height * (1 - CGFloat(normalizedValue))
 
-                // Fill from center line to knob position
                 if value != 0 {
                     let fillHeight = abs(knobY - centerY)
                     let fillY = min(knobY, centerY)
@@ -94,36 +147,82 @@ struct VerticalSlider: View {
                 }
 
                 // Knob
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(NSColor.controlBackgroundColor),
-                                Color(NSColor.controlBackgroundColor).opacity(0.9)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(NSColor.controlBackgroundColor),
+                                    Color(NSColor.controlBackgroundColor).opacity(0.9)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
-                    .overlay(
-                        Circle()
-                            .stroke(Color(NSColor.separatorColor).opacity(0.8), lineWidth: 0.5)
-                    )
-                    .frame(width: 16, height: 16)
-                    .shadow(color: .black.opacity(0.15), radius: 1.5, x: 0, y: 0.5)
-                    .position(
-                        x: geometry.size.width / 2,
-                        y: knobY
-                    )
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { gesture in
-                                let newValue = 1 - (gesture.location.y / geometry.size.height)
-                                let clampedValue = max(0, min(1, newValue))
-                                value = range.lowerBound + Float(clampedValue) * (range.upperBound - range.lowerBound)
-                            }
-                    )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isFocused ? Color.accentColor.opacity(0.6) : Color(NSColor.separatorColor).opacity(0.8),
+                                    lineWidth: isFocused ? 1.0 : 0.5
+                                )
+                        )
+
+                    // dB text inside focused knob
+                    if isFocused {
+                        Text(knobDisplayText)
+                            .font(.system(size: 7, weight: .medium, design: .rounded))
+                            .foregroundColor(.primary.opacity(0.8))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
+                .frame(width: knobSize, height: knobSize)
+                .shadow(color: .black.opacity(0.15), radius: 1.5, x: 0, y: 0.5)
+                .position(
+                    x: geometry.size.width / 2,
+                    y: knobY
+                )
+                .onTapGesture(count: 2) {
+                    onDoubleTap()
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { gesture in
+                            let newValue = 1 - (gesture.location.y / geometry.size.height)
+                            let clampedValue = max(0, min(1, newValue))
+                            value = range.lowerBound + Float(clampedValue) * (range.upperBound - range.lowerBound)
+                        }
+                )
             }
+        }
+    }
+}
+
+// MARK: - Scroll Wheel Receiver (macOS)
+
+struct ScrollWheelReceiver: NSViewRepresentable {
+    let onScroll: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ScrollWheelNSView {
+        ScrollWheelNSView(onScroll: onScroll)
+    }
+
+    func updateNSView(_ nsView: ScrollWheelNSView, context: Context) {
+        nsView.onScroll = onScroll
+    }
+
+    class ScrollWheelNSView: NSView {
+        var onScroll: (CGFloat) -> Void
+
+        init(onScroll: @escaping (CGFloat) -> Void) {
+            self.onScroll = onScroll
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func scrollWheel(with event: NSEvent) {
+            onScroll(event.deltaY)
         }
     }
 }

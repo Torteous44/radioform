@@ -93,7 +93,16 @@ class ProxyDeviceManager {
         print("[AutoSelect] Current default device: \(name) (\(uid))")
 
         if name.contains("Radioform") {
-            print("[AutoSelect] Already on proxy device - no action needed")
+            // If we're already on a proxy, make sure we map it to the physical device.
+            if let physicalUID = uid.components(separatedBy: "-radioform").first,
+               let physicalDevice = registry.find(uid: physicalUID) {
+                activeProxyUID = physicalUID
+                activePhysicalDeviceID = physicalDevice.id
+                activeProxyDeviceID = currentDeviceID
+                print("[AutoSelect] Already on proxy device - mapped to \(physicalDevice.name)")
+            } else {
+                print("[AutoSelect] Already on proxy device - but no physical mapping found")
+            }
             return
         }
 
@@ -128,6 +137,29 @@ class ProxyDeviceManager {
             print("[AutoSelect] ERROR: Failed to set proxy as default")
             isAutoSwitching = false
         }
+    }
+
+    /// Resolve the current output device to a physical device, if possible.
+    /// If current output is a proxy, this also updates activeProxy* state.
+    func resolveCurrentOutputDevice(in devices: [PhysicalDevice]) -> PhysicalDevice? {
+        guard let currentDeviceID = getCurrentDefaultDevice(),
+              let uid = getDeviceUID(currentDeviceID),
+              let name = getDeviceName(currentDeviceID) else {
+            return nil
+        }
+
+        if name.contains("Radioform") {
+            if let physicalUID = uid.components(separatedBy: "-radioform").first,
+               let physicalDevice = devices.first(where: { $0.uid == physicalUID }) {
+                activeProxyUID = physicalUID
+                activePhysicalDeviceID = physicalDevice.id
+                activeProxyDeviceID = currentDeviceID
+                return physicalDevice
+            }
+            return nil
+        }
+
+        return devices.first(where: { $0.uid == uid })
     }
 
     func handleProxySelection(_ proxyUID: String, deviceID: AudioDeviceID) {

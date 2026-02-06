@@ -61,6 +61,14 @@ func main() {
         print("[WARNING] No validated devices found. Will attempt setup with available devices anyway.")
     }
 
+    // Query device sample rate for HiFi/lossless audio support
+    let preferredDevice = proxyManager.resolveCurrentOutputDevice(in: devices)
+        ?? validatedDevices.first
+        ?? devices.first!
+    let deviceSampleRate = deviceDiscovery.getDeviceNominalSampleRate(preferredDevice.id)
+    RadioformConfig.activeSampleRate = deviceSampleRate
+    print("[Step 1.5] HiFi mode: \(deviceSampleRate) Hz (from \(preferredDevice.name))")
+
     deviceRegistry.update(devices)
 
     print("[Step 2] Registering device change listeners...")
@@ -84,6 +92,14 @@ func main() {
     proxyManager.autoSelectProxy()
 
     print("[Step 8] Initializing DSP engine...")
+    // Update DSP to match device sample rate
+    if RadioformConfig.activeSampleRate != RadioformConfig.defaultSampleRate {
+        if dspProcessor.setSampleRate(RadioformConfig.activeSampleRate) {
+            print("    DSP sample rate updated to \(RadioformConfig.activeSampleRate) Hz")
+        } else {
+            print("    WARNING: Failed to update DSP sample rate, using \(RadioformConfig.defaultSampleRate) Hz")
+        }
+    }
     let flatPreset = dspProcessor.createFlatPreset()
     guard dspProcessor.applyPreset(flatPreset) else {
         print("[ERROR] Failed to apply EQ preset")

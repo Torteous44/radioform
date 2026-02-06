@@ -56,6 +56,8 @@ class PresetMonitor {
                     }
                 )
                 print("Applied preset: \(name)")
+                print("    preamp_db=\(preset.preamp_db) limiter_enabled=\(preset.limiter_enabled) limiter_threshold_db=\(preset.limiter_threshold_db)")
+                print("    bands=\(preset.num_bands)")
             } else {
                 print("Failed to apply preset")
             }

@@ -7,6 +7,9 @@ class AudioRenderer {
     private let memoryManager: SharedMemoryManager
     private let dspProcessor: DSPProcessor
     private let proxyManager: ProxyDeviceManager
+    private var didLogRenderInfo = false
+    private var debugRenderCount: Int = 0
+    private var testTonePhase: Float = 0
 
     init(
         memoryManager: SharedMemoryManager,
@@ -39,6 +42,17 @@ class AudioRenderer {
     }
 
     private func render(bufferList: UnsafeMutablePointer<AudioBufferList>, frameCount: UInt32) {
+        if !didLogRenderInfo {
+            didLogRenderInfo = true
+            let numBuffers = Int(bufferList.pointee.mNumberBuffers)
+            var sizes: [UInt32] = []
+            for i in 0..<numBuffers {
+                let buf = UnsafeMutableAudioBufferListPointer(bufferList)[i]
+                sizes.append(buf.mDataByteSize)
+            }
+            print("[AudioRenderer] First render: frames=\(frameCount) buffers=\(numBuffers) sizes=\(sizes)")
+        }
+
         let sharedMem: UnsafeMutablePointer<RFSharedAudioV2>?
 
         if let activeUID = proxyManager.activeProxyUID {
@@ -53,9 +67,46 @@ class AudioRenderer {
         }
 
         var tempBuffer = [Float](repeating: 0, count: Int(frameCount) * 2)
-        let framesRead = rf_ring_read_v2(mem, &tempBuffer, frameCount)
+        let useTestTone = (ProcessInfo.processInfo.environment["RF_TEST_TONE"] == "1")
+        let framesRead: UInt32
 
-        dspProcessor.processInterleaved(tempBuffer, output: &tempBuffer, frameCount: frameCount)
+        if useTestTone {
+            let sampleRate = Float(RadioformConfig.activeSampleRate)
+            let freq: Float = 440.0
+            let phaseInc = (2.0 * Float.pi * freq) / sampleRate
+            for i in 0..<Int(frameCount) {
+                let sample = sin(testTonePhase) * 0.2
+                tempBuffer[i * 2] = sample
+                tempBuffer[i * 2 + 1] = sample
+                testTonePhase += phaseInc
+                if testTonePhase > 2.0 * Float.pi {
+                    testTonePhase -= 2.0 * Float.pi
+                }
+            }
+            framesRead = frameCount
+        } else {
+            framesRead = rf_ring_read_v2(mem, &tempBuffer, frameCount)
+        }
+
+        if debugRenderCount < 5 {
+            debugRenderCount += 1
+            let sampleCount = Int(framesRead) * 2
+            if sampleCount > 0 {
+                var maxAbs: Float = 0
+                for i in 0..<sampleCount {
+                    let v = abs(tempBuffer[i])
+                    if v > maxAbs { maxAbs = v }
+                }
+                print("[AudioRenderer] Debug: framesRead=\(framesRead) maxAbs=\(maxAbs)")
+            } else {
+                print("[AudioRenderer] Debug: framesRead=0")
+            }
+        }
+
+        let bypassDSP = (ProcessInfo.processInfo.environment["RF_BYPASS_DSP"] == "1")
+        if !bypassDSP {
+            dspProcessor.processInterleaved(tempBuffer, output: &tempBuffer, frameCount: frameCount)
+        }
 
         deinterleave(
             source: tempBuffer,

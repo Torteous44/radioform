@@ -33,6 +33,11 @@ class DSPProcessor {
         radioform_dsp_process_interleaved(engine, input, &output, frameCount)
     }
 
+    func setSampleRate(_ sampleRate: UInt32) -> Bool {
+        guard let engine = engine else { return false }
+        return radioform_dsp_set_sample_rate(engine, sampleRate) == RADIOFORM_OK
+    }
+
     func createFlatPreset() -> radioform_preset_t {
         var preset = radioform_preset_t()
         radioform_dsp_preset_init_flat(&preset)

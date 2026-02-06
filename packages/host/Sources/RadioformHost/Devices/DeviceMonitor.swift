@@ -7,6 +7,9 @@ class DeviceMonitor {
     private let memoryManager: SharedMemoryManager
     private let discovery: DeviceDiscovery
     private let audioEngine: AudioEngine
+    private var lastHandledDeviceID: AudioDeviceID = 0
+    private var lastHandledTime: Date = .distantPast
+    private let callbackDebounce: TimeInterval = 0.3
 
     init(
         registry: DeviceRegistry,
@@ -114,6 +117,14 @@ class DeviceMonitor {
         ) == noErr else {
             return
         }
+
+        // Debounce: skip if same device within cooldown period
+        let now = Date()
+        if deviceID == lastHandledDeviceID && now.timeIntervalSince(lastHandledTime) < callbackDebounce {
+            return
+        }
+        lastHandledDeviceID = deviceID
+        lastHandledTime = now
 
         guard let name = getDeviceName(deviceID),
               let uid = getDeviceUID(deviceID) else {

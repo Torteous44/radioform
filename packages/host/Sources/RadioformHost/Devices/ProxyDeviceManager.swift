@@ -4,6 +4,8 @@ import CoreAudio
 class ProxyDeviceManager {
     private let registry: DeviceRegistry
     private var isAutoSwitching = false
+    private var lastSwitchTime: Date = .distantPast
+    private let switchCooldown: TimeInterval = 0.5
 
     var activeProxyUID: String?
     var activePhysicalDeviceID: AudioDeviceID = 0
@@ -115,6 +117,8 @@ class ProxyDeviceManager {
         }
 
         print("[AutoSelect] Switching to proxy device...")
+        isAutoSwitching = true
+        lastSwitchTime = Date()
         if setDefaultOutputDevice(proxyID) {
             print("[AutoSelect] ✓ Successfully switched to proxy")
             activeProxyUID = uid
@@ -122,6 +126,7 @@ class ProxyDeviceManager {
             activeProxyDeviceID = proxyID
         } else {
             print("[AutoSelect] ERROR: Failed to set proxy as default")
+            isAutoSwitching = false
         }
     }
 
@@ -132,12 +137,22 @@ class ProxyDeviceManager {
 
             activeProxyUID = physicalUID
             activePhysicalDeviceID = physicalDevice.id
+            activeProxyDeviceID = deviceID
         }
 
-        isAutoSwitching = false
+        // Delay resetting the flag to prevent race conditions with rapid callbacks
+        DispatchQueue.main.asyncAfter(deadline: .now() + switchCooldown) { [weak self] in
+            self?.isAutoSwitching = false
+        }
     }
 
     func handlePhysicalSelection(_ physicalUID: String) {
+        // Prevent rapid re-triggering
+        let now = Date()
+        guard now.timeIntervalSince(lastSwitchTime) > switchCooldown else {
+            return
+        }
+
         if !isAutoSwitching, let physicalDevice = registry.find(uid: physicalUID) {
             if let proxyID = findProxyDevice(forPhysicalUID: physicalUID) {
                 // Sync volume before switching
@@ -147,14 +162,14 @@ class ProxyDeviceManager {
 
                 print("Auto-switching to Radioform proxy")
                 isAutoSwitching = true
+                lastSwitchTime = now
                 _ = setDefaultOutputDevice(proxyID)
                 activeProxyDeviceID = proxyID
             } else {
                 print("Warning: No proxy found for this device")
             }
-        } else {
-            isAutoSwitching = false
         }
+        // Note: isAutoSwitching is reset in handleProxySelection after delay
     }
 
     func restorePhysicalDevice() -> Bool {

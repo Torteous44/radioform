@@ -477,6 +477,12 @@ struct MenuItemButton: View {
 struct BandControls: View {
     let bandIndex: Int
     @ObservedObject private var presetManager = PresetManager.shared
+    @State private var isEditingFreq = false
+    @State private var isEditingQ = false
+    @State private var freqText = ""
+    @State private var qText = ""
+    @FocusState private var freqFieldFocused: Bool
+    @FocusState private var qFieldFocused: Bool
 
     /// Format frequency for display
     private func formatFrequency(_ hz: Float) -> String {
@@ -489,6 +495,17 @@ struct BandControls: View {
         }
     }
 
+    /// Parse user-entered frequency text (supports "1k", "1.5k", "250", etc.)
+    private func parseFrequency(_ text: String) -> Float? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces).lowercased()
+        if trimmed.hasSuffix("k") {
+            if let val = Float(trimmed.dropLast()) {
+                return val * 1000
+            }
+        }
+        return Float(trimmed)
+    }
+
     /// Convert frequency (20–20000) to slider position (0–1) using log scale
     private func freqToPosition(_ freq: Float) -> Double {
         Double(log(freq / 20) / log(1000))
@@ -497,6 +514,20 @@ struct BandControls: View {
     /// Convert slider position (0–1) to frequency (20–20000) using log scale
     private func positionToFreq(_ position: Double) -> Float {
         20 * pow(1000, Float(position))
+    }
+
+    private func commitFreq() {
+        if let hz = parseFrequency(freqText) {
+            presetManager.updateBandFrequency(index: bandIndex, frequencyHz: hz)
+        }
+        isEditingFreq = false
+    }
+
+    private func commitQ() {
+        if let q = Float(qText.trimmingCharacters(in: .whitespaces)) {
+            presetManager.updateBandQ(index: bandIndex, qFactor: q)
+        }
+        isEditingQ = false
     }
 
     var body: some View {
@@ -524,10 +555,31 @@ struct BandControls: View {
                     in: 0...1
                 )
 
-                Text(formatFrequency(presetManager.currentFrequencies[bandIndex]))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .frame(width: 36, alignment: .trailing)
+                if isEditingFreq {
+                    TextField("", text: $freqText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .frame(width: 42)
+                        .multilineTextAlignment(.trailing)
+                        .focused($freqFieldFocused)
+                        .onSubmit { commitFreq() }
+                        .onExitCommand { isEditingFreq = false }
+                        .onChange(of: freqFieldFocused) { focused in
+                            if !focused { commitFreq() }
+                        }
+                } else {
+                    Text(formatFrequency(presetManager.currentFrequencies[bandIndex]))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .frame(width: 36, alignment: .trailing)
+                        .onTapGesture {
+                            freqText = formatFrequency(presetManager.currentFrequencies[bandIndex])
+                            isEditingFreq = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                freqFieldFocused = true
+                            }
+                        }
+                }
             }
 
             // Row 2: Q label + Q slider + Q value
@@ -544,10 +596,31 @@ struct BandControls: View {
                     in: 0.1...10.0
                 )
 
-                Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .frame(width: 36, alignment: .trailing)
+                if isEditingQ {
+                    TextField("", text: $qText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .frame(width: 42)
+                        .multilineTextAlignment(.trailing)
+                        .focused($qFieldFocused)
+                        .onSubmit { commitQ() }
+                        .onExitCommand { isEditingQ = false }
+                        .onChange(of: qFieldFocused) { focused in
+                            if !focused { commitQ() }
+                        }
+                } else {
+                    Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .frame(width: 36, alignment: .trailing)
+                        .onTapGesture {
+                            qText = String(format: "%.2f", presetManager.currentQFactors[bandIndex])
+                            isEditingQ = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                qFieldFocused = true
+                            }
+                        }
+                }
             }
         }
         .padding(.horizontal, 10)

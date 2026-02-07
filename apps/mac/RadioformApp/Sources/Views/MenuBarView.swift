@@ -69,8 +69,8 @@ struct MenuBarView: View {
                     // Contextual area: band controls (focused) or presets (default)
                     if let focusedIndex = presetManager.focusedBandIndex {
                         if focusedIndex < 10 {
-                            // Per-band: Q factor control
-                            BandQControl(bandIndex: focusedIndex)
+                            // Per-band controls: filter type, frequency, Q factor
+                            BandControls(bandIndex: focusedIndex)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 6)
                         } else {
@@ -474,28 +474,81 @@ struct MenuItemButton: View {
 
 // MARK: - Band Focus Controls
 
-struct BandQControl: View {
+struct BandControls: View {
     let bandIndex: Int
     @ObservedObject private var presetManager = PresetManager.shared
 
+    /// Format frequency for display
+    private func formatFrequency(_ hz: Float) -> String {
+        if hz < 1000 {
+            return "\(Int(hz))"
+        } else if hz < 10000 {
+            return String(format: "%.1fK", hz / 1000)
+        } else {
+            return "\(Int(hz / 1000))K"
+        }
+    }
+
+    /// Convert frequency (20–20000) to slider position (0–1) using log scale
+    private func freqToPosition(_ freq: Float) -> Double {
+        Double(log(freq / 20) / log(1000))
+    }
+
+    /// Convert slider position (0–1) to frequency (20–20000) using log scale
+    private func positionToFreq(_ position: Double) -> Float {
+        20 * pow(1000, Float(position))
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
-            Text("Q")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
+        VStack(spacing: 4) {
+            // Row 1: Filter type picker + frequency slider + value
+            HStack(spacing: 6) {
+                Picker("", selection: Binding(
+                    get: { presetManager.currentFilterTypes[bandIndex] },
+                    set: { presetManager.updateBandFilterType(index: bandIndex, filterType: $0) }
+                )) {
+                    ForEach(FilterType.allCases, id: \.self) { type in
+                        Text(type.displayName).tag(type)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 90)
+                .controlSize(.small)
 
-            Slider(
-                value: Binding(
-                    get: { Double(presetManager.currentQFactors[bandIndex]) },
-                    set: { presetManager.updateBandQ(index: bandIndex, qFactor: Float($0)) }
-                ),
-                in: 0.1...10.0
-            )
+                Slider(
+                    value: Binding(
+                        get: { freqToPosition(presetManager.currentFrequencies[bandIndex]) },
+                        set: { presetManager.updateBandFrequency(index: bandIndex, frequencyHz: positionToFreq($0)) }
+                    ),
+                    in: 0...1
+                )
 
-            Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(.primary)
-                .frame(width: 36, alignment: .trailing)
+                Text(formatFrequency(presetManager.currentFrequencies[bandIndex]))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+
+            // Row 2: Q label + Q slider + Q value
+            HStack(spacing: 6) {
+                Text("Q")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.secondary)
+
+                Slider(
+                    value: Binding(
+                        get: { Double(presetManager.currentQFactors[bandIndex]) },
+                        set: { presetManager.updateBandQ(index: bandIndex, qFactor: Float($0)) }
+                    ),
+                    in: 0.1...10.0
+                )
+
+                Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)

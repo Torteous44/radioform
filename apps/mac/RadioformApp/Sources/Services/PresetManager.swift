@@ -12,6 +12,7 @@ struct MappedBandResult {
     var gains: [Float]
     var qFactors: [Float]
     var filterTypes: [FilterType]
+    var frequencies: [Float]
     var warnings: [String]
 }
 
@@ -29,6 +30,7 @@ class PresetManager: ObservableObject {
     // Per-band advanced settings
     @Published var currentQFactors: [Float] = Array(repeating: 1.0, count: 10)
     @Published var currentFilterTypes: [FilterType] = Array(repeating: .peak, count: 10)
+    @Published var currentFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
 
     // Global settings
     @Published var currentPreampDb: Float = 0.0
@@ -250,26 +252,36 @@ class PresetManager: ObservableObject {
         var gains: [Float] = Array(repeating: 0, count: 10)
         var qFactors: [Float] = Array(repeating: 1.0, count: 10)
         var filterTypes: [FilterType] = Array(repeating: .peak, count: 10)
+        var frequencies: [Float] = standardFrequencies
         var warnings: [String] = []
+
+        // If preset has exactly 10 bands, use them directly by index (preserves custom frequencies)
+        if preset.bands.count == 10 {
+            for i in 0..<10 {
+                let band = preset.bands[i]
+                gains[i] = band.enabled ? band.gainDb : 0
+                qFactors[i] = band.qFactor
+                filterTypes[i] = band.filterType
+                frequencies[i] = band.frequencyHz
+            }
+            return MappedBandResult(gains: gains, qFactors: qFactors, filterTypes: filterTypes, frequencies: frequencies, warnings: warnings)
+        }
+
+        // For presets with fewer bands, use log-distance matching to map to standard slots
         var usedBandIndices = Set<Int>()
 
-        // Use logarithmic distance for frequency matching (more accurate for audio)
         func logDistance(_ f1: Float, _ f2: Float) -> Float {
             return abs(log10(f1) - log10(f2))
         }
 
-        // Consider all bands (not just enabled) so we preserve Q/filterType for disabled bands too
         let allBands = preset.bands.enumerated().map { ($0.offset, $0.element) }
 
-        // For each standard frequency, find best matching preset band
         for i in 0..<10 {
             let targetFreq = standardFrequencies[i]
 
-            // Find closest unused band
             var bestMatch: (index: Int, band: EQBand, distance: Float)?
 
             for (presetIdx, band) in allBands {
-                // Skip if this band was already used
                 if usedBandIndices.contains(presetIdx) {
                     continue
                 }
@@ -281,10 +293,7 @@ class PresetManager: ObservableObject {
                 }
             }
 
-            // Apply match if found and within reasonable tolerance
             if let match = bestMatch {
-                // Tolerance: 1 octave = log distance of 0.301 (log10(2))
-                // Use 0.5 octaves as max tolerance (more permissive than before)
                 let maxToleranceOctaves: Float = 0.5
                 let maxLogDistance = maxToleranceOctaves * log10(2)
 
@@ -292,9 +301,9 @@ class PresetManager: ObservableObject {
                     gains[i] = match.band.enabled ? match.band.gainDb : 0
                     qFactors[i] = match.band.qFactor
                     filterTypes[i] = match.band.filterType
+                    frequencies[i] = match.band.frequencyHz
                     usedBandIndices.insert(match.index)
                 } else {
-                    // Band exists but too far away
                     let octaveDiff = match.distance / log10(2)
                     warnings.append(
                         "Band at \(Int(match.band.frequencyHz))Hz is \(String(format: "%.1f", octaveDiff)) octaves from \(Int(targetFreq))Hz slider - setting to 0dB"
@@ -303,7 +312,6 @@ class PresetManager: ObservableObject {
             }
         }
 
-        // Check for unmapped preset bands that were enabled
         let enabledBands = allBands.filter { $0.1.enabled }
         for (presetIdx, band) in enabledBands {
             if !usedBandIndices.contains(presetIdx) {
@@ -313,7 +321,7 @@ class PresetManager: ObservableObject {
             }
         }
 
-        return MappedBandResult(gains: gains, qFactors: qFactors, filterTypes: filterTypes, warnings: warnings)
+        return MappedBandResult(gains: gains, qFactors: qFactors, filterTypes: filterTypes, frequencies: frequencies, warnings: warnings)
     }
 
     /// Apply preset via IPC
@@ -331,6 +339,7 @@ class PresetManager: ObservableObject {
             currentBands = result.gains
             currentQFactors = result.qFactors
             currentFilterTypes = result.filterTypes
+            currentFrequencies = result.frequencies
             currentPreampDb = preset.preampDb
             currentLimiterEnabled = preset.limiterEnabled
             currentLimiterThresholdDb = preset.limiterThresholdDb
@@ -386,7 +395,7 @@ class PresetManager: ObservableObject {
     }
 
     private func doApplyCurrentStateToAudio() {
-        let bands = standardFrequencies.enumerated().map { index, frequency in
+        let bands = currentFrequencies.enumerated().map { index, frequency in
             let gain = isEnabled ? currentBands[index] : 0.0
             return EQBand(
                 frequencyHz: frequency,
@@ -442,6 +451,15 @@ class PresetManager: ObservableObject {
     func updateBandFilterType(index: Int, filterType: FilterType) {
         guard index >= 0 && index < 10 else { return }
         currentFilterTypes[index] = filterType
+        markCustomIfNeeded()
+        resetInactivityTimer()
+        applyCurrentStateToAudio()
+    }
+
+    /// Update frequency for a specific band
+    func updateBandFrequency(index: Int, frequencyHz: Float) {
+        guard index >= 0 && index < 10 else { return }
+        currentFrequencies[index] = max(20, min(20000, frequencyHz))
         markCustomIfNeeded()
         resetInactivityTimer()
         applyCurrentStateToAudio()
@@ -572,7 +590,7 @@ class PresetManager: ObservableObject {
         let finalName = generateUniqueName(trimmedName)
 
         // Build preset from current bands (preserving advanced settings)
-        let bands: [EQBand] = standardFrequencies.enumerated().map { index, frequency in
+        let bands: [EQBand] = currentFrequencies.enumerated().map { index, frequency in
             let gain = currentBands[index]
             return EQBand(
                 frequencyHz: frequency,

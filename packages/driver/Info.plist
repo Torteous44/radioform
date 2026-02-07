@@ -19,9 +19,9 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.11</string>
+	<string>2.0.0-internal</string>
 	<key>CFBundleVersion</key>
-	<string>1.1.11</string>
+	<string>2.0.0-internal</string>
 	<key>CFPlugInDynamicRegisterFunction</key>
 	<string></string>
 	<key>CFPlugInDynamicRegistration</key>

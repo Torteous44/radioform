@@ -98,12 +98,14 @@ fi
 if [ "$UPDATE_DRIVER" = true ]; then
     DRIVER_CMAKE="$PROJECT_ROOT/packages/driver/CMakeLists.txt"
     if [ -f "$DRIVER_CMAKE" ]; then
+        # CMake only accepts numeric versions (major.minor.patch) - strip any suffix like "-internal"
+        CMAKE_VERSION=$(echo "$VERSION" | sed 's/-.*//')
         # Use sed to replace the version in project() line
         if [[ "$OSTYPE" == "darwin"* ]]; then
             # macOS sed requires -i with extension or '' and different regex syntax
-            sed -i '' "s/project(RadioformDriver VERSION [0-9.]*/project(RadioformDriver VERSION $VERSION/" "$DRIVER_CMAKE"
+            sed -i '' "s/project(RadioformDriver VERSION [0-9a-zA-Z._-]*/project(RadioformDriver VERSION $CMAKE_VERSION/" "$DRIVER_CMAKE"
         else
-            sed -i "s/project(RadioformDriver VERSION [0-9.]\+/project(RadioformDriver VERSION $VERSION/" "$DRIVER_CMAKE"
+            sed -i "s/project(RadioformDriver VERSION [0-9a-zA-Z._-]\+/project(RadioformDriver VERSION $CMAKE_VERSION/" "$DRIVER_CMAKE"
         fi
         echo "✓ Updated packages/driver/CMakeLists.txt"
     else

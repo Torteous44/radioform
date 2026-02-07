@@ -4,8 +4,18 @@ import AppKit
 struct TenBandEQ: View {
     @ObservedObject private var presetManager = PresetManager.shared
 
-    let bandFrequencies = ["32", "64", "125", "250", "500", "1K", "2K", "4K", "8K", "16K"]
     let displayOrder = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    /// Format frequency value for band labels
+    private func formatFrequency(_ hz: Float) -> String {
+        if hz < 1000 {
+            return "\(Int(hz))"
+        } else if hz < 10000 {
+            return String(format: "%.1fK", hz / 1000)
+        } else {
+            return "\(Int(hz / 1000))K"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -57,7 +67,7 @@ struct TenBandEQ: View {
                             .frame(width: 20, height: 100)
 
                             // Frequency label
-                            Text(index == 10 ? "Pre" : bandFrequencies[index])
+                            Text(index == 10 ? "Pre" : formatFrequency(presetManager.currentFrequencies[index]))
                                 .font(.system(size: 9))
                                 .foregroundColor(index == 10 ? .accentColor.opacity(0.7) : .secondary)
                                 .frame(minWidth: 22)

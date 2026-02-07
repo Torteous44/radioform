@@ -8,11 +8,11 @@ User interface for system EQ control. Contains no realtime audio code.
 
 ## Features
 
-- 10-band parametric EQ with frequency response visualization
-- Preset management (8 bundled presets, JSON import/export)
-- Device selection for Radioform proxy outputs
+- 10-band parametric EQ
+- Preset management (bundled presets + custom presets saved to JSON on disk)
 - Driver installation onboarding flow
 - Menu bar popover interface
+- Advanced per-band controls: frequency, Q, filter type
 
 ## Architecture
 

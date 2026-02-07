@@ -1,7 +1,7 @@
 import Foundation
 
 /// Filter types matching radioform_filter_type_t
-enum FilterType: Int, Codable {
+enum FilterType: Int, Codable, CaseIterable {
     case peak = 0
     case lowShelf = 1
     case highShelf = 2
@@ -9,6 +9,18 @@ enum FilterType: Int, Codable {
     case highPass = 4
     case notch = 5
     case bandPass = 6
+
+    var displayName: String {
+        switch self {
+        case .peak: return "Peak"
+        case .lowShelf: return "Low Shelf"
+        case .highShelf: return "High Shelf"
+        case .lowPass: return "Low Pass"
+        case .highPass: return "High Pass"
+        case .notch: return "Notch"
+        case .bandPass: return "Band Pass"
+        }
+    }
 }
 
 /// Single EQ band matching radioform_band_t

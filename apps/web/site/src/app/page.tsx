@@ -1,5 +1,4 @@
 import Image from "next/image";
-import HoverCopy from "./components/HoverCopy";
 import FAQ from "./components/FAQ";
 
 const jsonLd = {
@@ -24,9 +23,8 @@ const jsonLd = {
         priceCurrency: "USD",
       },
       featureList: [
-        "10-band system-wide equalizer (32 Hz to 16 kHz)",
-        "Built-in presets for Electronic, Acoustic, Classical, Hip-Hop, Jazz, Pop, R&B, Rock",
-        "Custom EQ curves per audio device",
+        "10-band fully parametric equalizer (20 Hz to 20 kHz)",
+        "Built-in presets for Electronic, Acoustic, Classical, Hip-Hop, Pop, R&B, Rock, Flat",
         "Built-in limiter and preamp",
         "Zero added latency",
         "Sub-1% CPU usage",
@@ -157,10 +155,14 @@ export default function Home() {
         {/* Copy */}
         <div className="text-sm leading-relaxed space-y-4 mb-8">
           <p>
-            Radioform is a free, open-source macOS native equalizer that lets
-            you shape your sound system-wide.
+            Radioform is a free, open-source macOS equalizer that lets you
+            shape your sound system-wide — with fully parametric per-band
+            control.
           </p>
-          <HoverCopy />
+          <p>
+            It tucks into your menubar and stays out of your way. Pick a
+            preset or craft your own EQ curves for different gear.
+          </p>
           <p>
             Created with C++ and Swift. Learn more{" "}
             <a href="/about" className="underline">

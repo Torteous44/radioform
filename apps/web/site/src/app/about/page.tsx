@@ -120,9 +120,9 @@ export default function Technology() {
                   EQ everything at once
                 </p>
                 <p className="col-span-12 sm:col-span-8 text-black leading-relaxed">
-                  10 bands from 32 Hz to 16 kHz. Boost low end, pull back harsh
-                  highs, or add warmth. It applies to all audio on your Mac, so
-                  you don’t configure anything per app.
+                  10 fully parametric bands from 20 Hz to 20 kHz. Boost low end,
+                  pull back harsh highs, or add warmth. It applies to all audio
+                  on your Mac, so you don’t configure anything per app.
                 </p>
                 <div className="col-span-12 h-px bg-black/10 mt-2" />
               </div>
@@ -133,8 +133,8 @@ export default function Technology() {
                 </p>
                 <div className="col-span-12 sm:col-span-8 space-y-2">
                   <p className="text-black leading-relaxed">
-                    Presets for Electronic, Acoustic, Classical, Hip-Hop, Jazz,
-                    Pop, R&amp;B, and Rock.
+                    Presets for Electronic, Acoustic, Classical, Hip-Hop, Pop,
+                    R&amp;B, Rock, plus a Flat baseline.
                   </p>
                   <p className="text-black leading-relaxed">
                     They’re solid starting points. Save your own curves for
@@ -197,8 +197,8 @@ export default function Technology() {
               Performance
             </h2>
             <p className="text-black">
-              Under 1% CPU usage. Zero added latency. 10 EQ bands from 32 Hz to
-              16 kHz.
+              Under 1% CPU usage. Zero added latency. 10 fully parametric bands
+              from 20 Hz to 20 kHz.
             </p>
           </section>
 
@@ -228,8 +228,9 @@ export default function Technology() {
             <div className="space-y-2 text-black">
               <p>macOS 13.0 Ventura or later.</p>
               <p>
-                Runs natively on Apple Silicon and Intel. Signed and notarized
-                by Apple. Updates happen automatically.
+                Runs natively on Apple Silicon and Intel. Releases are signed
+                for distribution and can be notarized. In-app update checks are
+                handled by Sparkle and can be disabled.
               </p>
               <p>
                 Open source under GPLv3. Free, no subscriptions, no data

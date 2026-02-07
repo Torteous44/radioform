@@ -25,15 +25,16 @@ Radioform is built as a small set of focused components, each doing one job well
   Handles device management, shared-memory audio transfer, and DSP execution.
 
 - **Menu Bar App (SwiftUI)**  
-  A lightweight control surface that can quit and relaunch without interrupting sound.
+  A lightweight UI that controls a separate audio host process; no realtime audio in the UI.
 
 
 ## What You Can Do
 
 - Apply system-wide EQ across all apps
 - Shape sound with a 10-band parametric equalizer
+- Adjust per-band frequency, Q, and filter type (Peak, Shelf, Pass, Notch)
 - Keep levels safe with limiter and preamp guard rails
-- Load bundled or custom presets (JSON), safely validated
+- Load bundled presets and save custom presets (JSON on disk), safely validated
 - Switch devices without breaking your audio flow
 
 ## Performance

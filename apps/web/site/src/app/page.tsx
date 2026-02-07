@@ -135,7 +135,7 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="max-w-lg mx-auto">
+      <div className="max-w-md mx-auto">
         {/* Hero */}
         <div className="w-full overflow-hidden hidden min-[480px]:block">
           <Image
@@ -150,18 +150,19 @@ export default function Home() {
         </div>
 
         <StretchedTitle />
-        <h1 className="sr-only">Radioform: A free, open-source macOS equalizer</h1>
+        <h1 className="sr-only">
+          Radioform: A free, open-source macOS equalizer
+        </h1>
 
         {/* Copy */}
         <div className="text-sm leading-relaxed space-y-4 mb-8">
           <p>
-            Radioform is a free, open-source macOS equalizer that lets you
-            shape your sound system-wide — with fully parametric per-band
-            control.
+            Radioform is a free, open-source macOS equalizer that lets you shape
+            your sound system-wide — with fully parametric per-band control.
           </p>
           <p>
-            It tucks into your menubar and stays out of your way. Pick a
-            preset or craft your own EQ curves for different gear.
+            It tucks into your menubar and stays out of your way. Pick a preset
+            or craft your own EQ curves for different gear.
           </p>
           <p>
             Created with C++ and Swift. Learn more{" "}
@@ -222,7 +223,10 @@ export default function Home() {
         </div>
 
         {/* FAQs */}
-        <section aria-label="Frequently asked questions" className="border-t border-neutral-200">
+        <section
+          aria-label="Frequently asked questions"
+          className="border-t border-neutral-200"
+        >
           <FAQ
             question="How do I get started?"
             answer={

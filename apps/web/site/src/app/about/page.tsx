@@ -50,7 +50,7 @@ export default function Technology() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutJsonLd) }}
       />
-      <div className="max-w-lg mx-auto">
+      <div className="max-w-md mx-auto">
         <div className="relative mt-6 mb-12 hover-underline">
           <Link
             href="/"

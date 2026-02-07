@@ -395,8 +395,9 @@ class PresetManager: ObservableObject {
     }
 
     private func doApplyCurrentStateToAudio() {
+        let enabled = isEnabled
         let bands = currentFrequencies.enumerated().map { index, frequency in
-            let gain = isEnabled ? currentBands[index] : 0.0
+            let gain = enabled ? currentBands[index] : 0.0
             return EQBand(
                 frequencyHz: frequency,
                 gainDb: gain,
@@ -406,12 +407,17 @@ class PresetManager: ObservableObject {
             )
         }
 
+        // When disabled, force neutral global settings to ensure a true bypass.
+        let preampDb = enabled ? currentPreampDb : 0.0
+        let limiterEnabled = enabled ? currentLimiterEnabled : false
+        let limiterThresholdDb = enabled ? currentLimiterThresholdDb : 0.0
+
         let customPreset = EQPreset(
             name: "Custom",
             bands: bands,
-            preampDb: currentPreampDb,
-            limiterEnabled: currentLimiterEnabled,
-            limiterThresholdDb: currentLimiterThresholdDb
+            preampDb: preampDb,
+            limiterEnabled: limiterEnabled,
+            limiterThresholdDb: limiterThresholdDb
         )
 
         do {

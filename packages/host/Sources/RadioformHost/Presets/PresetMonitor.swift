@@ -3,8 +3,9 @@ import Foundation
 class PresetMonitor {
     private let loader: PresetLoader
     private let processor: DSPProcessor
-    private var isMonitoring = false
-    private var monitorQueue: DispatchQueue?
+    private let queue = DispatchQueue(label: "com.radioform.preset-monitor")
+    private var timer: DispatchSourceTimer?
+    private var lastModification: Date?
 
     init(loader: PresetLoader, processor: DSPProcessor) {
         self.loader = loader
@@ -12,37 +13,36 @@ class PresetMonitor {
     }
 
     func startMonitoring() {
-        guard !isMonitoring else { return }
+        guard timer == nil else { return }
 
-        isMonitoring = true
-        let queue = DispatchQueue(label: "com.radioform.preset-monitor")
-        monitorQueue = queue
-
-        queue.async { [weak self] in
-            guard let self = self else { return }
-
-            var lastModification: Date?
-
-            while self.isMonitoring {
-                if let attributes = try? FileManager.default.attributesOfItem(
-                    atPath: RadioformConfig.presetFilePath
-                ),
-                   let modDate = attributes[.modificationDate] as? Date {
-
-                    if lastModification == nil || modDate > lastModification! {
-                        lastModification = modDate
-                        self.loadAndApplyPreset()
-                    }
-                }
-
-                Thread.sleep(forTimeInterval: RadioformConfig.presetMonitorInterval)
-            }
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(
+            deadline: .now(),
+            repeating: RadioformConfig.presetMonitorInterval
+        )
+        timer.setEventHandler { [weak self] in
+            self?.checkForChanges()
         }
+        timer.resume()
+        self.timer = timer
     }
 
     func stopMonitoring() {
-        isMonitoring = false
-        monitorQueue = nil
+        timer?.cancel()
+        timer = nil
+    }
+
+    private func checkForChanges() {
+        if let attributes = try? FileManager.default.attributesOfItem(
+            atPath: RadioformConfig.presetFilePath
+        ),
+           let modDate = attributes[.modificationDate] as? Date {
+
+            if lastModification == nil || modDate > lastModification! {
+                lastModification = modDate
+                loadAndApplyPreset()
+            }
+        }
     }
 
     private func loadAndApplyPreset() {

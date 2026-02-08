@@ -21,6 +21,18 @@ enum FilterType: Int, Codable, CaseIterable {
         case .bandPass: return "Band Pass"
         }
     }
+
+    var shortDisplayName: String {
+        switch self {
+        case .peak: return "Peak"
+        case .lowShelf: return "LoSh"
+        case .highShelf: return "HiSh"
+        case .lowPass: return "LoPa"
+        case .highPass: return "HiPa"
+        case .notch: return "Not"
+        case .bandPass: return "Band"
+        }
+    }
 }
 
 /// Single EQ band matching radioform_band_t

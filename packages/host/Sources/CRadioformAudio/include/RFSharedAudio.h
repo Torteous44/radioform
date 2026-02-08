@@ -1,5 +1,5 @@
-#ifndef RF_SHARED_AUDIO_V2_H
-#define RF_SHARED_AUDIO_V2_H
+#ifndef RF_SHARED_AUDIO_H
+#define RF_SHARED_AUDIO_H
 
 #include <stdint.h>
 #include <stdatomic.h>
@@ -11,8 +11,8 @@
 extern "C" {
 #endif
 
-// Protocol version - V2 adds dynamic format support
-#define RF_AUDIO_PROTOCOL_VERSION_V2 0x00020000
+// Protocol version
+#define RF_AUDIO_PROTOCOL_VERSION 0x00020000
 
 // Audio format types
 typedef enum {
@@ -49,7 +49,7 @@ static inline uint32_t rf_frames_for_duration(uint32_t sample_rate, uint32_t dur
 }
 
 /**
- * V2 Shared memory structure - DYNAMIC format support
+ * Shared memory structure
  *
  * This version supports:
  * - Multiple sample rates (44.1 - 192 kHz)
@@ -60,7 +60,7 @@ static inline uint32_t rf_frames_for_duration(uint32_t sample_rate, uint32_t dur
  */
 typedef struct {
     // ===== PROTOCOL INFO =====
-    uint32_t protocol_version;        // RF_AUDIO_PROTOCOL_VERSION_V2
+    uint32_t protocol_version;        // RF_AUDIO_PROTOCOL_VERSION
     uint32_t header_size;             // Size of this header (for future expansion)
 
     // ===== AUDIO FORMAT (negotiated) =====
@@ -108,7 +108,7 @@ typedef struct {
     // This MUST be the last field (flexible array member)
     uint8_t audio_data[];
 
-} RFSharedAudioV2;
+} RFSharedAudio;
 
 // Capability flags
 #define RF_CAP_MULTI_SAMPLE_RATE    (1 << 0)  // Supports multiple sample rates
@@ -120,28 +120,28 @@ typedef struct {
 #define RF_CAP_HEARTBEAT_MONITOR    (1 << 6)  // Monitors connection health
 
 /**
- * Calculate total size needed for V2 shared memory
+ * Calculate total size needed for shared memory
  */
-static inline size_t rf_shared_audio_v2_size(uint32_t capacity_frames,
+static inline size_t rf_shared_audio_size(uint32_t capacity_frames,
                                               uint32_t channels,
                                               uint32_t bytes_per_sample) {
-    return sizeof(RFSharedAudioV2) + (capacity_frames * channels * bytes_per_sample);
+    return sizeof(RFSharedAudio) + (capacity_frames * channels * bytes_per_sample);
 }
 
 /**
- * Initialize V2 shared memory with format specification
+ * Initialize shared memory with format specification
  */
-static inline void rf_shared_audio_v2_init(
-    RFSharedAudioV2* mem,
+static inline void rf_shared_audio_init(
+    RFSharedAudio* mem,
     uint32_t sample_rate,
     uint32_t channels,
     RFAudioFormat format,
     uint32_t duration_ms)
 {
-    memset(mem, 0, sizeof(RFSharedAudioV2));
+    memset(mem, 0, sizeof(RFSharedAudio));
 
-    mem->protocol_version = RF_AUDIO_PROTOCOL_VERSION_V2;
-    mem->header_size = sizeof(RFSharedAudioV2);
+    mem->protocol_version = RF_AUDIO_PROTOCOL_VERSION;
+    mem->header_size = sizeof(RFSharedAudio);
 
     // Audio format
     mem->sample_rate = sample_rate;
@@ -219,7 +219,7 @@ static inline uint32_t rf_bytes_per_sample(RFAudioFormat format) {
 /**
  * Check if both sides are connected and healthy
  */
-static inline bool rf_is_connection_healthy(const RFSharedAudioV2* mem) {
+static inline bool rf_is_connection_healthy(const RFSharedAudio* mem) {
     uint32_t driver_conn = atomic_load(&mem->driver_connected);
     uint32_t host_conn = atomic_load(&mem->host_connected);
 
@@ -240,8 +240,8 @@ static inline bool rf_is_connection_healthy(const RFSharedAudioV2* mem) {
  *
  * This version accepts float32 input and converts to the ring buffer's format
  */
-static inline uint32_t rf_ring_write_v2(
-    RFSharedAudioV2* mem,
+static inline uint32_t rf_ring_write(
+    RFSharedAudio* mem,
     const float* input_frames,  // Always float32 input
     uint32_t num_frames)
 {
@@ -317,8 +317,8 @@ static inline uint32_t rf_ring_write_v2(
  *
  * This version outputs float32 regardless of ring buffer format
  */
-static inline uint32_t rf_ring_read_v2(
-    RFSharedAudioV2* mem,
+static inline uint32_t rf_ring_read(
+    RFSharedAudio* mem,
     float* output_frames,  // Always float32 output
     uint32_t num_frames)
 {
@@ -393,12 +393,12 @@ static inline uint32_t rf_ring_read_v2(
 /**
  * Update heartbeat (call every ~1 second)
  */
-static inline void rf_update_driver_heartbeat(RFSharedAudioV2* mem) {
+static inline void rf_update_driver_heartbeat(RFSharedAudio* mem) {
     atomic_fetch_add(&mem->driver_heartbeat, 1);
     atomic_store(&mem->driver_connected, 1);
 }
 
-static inline void rf_update_host_heartbeat(RFSharedAudioV2* mem) {
+static inline void rf_update_host_heartbeat(RFSharedAudio* mem) {
     atomic_fetch_add(&mem->host_heartbeat, 1);
     atomic_store(&mem->host_connected, 1);
 }
@@ -408,7 +408,7 @@ static inline void rf_update_host_heartbeat(RFSharedAudioV2* mem) {
  * Returns true if current format doesn't match requested format
  */
 static inline bool rf_needs_format_change(
-    const RFSharedAudioV2* mem,
+    const RFSharedAudio* mem,
     uint32_t new_sample_rate,
     uint32_t new_channels,
     RFAudioFormat new_format)
@@ -422,4 +422,4 @@ static inline bool rf_needs_format_change(
 }
 #endif
 
-#endif // RF_SHARED_AUDIO_V2_H
+#endif // RF_SHARED_AUDIO_H

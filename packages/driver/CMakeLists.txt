@@ -17,9 +17,9 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -fsanitize=address")
 # libASPL
 add_subdirectory(vendor/libASPL)
 
-# Radioform Driver sources - V2 (Universal)
+# Radioform Driver sources
 set(DRIVER_SOURCES
-    src/PluginV2.cpp
+    src/Plugin.cpp
 )
 
 # Create the driver bundle
@@ -53,7 +53,7 @@ set_target_properties(RadioformDriver PROPERTIES
 #     BUNDLE DESTINATION "/Library/Audio/Plug-Ins/HAL"
 # )
 
-message(STATUS "Radioform HAL Driver V2 (Universal) configured")
+message(STATUS "Radioform HAL Driver configured")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Multi-format: YES (int16/24/32, float32/64)")
 message(STATUS "  Multi-rate: YES (44.1-192 kHz)")

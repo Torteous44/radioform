@@ -4,7 +4,7 @@
 #include <aspl/Driver.hpp>
 #include <CoreAudio/AudioServerPlugIn.h>
 
-#include "../include/RFSharedAudioV2.h"
+#include "../include/RFSharedAudio.h"
 
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -28,11 +28,11 @@
 #include <cstdarg>
 
 // Logging
-static os_log_t rf_log = os_log_create("com.radioform.driver.v2", "default");
+static os_log_t rf_log = os_log_create("com.radioform.driver", "default");
 
-#define RF_LOG_ERROR(fmt, ...) os_log_error(rf_log, "[Radioform V2 ERROR] " fmt, ##__VA_ARGS__)
-#define RF_LOG_INFO(fmt, ...) os_log_info(rf_log, "[Radioform V2 INFO] " fmt, ##__VA_ARGS__)
-#define RF_LOG_DEBUG(fmt, ...) os_log_debug(rf_log, "[Radioform V2 DEBUG] " fmt, ##__VA_ARGS__)
+#define RF_LOG_ERROR(fmt, ...) os_log_error(rf_log, "[Radioform ERROR] " fmt, ##__VA_ARGS__)
+#define RF_LOG_INFO(fmt, ...) os_log_info(rf_log, "[Radioform INFO] " fmt, ##__VA_ARGS__)
+#define RF_LOG_DEBUG(fmt, ...) os_log_debug(rf_log, "[Radioform DEBUG] " fmt, ##__VA_ARGS__)
 
 // Fallback file logger for debugging when unified logs are unavailable.
 static void RF_DebugLog(const char* fmt, ...) {
@@ -217,6 +217,9 @@ public:
                         RF_LOG_INFO("✓ Connected on attempt %d", attempt);
                         state_ = DeviceState::Connected;
 
+                        // Pre-allocate conversion buffers
+                        ResizeBuffers();
+
                         // Start heartbeat
                         last_heartbeat_ = std::chrono::steady_clock::now();
                         return kAudioHardwareNoError;
@@ -334,20 +337,25 @@ public:
             HandleFormatChange(fmt);
         }
 
-        // Convert to interleaved float32
-        std::vector<float> interleaved;
-        if (!ConvertToFloat32Interleaved(bytes, frameCount, fmt, interleaved)) {
+        // Ensure pre-allocated buffer is large enough
+        size_t needed = frameCount * fmt.mChannelsPerFrame;
+        if (interleaved_buf_.size() < needed) {
+            interleaved_buf_.resize(needed);
+        }
+
+        // Convert to interleaved float32 using pre-allocated buffer
+        if (!ConvertToFloat32Interleaved(bytes, frameCount, fmt, interleaved_buf_)) {
             stats_.failed_writes++;
             return;
         }
 
         // Handle sample rate conversion if needed
         if (fmt.mSampleRate != shared_memory_->sample_rate) {
-            ProcessWithSampleRateConversion(interleaved.data(), frameCount,
+            ProcessWithSampleRateConversion(interleaved_buf_.data(), frameCount,
                                             fmt.mSampleRate, fmt.mChannelsPerFrame);
         } else {
             // Direct write
-            rf_ring_write_v2(shared_memory_, interleaved.data(), frameCount);
+            rf_ring_write(shared_memory_, interleaved_buf_.data(), frameCount);
         }
 
         stats_.LogPeriodic();
@@ -373,7 +381,7 @@ private:
         }
 
         // Validate file size before mapping
-        size_t min_size = sizeof(RFSharedAudioV2);
+        size_t min_size = sizeof(RFSharedAudio);
         if ((size_t)st.st_size < min_size) {
             RF_DebugLog("OpenSharedMemory: size too small: %lld < %zu", (long long)st.st_size, min_size);
             RF_LOG_ERROR("File too small: %lld < %zu", (long long)st.st_size, min_size);
@@ -390,7 +398,7 @@ private:
             return;
         }
 
-        shared_memory_ = reinterpret_cast<RFSharedAudioV2*>(mem);
+        shared_memory_ = reinterpret_cast<RFSharedAudio*>(mem);
 
         RF_DebugLog("OpenSharedMemory: mapped %p size=%lld rate=%u ch=%u fmt=%u",
             mem, (long long)st.st_size, shared_memory_->sample_rate, shared_memory_->channels, shared_memory_->format);
@@ -412,7 +420,7 @@ private:
             atomic_store(&shared_memory_->driver_connected, 0);
 
             // Calculate size for munmap
-            size_t size = rf_shared_audio_v2_size(
+            size_t size = rf_shared_audio_size(
                 shared_memory_->ring_capacity_frames,
                 shared_memory_->channels,
                 shared_memory_->bytes_per_sample);
@@ -428,11 +436,11 @@ private:
         if (!shared_memory_) return false;
 
         // Check protocol version
-        if (shared_memory_->protocol_version != RF_AUDIO_PROTOCOL_VERSION_V2) {
+        if (shared_memory_->protocol_version != RF_AUDIO_PROTOCOL_VERSION) {
             RF_DebugLog("ValidateConnection: protocol mismatch 0x%x expected 0x%x",
-                shared_memory_->protocol_version, RF_AUDIO_PROTOCOL_VERSION_V2);
+                shared_memory_->protocol_version, RF_AUDIO_PROTOCOL_VERSION);
             RF_LOG_ERROR("Protocol mismatch: 0x%x (expected 0x%x)",
-                shared_memory_->protocol_version, RF_AUDIO_PROTOCOL_VERSION_V2);
+                shared_memory_->protocol_version, RF_AUDIO_PROTOCOL_VERSION);
             return false;
         }
 
@@ -526,6 +534,17 @@ private:
         }
     }
 
+    void ResizeBuffers() {
+        if (!shared_memory_) return;
+
+        // Size for max expected callback: 4096 frames at 192kHz, 8 channels
+        uint32_t max_frames = 4096;
+        uint32_t max_channels = RF_MAX_CHANNELS;
+
+        interleaved_buf_.resize(max_frames * max_channels);
+        resampled_buf_.resize(max_frames * 2 * max_channels); // 2x for upsampling headroom
+    }
+
     void HandleFormatChange(const AudioStreamBasicDescription& new_fmt) {
         stats_.format_changes++;
 
@@ -542,6 +561,8 @@ private:
             RF_LOG_INFO("Created resampler: %.0f -> %u Hz",
                 new_fmt.mSampleRate, shared_memory_->sample_rate);
         }
+
+        ResizeBuffers();
     }
 
     bool ConvertToFloat32Interleaved(const void* bytes, UInt32 frameCount,
@@ -601,16 +622,19 @@ private:
 
         stats_.sample_rate_conversions++;
 
-        // Calculate output size
+        // Calculate output size and ensure buffer is large enough
         uint32_t output_capacity = (input_frames * shared_memory_->sample_rate) / input_rate + 10;
-        std::vector<float> resampled(output_capacity * channels);
+        size_t needed = output_capacity * channels;
+        if (resampled_buf_.size() < needed) {
+            resampled_buf_.resize(needed);
+        }
 
         uint32_t output_frames = resampler_->Process(
             input, input_frames,
-            resampled.data(), output_capacity);
+            resampled_buf_.data(), output_capacity);
 
         if (output_frames > 0) {
-            rf_ring_write_v2(shared_memory_, resampled.data(), output_frames);
+            rf_ring_write(shared_memory_, resampled_buf_.data(), output_frames);
         }
     }
 
@@ -630,7 +654,7 @@ private:
     }
 
     // Member variables
-    RFSharedAudioV2* shared_memory_;
+    RFSharedAudio* shared_memory_;
     std::string device_uid_;
     std::string shm_file_path_;
 
@@ -648,6 +672,10 @@ private:
     uint32_t current_channels_;
 
     std::unique_ptr<SimpleResampler> resampler_;
+
+    // Pre-allocated buffers to avoid heap allocation on the audio thread
+    std::vector<float> interleaved_buf_;
+    std::vector<float> resampled_buf_;
 
     AudioStats stats_;
 };
@@ -776,7 +804,7 @@ bool HostHeartbeatFresh(const std::string& uid) {
         return false;
     }
 
-    auto shared = reinterpret_cast<RFSharedAudioV2*>(mem);
+    auto shared = reinterpret_cast<RFSharedAudio*>(mem);
     uint64_t hb = atomic_load(&shared->host_heartbeat);
 
     munmap(mem, st.st_size);

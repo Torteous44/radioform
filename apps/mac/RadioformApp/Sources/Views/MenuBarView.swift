@@ -531,21 +531,55 @@ struct BandControls: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            // Row 1: Filter type picker + frequency slider + value
-            HStack(spacing: 6) {
-                Picker("", selection: Binding(
-                    get: { presetManager.currentFilterTypes[bandIndex] },
-                    set: { presetManager.updateBandFilterType(index: bandIndex, filterType: $0) }
-                )) {
+        VStack(alignment: .leading, spacing: 10) {
+            // Filter
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 16)
+
+                    Text("Filter")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+
+                HStack(spacing: 4) {
                     ForEach(FilterType.allCases, id: \.self) { type in
-                        Text(type.displayName).tag(type)
+                        let isSelected = presetManager.currentFilterTypes[bandIndex] == type
+                        Button {
+                            presetManager.updateBandFilterType(index: bandIndex, filterType: type)
+                        } label: {
+                            Text(type.shortDisplayName)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(isSelected ? .white : .primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 3)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(isSelected ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.25))
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 90)
-                .controlSize(.small)
+            }
+
+            // Frequency
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 16)
+
+                    Text("Frequency")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
 
                 Slider(
                     value: Binding(
@@ -559,8 +593,8 @@ struct BandControls: View {
                     TextField("", text: $freqText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .frame(width: 42)
-                        .multilineTextAlignment(.trailing)
+                        .frame(width: 60, alignment: .leading)
+                        .multilineTextAlignment(.leading)
                         .focused($freqFieldFocused)
                         .onSubmit { commitFreq() }
                         .onExitCommand { isEditingFreq = false }
@@ -568,10 +602,9 @@ struct BandControls: View {
                             if !focused { commitFreq() }
                         }
                 } else {
-                    Text(formatFrequency(presetManager.currentFrequencies[bandIndex]))
+                    Text("\(formatFrequency(presetManager.currentFrequencies[bandIndex])) Hz")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(.primary)
-                        .frame(width: 36, alignment: .trailing)
                         .onTapGesture {
                             freqText = formatFrequency(presetManager.currentFrequencies[bandIndex])
                             isEditingFreq = true
@@ -582,11 +615,18 @@ struct BandControls: View {
                 }
             }
 
-            // Row 2: Q label + Q slider + Q value
-            HStack(spacing: 6) {
-                Text("Q")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+            // Q
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: "tuningfork")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 16)
+
+                    Text("Q")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
 
                 Slider(
                     value: Binding(
@@ -600,8 +640,8 @@ struct BandControls: View {
                     TextField("", text: $qText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .frame(width: 42)
-                        .multilineTextAlignment(.trailing)
+                        .frame(width: 60, alignment: .leading)
+                        .multilineTextAlignment(.leading)
                         .focused($qFieldFocused)
                         .onSubmit { commitQ() }
                         .onExitCommand { isEditingQ = false }
@@ -612,7 +652,6 @@ struct BandControls: View {
                     Text(String(format: "%.2f", presetManager.currentQFactors[bandIndex]))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(.primary)
-                        .frame(width: 36, alignment: .trailing)
                         .onTapGesture {
                             qText = String(format: "%.2f", presetManager.currentQFactors[bandIndex])
                             isEditingQ = true

@@ -1,9 +1,11 @@
 import Foundation
+import Darwin
 import CRadioformAudio
 
 class SharedMemoryManager {
     private var deviceMemory: [String: UnsafeMutablePointer<RFSharedAudio>] = [:]
     private var heartbeatTimer: DispatchSourceTimer?
+    private var lock = os_unfair_lock()
 
     func createMemory(for devices: [PhysicalDevice]) {
         print("[RadioformHost] Creating shared memory for \(devices.count) devices")
@@ -73,7 +75,9 @@ class SharedMemoryManager {
             RadioformConfig.defaultDurationMs
         )
 
+        os_unfair_lock_lock(&lock)
         deviceMemory[uid] = sharedMem
+        os_unfair_lock_unlock(&lock)
 
         print("[RadioformHost] ✓ SUCCESS")
         print("[RadioformHost]   Protocol: current")
@@ -85,7 +89,14 @@ class SharedMemoryManager {
     }
 
     func removeMemory(for uid: String) {
-        guard let sharedMem = deviceMemory[uid] else { return }
+        os_unfair_lock_lock(&lock)
+        let sharedMem = deviceMemory[uid]
+        if sharedMem != nil {
+            deviceMemory.removeValue(forKey: uid)
+        }
+        os_unfair_lock_unlock(&lock)
+
+        guard let sharedMem = sharedMem else { return }
 
         let shmSize = rf_shared_audio_size(
             sharedMem.pointee.ring_capacity_frames,
@@ -94,18 +105,23 @@ class SharedMemoryManager {
         )
 
         munmap(sharedMem, shmSize)
-        deviceMemory.removeValue(forKey: uid)
 
         let shmPath = PathManager.sharedMemoryPath(uid: uid)
         unlink(shmPath)
     }
 
     func getMemory(for uid: String) -> UnsafeMutablePointer<RFSharedAudio>? {
-        return deviceMemory[uid]
+        os_unfair_lock_lock(&lock)
+        let mem = deviceMemory[uid]
+        os_unfair_lock_unlock(&lock)
+        return mem
     }
 
     func getFirstMemory() -> UnsafeMutablePointer<RFSharedAudio>? {
-        return deviceMemory.values.first
+        os_unfair_lock_lock(&lock)
+        let mem = deviceMemory.values.first
+        os_unfair_lock_unlock(&lock)
+        return mem
     }
 
     func startHeartbeat() {
@@ -117,7 +133,10 @@ class SharedMemoryManager {
 
         heartbeatTimer?.setEventHandler { [weak self] in
             guard let self = self else { return }
-            for (_, mem) in self.deviceMemory {
+            os_unfair_lock_lock(&self.lock)
+            let mems = Array(self.deviceMemory.values)
+            os_unfair_lock_unlock(&self.lock)
+            for mem in mems {
                 rf_update_host_heartbeat(mem)
             }
         }
@@ -133,14 +152,19 @@ class SharedMemoryManager {
 
     func cleanup() {
         print("[Cleanup] Unmapping shared memory...")
-        for (_, mem) in deviceMemory {
+        os_unfair_lock_lock(&lock)
+        let entries = deviceMemory
+        deviceMemory.removeAll()
+        os_unfair_lock_unlock(&lock)
+
+        for (uid, mem) in entries {
             let size = rf_shared_audio_size(
                 mem.pointee.ring_capacity_frames,
                 mem.pointee.channels,
                 mem.pointee.bytes_per_sample
             )
             munmap(mem, size)
+            unlink(PathManager.sharedMemoryPath(uid: uid))
         }
-        deviceMemory.removeAll()
     }
 }

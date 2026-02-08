@@ -10,6 +10,9 @@ class AudioRenderer {
     private var didLogRenderInfo = false
     private var debugRenderCount: Int = 0
     private var testTonePhase: Float = 0
+    private var tempBuffer: [Float] = []
+    private let useTestTone: Bool
+    private let bypassDSP: Bool
 
     init(
         memoryManager: SharedMemoryManager,
@@ -19,6 +22,8 @@ class AudioRenderer {
         self.memoryManager = memoryManager
         self.dspProcessor = dspProcessor
         self.proxyManager = proxyManager
+        self.useTestTone = (ProcessInfo.processInfo.environment["RF_TEST_TONE"] == "1")
+        self.bypassDSP = (ProcessInfo.processInfo.environment["RF_BYPASS_DSP"] == "1")
     }
 
     func createRenderCallback() -> AURenderCallback {
@@ -66,8 +71,14 @@ class AudioRenderer {
             return
         }
 
-        var tempBuffer = [Float](repeating: 0, count: Int(frameCount) * 2)
-        let useTestTone = (ProcessInfo.processInfo.environment["RF_TEST_TONE"] == "1")
+        let needed = Int(frameCount) * 2
+        if tempBuffer.count < needed {
+            tempBuffer = [Float](repeating: 0, count: needed)
+        } else {
+            for i in 0..<needed {
+                tempBuffer[i] = 0
+            }
+        }
         let framesRead: UInt32
 
         if useTestTone {
@@ -103,9 +114,8 @@ class AudioRenderer {
             }
         }
 
-        let bypassDSP = (ProcessInfo.processInfo.environment["RF_BYPASS_DSP"] == "1")
         if !bypassDSP {
-            dspProcessor.processInterleaved(tempBuffer, output: &tempBuffer, frameCount: frameCount)
+            dspProcessor.processInterleaved(tempBuffer, output: &tempBuffer, frameCount: framesRead)
         }
 
         deinterleave(

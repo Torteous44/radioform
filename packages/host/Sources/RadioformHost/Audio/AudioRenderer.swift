@@ -53,7 +53,7 @@ class AudioRenderer {
             print("[AudioRenderer] First render: frames=\(frameCount) buffers=\(numBuffers) sizes=\(sizes)")
         }
 
-        let sharedMem: UnsafeMutablePointer<RFSharedAudioV2>?
+        let sharedMem: UnsafeMutablePointer<RFSharedAudio>?
 
         if let activeUID = proxyManager.activeProxyUID {
             sharedMem = memoryManager.getMemory(for: activeUID)
@@ -85,7 +85,7 @@ class AudioRenderer {
             }
             framesRead = frameCount
         } else {
-            framesRead = rf_ring_read_v2(mem, &tempBuffer, frameCount)
+            framesRead = rf_ring_read(mem, &tempBuffer, frameCount)
         }
 
         if debugRenderCount < 5 {

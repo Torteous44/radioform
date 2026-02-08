@@ -1,5 +1,5 @@
 module CRadioformAudio {
-    header "RFSharedAudioV2.h"
+    header "RFSharedAudio.h"
     header "RFSharedMemoryWrapper.h"
     export *
 }

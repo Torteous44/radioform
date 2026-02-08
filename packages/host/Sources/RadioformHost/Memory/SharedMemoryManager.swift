@@ -2,34 +2,34 @@ import Foundation
 import CRadioformAudio
 
 class SharedMemoryManager {
-    private var deviceMemory: [String: UnsafeMutablePointer<RFSharedAudioV2>] = [:]
+    private var deviceMemory: [String: UnsafeMutablePointer<RFSharedAudio>] = [:]
     private var heartbeatTimer: DispatchSourceTimer?
 
     func createMemory(for devices: [PhysicalDevice]) {
-        print("[RadioformHost V2] Creating shared memory for \(devices.count) devices")
+        print("[RadioformHost] Creating shared memory for \(devices.count) devices")
 
         for device in devices {
             if createMemory(for: device.uid) {
-                print("[RadioformHost V2] ✓ \(device.name)")
+                print("[RadioformHost] ✓ \(device.name)")
             } else {
-                print("[RadioformHost V2] ✗ \(device.name)")
+                print("[RadioformHost] ✗ \(device.name)")
             }
         }
 
-        print("[RadioformHost V2] Complete")
+        print("[RadioformHost] Complete")
     }
 
     func createMemory(for uid: String) -> Bool {
-        print("[RadioformHost V2] Creating shared memory for: \(uid)")
+        print("[RadioformHost] Creating shared memory for: \(uid)")
 
         let shmPath = PathManager.sharedMemoryPath(uid: uid)
-        print("[RadioformHost V2] File: \(shmPath)")
+        print("[RadioformHost] File: \(shmPath)")
 
         unlink(shmPath)
 
         let fd = open(shmPath, O_CREAT | O_RDWR, 0o666)
         guard fd >= 0 else {
-            print("[RadioformHost V2] ERROR: Failed to create file: \(String(cString: strerror(errno)))")
+            print("[RadioformHost] ERROR: Failed to create file: \(String(cString: strerror(errno)))")
             return false
         }
 
@@ -41,16 +41,16 @@ class SharedMemoryManager {
             RadioformConfig.defaultDurationMs
         )
         let bytesPerSample = rf_bytes_per_sample(RadioformConfig.defaultFormat)
-        let shmSize = rf_shared_audio_v2_size(
+        let shmSize = rf_shared_audio_size(
             frames,
             RadioformConfig.defaultChannels,
             bytesPerSample
         )
 
-        print("[RadioformHost V2] Size: \(shmSize) bytes (\(frames) frames @ \(sampleRate)Hz)")
+        print("[RadioformHost] Size: \(shmSize) bytes (\(frames) frames @ \(sampleRate)Hz)")
 
         guard ftruncate(fd, Int64(shmSize)) == 0 else {
-            print("[RadioformHost V2] ERROR: Failed to set size: \(String(cString: strerror(errno)))")
+            print("[RadioformHost] ERROR: Failed to set size: \(String(cString: strerror(errno)))")
             close(fd)
             return false
         }
@@ -59,13 +59,13 @@ class SharedMemoryManager {
         close(fd)
 
         guard mem != MAP_FAILED else {
-            print("[RadioformHost V2] ERROR: mmap failed: \(String(cString: strerror(errno)))")
+            print("[RadioformHost] ERROR: mmap failed: \(String(cString: strerror(errno)))")
             return false
         }
 
-        let sharedMem = mem!.assumingMemoryBound(to: RFSharedAudioV2.self)
+        let sharedMem = mem!.assumingMemoryBound(to: RFSharedAudio.self)
 
-        rf_shared_audio_v2_init(
+        rf_shared_audio_init(
             sharedMem,
             sampleRate,
             RadioformConfig.defaultChannels,
@@ -75,11 +75,11 @@ class SharedMemoryManager {
 
         deviceMemory[uid] = sharedMem
 
-        print("[RadioformHost V2] ✓ SUCCESS")
-        print("[RadioformHost V2]   Protocol: V2")
-        print("[RadioformHost V2]   Format: \(sampleRate)Hz, \(RadioformConfig.defaultChannels)ch, float32")
-        print("[RadioformHost V2]   Buffer: \(RadioformConfig.defaultDurationMs)ms (\(frames) frames)")
-        print("[RadioformHost V2]   Capabilities: Multi-rate, Multi-format, Heartbeat")
+        print("[RadioformHost] ✓ SUCCESS")
+        print("[RadioformHost]   Protocol: current")
+        print("[RadioformHost]   Format: \(sampleRate)Hz, \(RadioformConfig.defaultChannels)ch, float32")
+        print("[RadioformHost]   Buffer: \(RadioformConfig.defaultDurationMs)ms (\(frames) frames)")
+        print("[RadioformHost]   Capabilities: Multi-rate, Multi-format, Heartbeat")
 
         return true
     }
@@ -87,7 +87,7 @@ class SharedMemoryManager {
     func removeMemory(for uid: String) {
         guard let sharedMem = deviceMemory[uid] else { return }
 
-        let shmSize = rf_shared_audio_v2_size(
+        let shmSize = rf_shared_audio_size(
             sharedMem.pointee.ring_capacity_frames,
             sharedMem.pointee.channels,
             sharedMem.pointee.bytes_per_sample
@@ -100,11 +100,11 @@ class SharedMemoryManager {
         unlink(shmPath)
     }
 
-    func getMemory(for uid: String) -> UnsafeMutablePointer<RFSharedAudioV2>? {
+    func getMemory(for uid: String) -> UnsafeMutablePointer<RFSharedAudio>? {
         return deviceMemory[uid]
     }
 
-    func getFirstMemory() -> UnsafeMutablePointer<RFSharedAudioV2>? {
+    func getFirstMemory() -> UnsafeMutablePointer<RFSharedAudio>? {
         return deviceMemory.values.first
     }
 
@@ -132,9 +132,9 @@ class SharedMemoryManager {
     }
 
     func cleanup() {
-        print("[Cleanup] Unmapping V2 shared memory...")
+        print("[Cleanup] Unmapping shared memory...")
         for (_, mem) in deviceMemory {
-            let size = rf_shared_audio_v2_size(
+            let size = rf_shared_audio_size(
                 mem.pointee.ring_capacity_frames,
                 mem.pointee.channels,
                 mem.pointee.bytes_per_sample

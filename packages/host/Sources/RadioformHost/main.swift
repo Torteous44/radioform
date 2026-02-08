@@ -74,7 +74,7 @@ func main() {
     print("[Step 2] Registering device change listeners...")
     deviceMonitor.registerListeners()
 
-    print("[Step 3] Creating V2 shared memory files...")
+    print("[Step 3] Creating shared memory files...")
     memoryManager.createMemory(for: devices)
 
     print("[Step 4] Writing control file...")

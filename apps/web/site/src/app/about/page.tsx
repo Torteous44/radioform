@@ -101,6 +101,10 @@ export default function Technology() {
               playing it, Radioform can shape it.
             </p>
             <p>
+              It works by inserting a virtual output device into CoreAudio’s
+              chain.
+            </p>
+            <p>
               It runs from your menu bar. You pick a preset or tweak the sliders
               yourself, and then you mostly just leave it alone. That&apos;s
               kind of the whole point.
@@ -122,7 +126,8 @@ export default function Technology() {
                 <p className="col-span-12 sm:col-span-8 text-black leading-relaxed">
                   10 fully parametric bands from 20 Hz to 20 kHz. Boost low end,
                   pull back harsh highs, or add warmth. It applies to all audio
-                  on your Mac, so you don’t configure anything per app.
+                  on your Mac, so you don’t configure anything per app. Each
+                  band is a biquad filter with frequency, Q, and gain.
                 </p>
                 <div className="col-span-12 h-px bg-black/10 mt-2" />
               </div>
@@ -150,7 +155,8 @@ export default function Technology() {
                 </p>
                 <p className="col-span-12 sm:col-span-8 text-black leading-relaxed">
                   AirPods, desk speakers, living room setup. Radioform follows
-                  your output device and keeps your EQ applied.
+                  your output device and keeps your EQ applied. The host
+                  reconfigures sample rate automatically.
                 </p>
                 <div className="col-span-12 h-px bg-black/10 mt-2" />
               </div>
@@ -186,6 +192,10 @@ export default function Technology() {
               no intermediate buffering, so you won&apos;t notice it&apos;s
               there. Except that things sound better.
             </p>
+            <p className="text-black mt-4">
+              Driver writes to shared memory; the host reads, processes, and
+              outputs.
+            </p>
           </section>
 
           {/* Performance */}
@@ -199,6 +209,9 @@ export default function Technology() {
             <p className="text-black">
               Under 1% CPU usage. Zero added latency. 10 fully parametric bands
               from 20 Hz to 20 kHz.
+            </p>
+            <p className="text-black mt-4">
+              DSP runs in a separate process with pre-allocated buffers.
             </p>
           </section>
 
@@ -215,6 +228,9 @@ export default function Technology() {
               Electron or a web wrapper. It plugs directly into macOS CoreAudio,
               so it feels like something that should have shipped with the OS.
             </p>
+            <p className="text-black mt-4">
+              HAL plugin + host + UI are separate pieces, loosely coupled.
+            </p>
           </section>
 
           {/* Platform */}
@@ -228,9 +244,9 @@ export default function Technology() {
             <div className="space-y-2 text-black">
               <p>macOS 13.0 Ventura or later.</p>
               <p>
-                Runs natively on Apple Silicon and Intel. Releases are signed
-                for distribution and can be notarized. In-app update checks are
-                handled by Sparkle and can be disabled.
+                Runs natively on Apple Silicon. Releases are signed for
+                distribution and can be notarized. In-app update checks are
+                handled by Sparkle.
               </p>
               <p>
                 Open source under GPLv3. Free, no subscriptions, no data

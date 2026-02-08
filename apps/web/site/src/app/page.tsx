@@ -137,15 +137,14 @@ export default function Home() {
       />
       <div className="max-w-md mx-auto">
         {/* Hero */}
-        <div className="w-full overflow-hidden hidden min-[480px]:block">
+        <div className="relative w-full max-[479px]:hidden aspect-[1000/200] scale-x-[1.13]">
           <Image
             src="/painting1_baked.avif"
             alt=""
-            width={800}
-            height={330}
+            fill
             priority
             sizes="(min-width: 768px) 512px, 100vw"
-            className="w-full object-cover scale-x-[1.1]"
+            className="object-contain"
           />
         </div>
 

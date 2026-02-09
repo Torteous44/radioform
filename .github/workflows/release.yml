@@ -106,27 +106,54 @@ jobs:
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Build All Components
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      - name: Build DSP Library
+      - name: Build DSP Library (universal)
         run: |
-          cmake -S packages/dsp -B packages/dsp/build -DCMAKE_BUILD_TYPE=Release
+          cmake -S packages/dsp -B packages/dsp/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
           cmake --build packages/dsp/build --config Release --parallel
-          echo "✓ DSP library built"
+          echo "✓ DSP library built (universal)"
 
-      - name: Build HAL Driver
+      - name: Build HAL Driver (universal)
         run: |
-          cmake -S packages/driver -B packages/driver/build -DCMAKE_BUILD_TYPE=Release
+          cmake -S packages/driver -B packages/driver/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
           cmake --build packages/driver/build --config Release --parallel
-          echo "✓ HAL driver built"
+          echo "✓ HAL driver built (universal)"
 
-      - name: Build Host Engine
+      - name: Build Host Engine (universal)
         run: |
-          swift build --configuration release --package-path packages/host
-          echo "✓ Host engine built"
+          swift build --configuration release --package-path packages/host \
+            --triple arm64-apple-macosx
+          swift build --configuration release --package-path packages/host \
+            --triple x86_64-apple-macosx
+          mkdir -p packages/host/.build/universal/release
+          lipo -create -output packages/host/.build/universal/release/RadioformHost \
+            packages/host/.build/arm64-apple-macosx/release/RadioformHost \
+            packages/host/.build/x86_64-apple-macosx/release/RadioformHost
+          echo "✓ Host engine built (universal)"
 
-      - name: Build Menu Bar App
+      - name: Build Menu Bar App (universal)
         run: |
-          swift build --configuration release --package-path apps/mac/RadioformApp
-          echo "✓ Menu bar app built"
+          swift build --configuration release --package-path apps/mac/RadioformApp \
+            --triple arm64-apple-macosx
+          swift build --configuration release --package-path apps/mac/RadioformApp \
+            --triple x86_64-apple-macosx
+          mkdir -p apps/mac/RadioformApp/.build/universal/release
+          lipo -create -output apps/mac/RadioformApp/.build/universal/release/RadioformApp \
+            apps/mac/RadioformApp/.build/arm64-apple-macosx/release/RadioformApp \
+            apps/mac/RadioformApp/.build/x86_64-apple-macosx/release/RadioformApp
+          echo "✓ Menu bar app built (universal)"
+
+      - name: Verify universal architectures
+        run: |
+          echo "Verifying universal binary architectures..."
+          lipo -archs packages/dsp/build/libradioform_dsp.a
+          lipo -archs packages/driver/build/RadioformDriver.driver/Contents/MacOS/RadioformDriver
+          lipo -archs packages/host/.build/universal/release/RadioformHost
+          lipo -archs apps/mac/RadioformApp/.build/universal/release/RadioformApp
+          echo "✓ All binaries are universal"
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       #  Create App Bundle

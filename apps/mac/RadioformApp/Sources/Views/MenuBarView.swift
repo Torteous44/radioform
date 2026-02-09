@@ -544,6 +544,7 @@ struct BandControls: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                 }
+                .padding(.bottom, 2)
 
                 HStack(spacing: 4) {
                     ForEach(FilterType.allCases, id: \.self) { type in

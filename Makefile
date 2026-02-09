@@ -111,11 +111,11 @@ test:
 
 # Quick rebuild (for when you only changed Swift code)
 quick:
-	@echo "Quick rebuild (Swift only)..."
-	@cd apps/mac/RadioformApp && swift build -c release
-	@cd packages/host && swift build -c release
+	@echo "Quick rebuild (Swift only, universal)..."
+	@cd apps/mac/RadioformApp && swift build -c release --triple arm64-apple-macosx && swift build -c release --triple x86_64-apple-macosx && mkdir -p .build/universal/release && lipo -create -output .build/universal/release/RadioformApp .build/arm64-apple-macosx/release/RadioformApp .build/x86_64-apple-macosx/release/RadioformApp
+	@cd packages/host && swift build -c release --triple arm64-apple-macosx && swift build -c release --triple x86_64-apple-macosx && mkdir -p .build/universal/release && lipo -create -output .build/universal/release/RadioformHost .build/arm64-apple-macosx/release/RadioformHost .build/x86_64-apple-macosx/release/RadioformHost
 	@./tools/create_app_bundle.sh
-	@echo "✓ Quick rebuild complete"
+	@echo "✓ Quick rebuild complete (universal)"
 
 # Full clean + rebuild
 rebuild: clean build bundle

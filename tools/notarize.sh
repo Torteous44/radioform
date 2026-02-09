@@ -119,7 +119,7 @@ spctl --assess -vv "$APP_PATH"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Notarization Complete!"
+echo "     Notarization Complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Your app is now notarized and ready for distribution!"

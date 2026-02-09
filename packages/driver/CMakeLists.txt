@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(RadioformDriver VERSION 2.0.0 LANGUAGES CXX)
+project(RadioformDriver VERSION 2.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,6 +8,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# macOS: build universal binary (arm64 + x86_64)
+if(APPLE)
+    if(NOT CMAKE_OSX_ARCHITECTURES)
+        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Build architectures" FORCE)
+    endif()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version" FORCE)
+    message(STATUS "Building for macOS architectures: ${CMAKE_OSX_ARCHITECTURES}")
 endif()
 
 # Compiler flags

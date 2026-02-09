@@ -29,7 +29,7 @@ fi
 
 # Check if create-dmg is installed
 if ! command -v create-dmg &> /dev/null; then
-    echo -e "${YELLOW}⚠️  create-dmg not found. Install with: brew install create-dmg${NC}"
+    echo -e "${YELLOW}  create-dmg not found. Install with: brew install create-dmg${NC}"
     echo "Falling back to basic DMG creation..."
 
     # Fallback to basic hdiutil method
@@ -46,7 +46,7 @@ fi
 
 # Check if background image exists
 if [ ! -f "$BACKGROUND_IMG" ]; then
-    echo -e "${YELLOW}⚠️  Background image not found at $BACKGROUND_IMG${NC}"
+    echo -e "${YELLOW}  Background image not found at $BACKGROUND_IMG${NC}"
     echo "Creating DMG without custom background..."
     BACKGROUND_ARG=""
 else
@@ -58,7 +58,7 @@ fi
 rm -f "$DMG_PATH"
 
 # Create DMG with create-dmg
-echo "📦 Creating DMG with custom layout..."
+echo " Creating DMG with custom layout..."
 create-dmg \
     --volname "Radioform" \
     $BACKGROUND_ARG \

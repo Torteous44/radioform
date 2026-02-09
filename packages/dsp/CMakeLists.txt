@@ -36,22 +36,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     endif()
 endif()
 
-# macOS specific: support both architectures
+# macOS specific: build universal binary (arm64 + x86_64)
 if(APPLE)
-    # Detect architecture
-    execute_process(
-        COMMAND uname -m
-        OUTPUT_VARIABLE ARCH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    message(STATUS "Building for macOS architecture: ${ARCH}")
-
-    # Enable appropriate SIMD based on architecture
-    if(ARCH STREQUAL "arm64")
-        add_compile_options(-mcpu=apple-m1)
-    elseif(ARCH STREQUAL "x86_64")
-        add_compile_options(-march=native -mtune=native)
+    if(NOT CMAKE_OSX_ARCHITECTURES)
+        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Build architectures" FORCE)
     endif()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version" FORCE)
+    message(STATUS "Building for macOS architectures: ${CMAKE_OSX_ARCHITECTURES}")
+
+    # Per-architecture optimization flags using Apple Clang's -Xarch_ prefix
+    add_compile_options(-Xarch_arm64 -mcpu=apple-m1)
+    add_compile_options(-Xarch_x86_64 -msse4.2)
 endif()
 
 # ============================================================================
@@ -155,7 +150,8 @@ message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  C++ standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Build tests: ${BUILD_TESTS}")
 if(APPLE)
-    message(STATUS "  macOS architecture: ${ARCH}")
+    message(STATUS "  macOS architectures: ${CMAKE_OSX_ARCHITECTURES}")
+    message(STATUS "  macOS deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
     message(STATUS "  Build ObjC++ bridge: ${BUILD_BRIDGE}")
 endif()
 message(STATUS "  Self-contained: RBJ biquad implementation (no external DSP libs)")

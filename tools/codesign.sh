@@ -120,7 +120,7 @@ SIGN_OPTS=(
 )
 
 # Step 1: Sign RadioformHost executable
-echo "📝 Signing RadioformHost..."
+echo " Signing RadioformHost..."
 if codesign "${SIGN_OPTS[@]}" \
     --entitlements "$PROJECT_ROOT/packages/host/RadioformHost.entitlements" \
     "$APP_BUNDLE/Contents/MacOS/RadioformHost"; then
@@ -132,7 +132,7 @@ fi
 
 # Step 2: Sign RadioformDriver.driver bundle (if present)
 if [ -d "$APP_BUNDLE/Contents/Resources/RadioformDriver.driver" ]; then
-    echo "📝 Signing RadioformDriver.driver..."
+    echo " Signing RadioformDriver.driver..."
 
     # Sign the driver binary inside the bundle
     if [ -f "$APP_BUNDLE/Contents/Resources/RadioformDriver.driver/Contents/MacOS/RadioformDriver" ]; then
@@ -159,7 +159,7 @@ fi
 
 # Step 3: Sign embedded frameworks (e.g. Sparkle)
 if [ -d "$APP_BUNDLE/Contents/Frameworks" ]; then
-    echo "📝 Signing frameworks..."
+    echo "Signing frameworks..."
 
     sign_macho_binaries() {
         local root="$1"
@@ -204,7 +204,7 @@ else
 fi
 
 # Step 4: Sign RadioformApp main executable
-echo "📝 Signing RadioformApp..."
+echo "Signing RadioformApp..."
 if codesign "${SIGN_OPTS[@]}" \
     --entitlements "$PROJECT_ROOT/apps/mac/RadioformApp/RadioformApp.entitlements" \
     "$APP_BUNDLE/Contents/MacOS/RadioformApp"; then
@@ -215,7 +215,7 @@ else
 fi
 
 # Step 5: Sign the entire app bundle (outer signature)
-echo "📝 Signing Radioform.app bundle..."
+echo "Signing Radioform.app bundle..."
 if codesign "${SIGN_OPTS[@]}" \
     --entitlements "$PROJECT_ROOT/apps/mac/RadioformApp/RadioformApp.entitlements" \
     "$APP_BUNDLE"; then
@@ -228,22 +228,22 @@ fi
 section "Verification"
 
 # Verify all signatures
-echo "🔍 Verifying RadioformHost..."
+echo " Verifying RadioformHost..."
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE/Contents/MacOS/RadioformHost"
 
 if [ -d "$APP_BUNDLE/Contents/Resources/RadioformDriver.driver" ]; then
-    echo "🔍 Verifying RadioformDriver.driver..."
+    echo " Verifying RadioformDriver.driver..."
     codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE/Contents/Resources/RadioformDriver.driver"
 fi
 
-echo "🔍 Verifying RadioformApp..."
+echo " Verifying RadioformApp..."
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE/Contents/MacOS/RadioformApp"
 
-echo "🔍 Verifying Radioform.app bundle..."
+echo " Verifying Radioform.app bundle..."
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 # Check Gatekeeper acceptance
-echo "🔍 Checking Gatekeeper assessment..."
+echo " Checking Gatekeeper assessment..."
 if spctl --assess --type execute --verbose=4 "$APP_BUNDLE" 2>&1 | grep -q "accepted"; then
     success "Gatekeeper will accept this app"
 else

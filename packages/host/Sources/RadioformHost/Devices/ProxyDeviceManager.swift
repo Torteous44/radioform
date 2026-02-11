@@ -9,6 +9,7 @@ class ProxyDeviceManager {
     private var monitoredProxyDeviceID: AudioDeviceID?
     private var monitoredVolumeElements: [UInt32] = []
     private let volumeForwardQueue = DispatchQueue(label: "com.radioform.host.proxy-volume-forward")
+    private let volumeForwardEpsilon: Float32 = 0.001
     private var lastForwardedProxyVolume: Float32?
 
     var activeProxyUID: String?
@@ -108,7 +109,7 @@ class ProxyDeviceManager {
                 activePhysicalDeviceID = physicalDevice.id
                 activeProxyDeviceID = currentDeviceID
                 startVolumeForwarding(proxyDeviceID: currentDeviceID)
-                forwardProxyVolumeToPhysical()
+                enqueueProxyVolumeForward(force: true)
                 print("[AutoSelect] Already on proxy device - mapped to \(physicalDevice.name)")
             } else {
                 print("[AutoSelect] Already on proxy device - but no physical mapping found")
@@ -144,7 +145,7 @@ class ProxyDeviceManager {
             activePhysicalDeviceID = currentDeviceID
             activeProxyDeviceID = proxyID
             startVolumeForwarding(proxyDeviceID: proxyID)
-            forwardProxyVolumeToPhysical()
+            enqueueProxyVolumeForward(force: true)
         } else {
             print("[AutoSelect] ERROR: Failed to set proxy as default")
             isAutoSwitching = false
@@ -183,7 +184,7 @@ class ProxyDeviceManager {
             activePhysicalDeviceID = physicalDevice.id
             activeProxyDeviceID = deviceID
             startVolumeForwarding(proxyDeviceID: deviceID)
-            forwardProxyVolumeToPhysical()
+            enqueueProxyVolumeForward(force: true)
         }
 
         // Delay resetting the flag to prevent race conditions with rapid callbacks
@@ -217,8 +218,9 @@ class ProxyDeviceManager {
             lastSwitchTime = now
             _ = setDefaultOutputDevice(proxyID)
             activeProxyDeviceID = proxyID
+            activePhysicalDeviceID = physicalDevice.id
             startVolumeForwarding(proxyDeviceID: proxyID)
-            forwardProxyVolumeToPhysical(force: true)
+            enqueueProxyVolumeForward(force: true)
         } else {
             stopVolumeForwarding()
             print("Warning: No proxy found for this device")
@@ -423,7 +425,9 @@ class ProxyDeviceManager {
         stopVolumeForwarding()
         monitoredProxyDeviceID = proxyDeviceID
         monitoredVolumeElements.removeAll(keepingCapacity: true)
-        lastForwardedProxyVolume = nil
+        volumeForwardQueue.async { [weak self] in
+            self?.lastForwardedProxyVolume = nil
+        }
 
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyVolumeScalar,
@@ -468,7 +472,9 @@ class ProxyDeviceManager {
         defer {
             monitoredProxyDeviceID = nil
             monitoredVolumeElements.removeAll(keepingCapacity: false)
-            lastForwardedProxyVolume = nil
+            volumeForwardQueue.async { [weak self] in
+                self?.lastForwardedProxyVolume = nil
+            }
         }
 
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
@@ -491,30 +497,40 @@ class ProxyDeviceManager {
             return
         }
 
+        enqueueProxyVolumeForward()
+    }
+
+    private func enqueueProxyVolumeForward(force: Bool = false) {
+        let proxyDeviceID = activeProxyDeviceID
+        let physicalDeviceID = activePhysicalDeviceID
+        guard proxyDeviceID != 0, physicalDeviceID != 0 else {
+            return
+        }
+
         volumeForwardQueue.async { [weak self] in
-            guard let self else { return }
-            guard self.monitoredProxyDeviceID == objectID, self.activeProxyDeviceID == objectID else {
-                return
-            }
-            self.forwardProxyVolumeToPhysical()
+            self?.forwardProxyVolumeToPhysical(
+                proxyDeviceID: proxyDeviceID,
+                physicalDeviceID: physicalDeviceID,
+                force: force
+            )
         }
     }
 
-    fileprivate func forwardProxyVolumeToPhysical(force: Bool = false) {
-        guard activeProxyDeviceID != 0, activePhysicalDeviceID != 0 else {
+    private func forwardProxyVolumeToPhysical(
+        proxyDeviceID: AudioDeviceID,
+        physicalDeviceID: AudioDeviceID,
+        force: Bool = false
+    ) {
+        guard let proxyVolume = getDeviceVolume(proxyDeviceID) else {
             return
         }
 
-        guard let proxyVolume = getDeviceVolume(activeProxyDeviceID) else {
-            return
-        }
-
-        if !force, let lastForwardedProxyVolume, abs(proxyVolume - lastForwardedProxyVolume) < 0.001 {
+        if !force, let lastForwardedProxyVolume, abs(proxyVolume - lastForwardedProxyVolume) < volumeForwardEpsilon {
             return
         }
 
         lastForwardedProxyVolume = proxyVolume
-        _ = setDeviceVolume(activePhysicalDeviceID, volume: proxyVolume)
+        _ = setDeviceVolume(physicalDeviceID, volume: proxyVolume)
     }
 }
 

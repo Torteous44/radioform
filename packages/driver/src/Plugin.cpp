@@ -361,6 +361,24 @@ public:
         stats_.LogPeriodic();
     }
 
+    // Keep proxy volume controls for UI/events, but avoid applying proxy gain in-driver.
+    // Volume is forwarded to the physical output device by the host process.
+    void OnProcessMixedOutput(
+        const std::shared_ptr<aspl::Stream>& stream,
+        Float64 zeroTimestamp,
+        Float64 timestamp,
+        Float32* frames,
+        UInt32 frameCount,
+        UInt32 channelCount) override
+    {
+        (void)stream;
+        (void)zeroTimestamp;
+        (void)timestamp;
+        (void)frames;
+        (void)frameCount;
+        (void)channelCount;
+    }
+
 private:
     void OpenSharedMemory() {
         RF_DebugLog("OpenSharedMemory: %s", shm_file_path_.c_str());

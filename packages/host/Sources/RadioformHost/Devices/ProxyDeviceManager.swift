@@ -185,6 +185,12 @@ class ProxyDeviceManager {
             activeProxyDeviceID = deviceID
             startVolumeForwarding(proxyDeviceID: deviceID)
             enqueueProxyVolumeForward(force: true)
+        } else {
+            // The selected proxy has no physical mapping (stale/unplugged). Tear down forwarding state.
+            stopVolumeForwarding()
+            activeProxyUID = nil
+            activePhysicalDeviceID = 0
+            activeProxyDeviceID = 0
         }
 
         // Delay resetting the flag to prevent race conditions with rapid callbacks
@@ -216,11 +222,16 @@ class ProxyDeviceManager {
             print("Auto-switching to Radioform proxy")
             isAutoSwitching = true
             lastSwitchTime = now
-            _ = setDefaultOutputDevice(proxyID)
-            activeProxyDeviceID = proxyID
-            activePhysicalDeviceID = physicalDevice.id
-            startVolumeForwarding(proxyDeviceID: proxyID)
-            enqueueProxyVolumeForward(force: true)
+            if setDefaultOutputDevice(proxyID) {
+                activeProxyDeviceID = proxyID
+                activePhysicalDeviceID = physicalDevice.id
+                startVolumeForwarding(proxyDeviceID: proxyID)
+                enqueueProxyVolumeForward(force: true)
+            } else {
+                print("Warning: Failed to switch system default output to proxy device")
+                isAutoSwitching = false
+                stopVolumeForwarding()
+            }
         } else {
             stopVolumeForwarding()
             print("Warning: No proxy found for this device")

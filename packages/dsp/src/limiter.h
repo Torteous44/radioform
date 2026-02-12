@@ -50,6 +50,11 @@ public:
     inline float processSample(float input) {
         const float abs_input = std::abs(input);
 
+        // Protect against NaN/Inf (silence rather than propagate)
+        if (!std::isfinite(abs_input)) {
+            return 0.0f;
+        }
+
         // Below knee: pass through
         if (abs_input <= knee_start_) {
             return input;

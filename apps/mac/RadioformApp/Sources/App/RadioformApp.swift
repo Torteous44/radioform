@@ -663,6 +663,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hostProcess?.standardOutput = outputPipe
         hostProcess?.standardError = outputPipe
 
+        hostProcess?.terminationHandler = { [weak self] process in
+            DispatchQueue.main.async {
+                guard self != nil else { return }
+                print("RadioformHost terminated (status: \(process.terminationStatus), reason: \(process.terminationReason.rawValue))")
+                NSApp.terminate(nil)
+            }
+        }
+
         do {
             try hostProcess?.run()
             print("Started RadioformHost at: \(hostPath)")

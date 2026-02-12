@@ -6,6 +6,11 @@ class ProxyDeviceManager {
     private var isAutoSwitching = false
     private var lastSwitchTime: Date = .distantPast
     private let switchCooldown: TimeInterval = 0.5
+    private var monitoredProxyDeviceID: AudioDeviceID?
+    private var monitoredVolumeElements: [UInt32] = []
+    private let volumeForwardQueue = DispatchQueue(label: "com.radioform.host.proxy-volume-forward")
+    private let volumeForwardEpsilon: Float32 = 0.001
+    private var lastForwardedProxyVolume: Float32?
 
     var activeProxyUID: String?
     var activePhysicalDeviceID: AudioDeviceID = 0
@@ -13,6 +18,10 @@ class ProxyDeviceManager {
 
     init(registry: DeviceRegistry) {
         self.registry = registry
+    }
+
+    deinit {
+        stopVolumeForwarding()
     }
 
     func findProxyDevice(forPhysicalUID physicalUID: String) -> AudioDeviceID? {
@@ -99,6 +108,8 @@ class ProxyDeviceManager {
                 activeProxyUID = physicalUID
                 activePhysicalDeviceID = physicalDevice.id
                 activeProxyDeviceID = currentDeviceID
+                startVolumeForwarding(proxyDeviceID: currentDeviceID)
+                enqueueProxyVolumeForward(force: true)
                 print("[AutoSelect] Already on proxy device - mapped to \(physicalDevice.name)")
             } else {
                 print("[AutoSelect] Already on proxy device - but no physical mapping found")
@@ -133,6 +144,8 @@ class ProxyDeviceManager {
             activeProxyUID = uid
             activePhysicalDeviceID = currentDeviceID
             activeProxyDeviceID = proxyID
+            startVolumeForwarding(proxyDeviceID: proxyID)
+            enqueueProxyVolumeForward(force: true)
         } else {
             print("[AutoSelect] ERROR: Failed to set proxy as default")
             isAutoSwitching = false
@@ -170,6 +183,14 @@ class ProxyDeviceManager {
             activeProxyUID = physicalUID
             activePhysicalDeviceID = physicalDevice.id
             activeProxyDeviceID = deviceID
+            startVolumeForwarding(proxyDeviceID: deviceID)
+            enqueueProxyVolumeForward(force: true)
+        } else {
+            // The selected proxy has no physical mapping (stale/unplugged). Tear down forwarding state.
+            stopVolumeForwarding()
+            activeProxyUID = nil
+            activePhysicalDeviceID = 0
+            activeProxyDeviceID = 0
         }
 
         // Delay resetting the flag to prevent race conditions with rapid callbacks
@@ -185,26 +206,42 @@ class ProxyDeviceManager {
             return
         }
 
-        if !isAutoSwitching, let physicalDevice = registry.find(uid: physicalUID) {
-            if let proxyID = findProxyDevice(forPhysicalUID: physicalUID) {
-                // Sync volume before switching
-                if let volume = getDeviceVolume(physicalDevice.id) {
-                    _ = setDeviceVolume(proxyID, volume: volume)
-                }
+        guard !isAutoSwitching else { return }
 
-                print("Auto-switching to Radioform proxy")
-                isAutoSwitching = true
-                lastSwitchTime = now
-                _ = setDefaultOutputDevice(proxyID)
-                activeProxyDeviceID = proxyID
-            } else {
-                print("Warning: No proxy found for this device")
+        guard let physicalDevice = registry.find(uid: physicalUID) else {
+            stopVolumeForwarding()
+            return
+        }
+
+        if let proxyID = findProxyDevice(forPhysicalUID: physicalUID) {
+            // Sync volume before switching
+            if let volume = getDeviceVolume(physicalDevice.id) {
+                _ = setDeviceVolume(proxyID, volume: volume)
             }
+
+            print("Auto-switching to Radioform proxy")
+            isAutoSwitching = true
+            lastSwitchTime = now
+            if setDefaultOutputDevice(proxyID) {
+                activeProxyDeviceID = proxyID
+                activePhysicalDeviceID = physicalDevice.id
+                startVolumeForwarding(proxyDeviceID: proxyID)
+                enqueueProxyVolumeForward(force: true)
+            } else {
+                print("Warning: Failed to switch system default output to proxy device")
+                isAutoSwitching = false
+                stopVolumeForwarding()
+            }
+        } else {
+            stopVolumeForwarding()
+            print("Warning: No proxy found for this device")
         }
         // Note: isAutoSwitching is reset in handleProxySelection after delay
     }
 
     func restorePhysicalDevice() -> Bool {
+        stopVolumeForwarding()
+
         guard let currentDeviceID = getCurrentDefaultDevice(),
               let name = getDeviceName(currentDeviceID),
               name.contains("Radioform") else {
@@ -390,4 +427,132 @@ class ProxyDeviceManager {
 
         return channelSet
     }
+
+    private func startVolumeForwarding(proxyDeviceID: AudioDeviceID) {
+        if monitoredProxyDeviceID == proxyDeviceID {
+            return
+        }
+
+        stopVolumeForwarding()
+        monitoredProxyDeviceID = proxyDeviceID
+        monitoredVolumeElements.removeAll(keepingCapacity: true)
+        volumeForwardQueue.async { [weak self] in
+            self?.lastForwardedProxyVolume = nil
+        }
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+
+        // Prefer a single master listener to avoid duplicate callback bursts.
+        if AudioObjectHasProperty(proxyDeviceID, &address) {
+            let status = AudioObjectAddPropertyListener(proxyDeviceID, &address, proxyVolumeChangedCallback, selfPtr)
+            if status == noErr {
+                monitoredVolumeElements.append(kAudioObjectPropertyElementMain)
+            } else {
+                print("[VolumeForward] Failed to add master listener (OSStatus: \(status))")
+            }
+        }
+
+        // Fallback to channel listeners only when master is unavailable.
+        if monitoredVolumeElements.isEmpty {
+            for channel: UInt32 in 1...2 {
+                address.mElement = channel
+                guard AudioObjectHasProperty(proxyDeviceID, &address) else { continue }
+                let status = AudioObjectAddPropertyListener(proxyDeviceID, &address, proxyVolumeChangedCallback, selfPtr)
+                if status == noErr {
+                    monitoredVolumeElements.append(channel)
+                } else {
+                    print("[VolumeForward] Failed to add listener for channel \(channel) (OSStatus: \(status))")
+                }
+            }
+        }
+
+        if monitoredVolumeElements.isEmpty {
+            monitoredProxyDeviceID = nil
+            print("[VolumeForward] WARNING: No volume listener registered for proxy device \(proxyDeviceID)")
+        }
+    }
+
+    private func stopVolumeForwarding() {
+        guard let proxyDeviceID = monitoredProxyDeviceID else { return }
+        defer {
+            monitoredProxyDeviceID = nil
+            monitoredVolumeElements.removeAll(keepingCapacity: false)
+            volumeForwardQueue.async { [weak self] in
+                self?.lastForwardedProxyVolume = nil
+            }
+        }
+
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+
+        for element in monitoredVolumeElements {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: element
+            )
+            let status = AudioObjectRemovePropertyListener(proxyDeviceID, &address, proxyVolumeChangedCallback, selfPtr)
+            if status != noErr {
+                print("[VolumeForward] Failed to remove listener for element \(element) (OSStatus: \(status))")
+            }
+        }
+    }
+
+    fileprivate func handleProxyVolumeChanged(from objectID: AudioObjectID) {
+        guard monitoredProxyDeviceID == objectID, activeProxyDeviceID == objectID else {
+            return
+        }
+
+        enqueueProxyVolumeForward()
+    }
+
+    private func enqueueProxyVolumeForward(force: Bool = false) {
+        let proxyDeviceID = activeProxyDeviceID
+        let physicalDeviceID = activePhysicalDeviceID
+        guard proxyDeviceID != 0, physicalDeviceID != 0 else {
+            return
+        }
+
+        volumeForwardQueue.async { [weak self] in
+            self?.forwardProxyVolumeToPhysical(
+                proxyDeviceID: proxyDeviceID,
+                physicalDeviceID: physicalDeviceID,
+                force: force
+            )
+        }
+    }
+
+    private func forwardProxyVolumeToPhysical(
+        proxyDeviceID: AudioDeviceID,
+        physicalDeviceID: AudioDeviceID,
+        force: Bool = false
+    ) {
+        guard let proxyVolume = getDeviceVolume(proxyDeviceID) else {
+            return
+        }
+
+        if !force, let lastForwardedProxyVolume, abs(proxyVolume - lastForwardedProxyVolume) < volumeForwardEpsilon {
+            return
+        }
+
+        lastForwardedProxyVolume = proxyVolume
+        _ = setDeviceVolume(physicalDeviceID, volume: proxyVolume)
+    }
+}
+
+private func proxyVolumeChangedCallback(
+    _ objectID: AudioObjectID,
+    _ numberAddresses: UInt32,
+    _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
+    _ clientData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let clientData else { return noErr }
+    let manager = Unmanaged<ProxyDeviceManager>.fromOpaque(clientData).takeUnretainedValue()
+    manager.handleProxyVolumeChanged(from: objectID)
+    return noErr
 }

@@ -54,6 +54,12 @@ radioform_error_t radioform_dsp_preset_validate(const radioform_preset_t* preset
     for (uint32_t i = 0; i < preset->num_bands; i++) {
         const radioform_band_t* band = &preset->bands[i];
 
+        // Check for NaN or infinity on band parameters
+        if (!std::isfinite(band->frequency_hz) || !std::isfinite(band->gain_db) ||
+            !std::isfinite(band->q_factor)) {
+            return RADIOFORM_ERROR_INVALID_PARAM;
+        }
+
         // Validate frequency (20 Hz to 20 kHz)
         if (band->frequency_hz < 20.0f || band->frequency_hz > 20000.0f) {
             return RADIOFORM_ERROR_INVALID_PARAM;
@@ -75,6 +81,11 @@ radioform_error_t radioform_dsp_preset_validate(const radioform_preset_t* preset
         }
     }
 
+    // Check for NaN or infinity on global parameters
+    if (!std::isfinite(preset->preamp_db) || !std::isfinite(preset->limiter_threshold_db)) {
+        return RADIOFORM_ERROR_INVALID_PARAM;
+    }
+
     // Validate preamp (-12 dB to +12 dB)
     if (preset->preamp_db < -12.0f || preset->preamp_db > 12.0f) {
         return RADIOFORM_ERROR_INVALID_PARAM;
@@ -82,11 +93,6 @@ radioform_error_t radioform_dsp_preset_validate(const radioform_preset_t* preset
 
     // Validate limiter threshold (-6 dB to 0 dB)
     if (preset->limiter_threshold_db < -6.0f || preset->limiter_threshold_db > 0.0f) {
-        return RADIOFORM_ERROR_INVALID_PARAM;
-    }
-
-    // Check for NaN or infinity
-    if (std::isnan(preset->preamp_db) || std::isinf(preset->preamp_db)) {
         return RADIOFORM_ERROR_INVALID_PARAM;
     }
 

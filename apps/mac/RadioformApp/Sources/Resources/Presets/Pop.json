@@ -74,5 +74,5 @@
   ],
   "preamp_db": 0.0,
   "limiter_enabled": true,
-  "limiter_threshold_db": -1.0
+  "limiter_threshold_db": -0.1
 }

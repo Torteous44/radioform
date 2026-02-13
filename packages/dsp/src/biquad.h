@@ -68,7 +68,12 @@ public:
      * @brief Set coefficients from band configuration (instant, no smoothing)
      */
     void setCoeffs(const radioform_band_t& band, float sample_rate) {
-        coeffs_ = calculateCoeffs(band, sample_rate);
+        BiquadCoeffs c = calculateCoeffs(band, sample_rate);
+        if (isFinite(c)) {
+            coeffs_ = c;
+        } else {
+            setCoeffsFlat();
+        }
         transition_remaining_ = 0;
     }
 
@@ -83,7 +88,12 @@ public:
      * @param transition_samples Number of samples to interpolate over (~10ms)
      */
     void setCoeffsSmooth(const radioform_band_t& band, float sample_rate, int transition_samples) {
-        target_coeffs_ = calculateCoeffs(band, sample_rate);
+        BiquadCoeffs c = calculateCoeffs(band, sample_rate);
+        if (!isFinite(c)) {
+            setCoeffsFlat();
+            return;
+        }
+        target_coeffs_ = c;
 
         if (transition_samples <= 0) {
             coeffs_ = target_coeffs_;
@@ -122,6 +132,14 @@ public:
         }
     }
 
+    /**
+     * @brief Check if all coefficients are finite (not NaN or Inf)
+     */
+    static bool isFinite(const BiquadCoeffs& c) {
+        return std::isfinite(c.b0) && std::isfinite(c.b1) && std::isfinite(c.b2)
+            && std::isfinite(c.a1) && std::isfinite(c.a2);
+    }
+
 private:
     /**
      * @brief Process one sample (mono) using Direct Form 2 Transposed
@@ -146,6 +164,14 @@ private:
         float output = coeffs_.b0 * input + state.z1;
         state.z1 = coeffs_.b1 * input - coeffs_.a1 * output + state.z2;
         state.z2 = coeffs_.b2 * input - coeffs_.a2 * output;
+
+        // Protect against NaN/Inf from filter state blowup
+        if (!std::isfinite(output)) {
+            state.z1 = 0.0f;
+            state.z2 = 0.0f;
+            return input;
+        }
+
         return output;
     }
 

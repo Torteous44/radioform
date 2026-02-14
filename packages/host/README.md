@@ -140,7 +140,7 @@ Key settings in `Constants.swift`:
 | `activeSampleRate` | Current operating sample rate (set at runtime) |
 | `fallbackSampleRate` | Default rate if device query fails (48kHz) |
 | `defaultChannels` | Stereo (2 channels) |
-| `defaultDurationMs` | Ring buffer duration (40ms) |
+| `defaultDurationMs` | Ring buffer duration (20ms) |
 | `heartbeatInterval` | Health check interval (1 second) |
 
 ## Build

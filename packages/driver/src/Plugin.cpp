@@ -53,7 +53,7 @@ namespace {
 // Configuration
 constexpr UInt32 DEFAULT_SAMPLE_RATE = 48000;
 constexpr UInt32 DEFAULT_CHANNELS = 2;
-constexpr UInt32 DEFAULT_RING_DURATION_MS = 20;
+constexpr UInt32 DEFAULT_RING_DURATION_MS = RF_RING_DURATION_MS_DEFAULT;
 
 // Health monitoring
 constexpr int HEALTH_CHECK_INTERVAL_SEC = 3;

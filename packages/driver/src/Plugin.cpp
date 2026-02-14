@@ -53,7 +53,7 @@ namespace {
 // Configuration
 constexpr UInt32 DEFAULT_SAMPLE_RATE = 48000;
 constexpr UInt32 DEFAULT_CHANNELS = 2;
-constexpr UInt32 DEFAULT_RING_DURATION_MS = 40;
+constexpr UInt32 DEFAULT_RING_DURATION_MS = 20;
 
 // Health monitoring
 constexpr int HEALTH_CHECK_INTERVAL_SEC = 3;
@@ -729,6 +729,9 @@ std::shared_ptr<aspl::Device> CreateProxyDevice(const std::string& name, const s
     params.SampleRate = DEFAULT_SAMPLE_RATE;
     params.ChannelCount = DEFAULT_CHANNELS;
     params.EnableMixing = true;
+    params.ZeroTimeStampPeriod = 512;  // Clock ticks every ~10.7ms at 48kHz (was 48000 = 1s)
+    params.SafetyOffset = 64;          // ~1.3ms headroom for client scheduling
+    params.Latency = 512;              // Presentation latency (~10.7ms)
 
     auto device = std::make_shared<aspl::Device>(g_state->context, params);
     device->AddStreamWithControlsAsync(aspl::Direction::Output);

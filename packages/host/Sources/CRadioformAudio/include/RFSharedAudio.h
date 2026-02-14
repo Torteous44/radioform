@@ -41,7 +41,7 @@ static const uint32_t RF_SUPPORTED_SAMPLE_RATES[] = {
 // We use milliseconds to be sample-rate independent
 #define RF_RING_DURATION_MS_MIN 20    // Minimum 20ms
 #define RF_RING_DURATION_MS_MAX 100   // Maximum 100ms
-#define RF_RING_DURATION_MS_DEFAULT 40  // Default 40ms
+#define RF_RING_DURATION_MS_DEFAULT 20  // Default 20ms
 
 // Calculate frames for given sample rate and duration
 static inline uint32_t rf_frames_for_duration(uint32_t sample_rate, uint32_t duration_ms) {
@@ -249,12 +249,13 @@ static inline uint32_t rf_ring_write(
     uint64_t read_idx = atomic_load(&mem->read_index);
     uint32_t capacity = mem->ring_capacity_frames;
 
-    // Check for overflow
+    // Check for overflow - drop incoming frames to preserve consumer timeline
     uint64_t used = write_idx - read_idx;
     if (used + num_frames > capacity) {
-        uint32_t frames_to_drop = (uint32_t)((used + num_frames) - capacity);
-        atomic_store(&mem->read_index, read_idx + frames_to_drop);
+        uint32_t can_write = (capacity > used) ? (uint32_t)(capacity - used) : 0;
+        num_frames = can_write;
         atomic_fetch_add(&mem->overrun_count, 1);
+        if (num_frames == 0) return 0;
     }
 
     // Write with format conversion

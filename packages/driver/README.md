@@ -132,7 +132,7 @@ Defined in `include/RFSharedAudio.h`. The struct is 256 bytes (padded with `_res
 | 20 | `bytes_per_sample` | `uint32_t` | Derived from format (2, 3, 4, or 8) |
 | 24 | `bytes_per_frame` | `uint32_t` | `bytes_per_sample * channels` |
 | 28 | `ring_capacity_frames` | `uint32_t` | `sample_rate * duration_ms / 1000` |
-| 32 | `ring_duration_ms` | `uint32_t` | Typically 40 (range: 20-100) |
+| 32 | `ring_duration_ms` | `uint32_t` | Typically 20 (range: 20-100) |
 | 36 | `driver_capabilities` | `uint32_t` | Bitmask of `RF_CAP_*` flags |
 | 40 | `host_capabilities` | `uint32_t` | Bitmask of `RF_CAP_*` flags |
 | 44 | `creation_timestamp` | `uint64_t` | Unix epoch seconds |
@@ -157,11 +157,11 @@ Defined in `include/RFSharedAudio.h`. The struct is 256 bytes (padded with `_res
 256 + (ring_capacity_frames * channels * bytes_per_sample)
 ```
 
-At 48 kHz, 2 channels, float32, 40ms: `256 + (1920 * 2 * 4)` = 15,616 bytes.
+At 48 kHz, 2 channels, float32, 20ms: `256 + (960 * 2 * 4)` = 7,936 bytes.
 
 ### Ring buffer
 
-Single-producer (driver), single-consumer (host). Uses monotonically increasing 64-bit indices with modulo for position. On overflow (write catches up to read), the driver advances `read_index` to make room and increments `overrun_count`. On underrun (read has no data), the host fills silence and increments `underrun_count`.
+Single-producer (driver), single-consumer (host). Uses monotonically increasing 64-bit indices with modulo for position. On overflow (write catches up to read), the driver drops incoming frames and increments `overrun_count`. On underrun (read has no data), the host fills silence and increments `underrun_count`.
 
 The ring buffer always stores audio in the format specified by the `format` field. `rf_ring_write()` accepts float32 and converts on write. `rf_ring_read()` converts back to float32 on read.
 
@@ -284,5 +284,5 @@ Every 30 seconds during active IO, the driver logs a stats summary:
 | `STATS_LOG_INTERVAL_SEC` | 30 | Seconds between stats log output |
 | `DEVICE_COOLDOWN_SEC` | 10 | Minimum seconds between device remove and re-add |
 | `RF_MAX_CHANNELS` | 8 | Maximum supported channel count |
-| `RF_RING_DURATION_MS_DEFAULT` | 40 | Default ring buffer duration |
+| `RF_RING_DURATION_MS_DEFAULT` | 20 | Default ring buffer duration |
 | `RF_AUDIO_PROTOCOL_VERSION` | `0x00020000` | Shared memory protocol version |

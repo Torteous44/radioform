@@ -8,7 +8,7 @@ struct RadioformConfig {
     static let defaultSampleRate: UInt32 = 48000
     static let defaultChannels: UInt32 = 2
     static let defaultFormat = RF_FORMAT_FLOAT32
-    static let defaultDurationMs: UInt32 = 20
+    static let defaultDurationMs: UInt32 = 40
 
     static var controlFilePath: String {
         return PathManager.controlFilePath

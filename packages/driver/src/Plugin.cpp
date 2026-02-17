@@ -191,9 +191,20 @@ protected:
     OSStatus GetZeroTimeStampImpl(UInt32 clientID,
         Float64* outSampleTime, UInt64* outHostTime, UInt64* outSeed) override
     {
+        const UInt64 now = mach_absolute_time();
+
+        // Ensure a deterministic anchor even if StartIOImpl has not run yet.
+        if (anchorTime_ == 0) {
+            anchorTime_ = now;
+            periodCounter_ = 0;
+        }
+
         // Recompute host ticks per frame on sample rate change
         Float64 sampleRate = GetNominalSampleRate();
-        if (sampleRate != lastSampleRate_) {
+        if (sampleRate <= 0) {
+            sampleRate = (lastSampleRate_ > 0) ? lastSampleRate_ : 48000.0;
+        }
+        if (sampleRate != lastSampleRate_ || hostTicksPerFrame_ <= 0) {
             struct mach_timebase_info tb;
             mach_timebase_info(&tb);
             Float64 hostClockFreq = Float64(tb.denom) / tb.numer * 1e9;
@@ -201,12 +212,17 @@ protected:
             lastSampleRate_ = sampleRate;
         }
 
-        const UInt64 now = mach_absolute_time();
         const Float64 period = GetZeroTimeStampPeriod();
+        if (period <= 0 || hostTicksPerFrame_ <= 0) {
+            *outSampleTime = 0;
+            *outHostTime = anchorTime_;
+            *outSeed = 1;
+            return kAudioHardwareNoError;
+        }
         const Float64 ticksPerPeriod = hostTicksPerFrame_ * period;
 
         // Compute elapsed periods from anchor using division (not single increment)
-        if (ticksPerPeriod > 0 && now > anchorTime_) {
+        if (ticksPerPeriod > 0 && now >= anchorTime_) {
             UInt64 elapsed = now - anchorTime_;
             UInt64 periods = (UInt64)(Float64(elapsed) / ticksPerPeriod);
             periodCounter_ = periods;
@@ -219,6 +235,9 @@ protected:
     }
 
 private:
+    // Thread-safety: libASPL's top-level StartIO()/GetZeroTimeStamp() take
+    // Device::ioMutex_ before invoking these Impl overrides, so these fields are
+    // serialized by the base class and do not need extra atomics here.
     UInt64 anchorTime_;
     UInt64 periodCounter_;
     Float64 hostTicksPerFrame_;

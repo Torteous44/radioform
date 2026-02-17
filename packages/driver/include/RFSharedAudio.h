@@ -249,7 +249,7 @@ static inline uint32_t rf_ring_write(
     uint64_t read_idx = atomic_load(&mem->read_index);
     uint32_t capacity = mem->ring_capacity_frames;
 
-    // Check for overflow
+    // Check for overflow - advance read_index to keep producer timeline intact
     uint64_t used = write_idx - read_idx;
     if (used + num_frames > capacity) {
         uint32_t frames_to_drop = (uint32_t)((used + num_frames) - capacity);

@@ -161,7 +161,7 @@ At 48 kHz, 2 channels, float32, 40ms: `256 + (1920 * 2 * 4)` = 15,616 bytes.
 
 ### Ring buffer
 
-Single-producer (driver), single-consumer (host). Uses monotonically increasing 64-bit indices with modulo for position. On overflow (write catches up to read), the driver advances `read_index` to make room and increments `overrun_count`. On underrun (read has no data), the host fills silence and increments `underrun_count`.
+Single-producer (driver), single-consumer (host). Uses monotonically increasing 64-bit indices with modulo for position. On overflow (write catches up to read), the driver advances `read_index` to make room (dropping the oldest samples) and increments `overrun_count`. On underrun (read has no data), the host fills silence and increments `underrun_count`.
 
 The ring buffer always stores audio in the format specified by the `format` field. `rf_ring_write()` accepts float32 and converts on write. `rf_ring_read()` converts back to float32 on read.
 

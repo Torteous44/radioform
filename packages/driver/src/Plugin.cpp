@@ -26,6 +26,7 @@
 #include <mutex>
 #include <algorithm>
 #include <cstdarg>
+#include <mach/mach_time.h>
 
 // Logging
 static os_log_t rf_log = os_log_create("com.radioform.driver", "default");
@@ -53,7 +54,7 @@ namespace {
 // Configuration
 constexpr UInt32 DEFAULT_SAMPLE_RATE = 48000;
 constexpr UInt32 DEFAULT_CHANNELS = 2;
-constexpr UInt32 DEFAULT_RING_DURATION_MS = 40;
+constexpr UInt32 DEFAULT_RING_DURATION_MS = RF_RING_DURATION_MS_DEFAULT;
 
 // Health monitoring
 constexpr int HEALTH_CHECK_INTERVAL_SEC = 3;
@@ -158,6 +159,89 @@ struct AudioStats {
             last_log = now;
         }
     }
+};
+
+// Custom Device subclass with correct GetZeroTimeStamp implementation.
+// libASPL's default GetZeroTimeStampImpl only increments periodCounter_ by 1 per
+// call. With a 512-frame period (~10.7ms), if the HAL calls GetZeroTimeStamp
+// slightly late the counter falls behind and can never catch up, causing monotonic
+// clock drift that Safari's Web Audio drift-compensation interprets as stutter.
+// This override computes elapsed periods via integer division from an anchor time.
+class RadioformDevice : public aspl::Device {
+public:
+    RadioformDevice(std::shared_ptr<aspl::Context> context,
+                    const aspl::DeviceParameters& params)
+        : aspl::Device(context, params)
+        , anchorTime_(0)
+        , periodCounter_(0)
+        , hostTicksPerFrame_(0)
+        , lastSampleRate_(0)
+    {}
+
+protected:
+    OSStatus StartIOImpl(UInt32 clientID, UInt32 startCount) override {
+        OSStatus status = aspl::Device::StartIOImpl(clientID, startCount);
+        if (status == kAudioHardwareNoError && startCount == 0) {
+            anchorTime_ = mach_absolute_time();
+            periodCounter_ = 0;
+        }
+        return status;
+    }
+
+    OSStatus GetZeroTimeStampImpl(UInt32 clientID,
+        Float64* outSampleTime, UInt64* outHostTime, UInt64* outSeed) override
+    {
+        const UInt64 now = mach_absolute_time();
+
+        // Ensure a deterministic anchor even if StartIOImpl has not run yet.
+        if (anchorTime_ == 0) {
+            anchorTime_ = now;
+            periodCounter_ = 0;
+        }
+
+        // Recompute host ticks per frame on sample rate change
+        Float64 sampleRate = GetNominalSampleRate();
+        if (sampleRate <= 0) {
+            sampleRate = (lastSampleRate_ > 0) ? lastSampleRate_ : 48000.0;
+        }
+        if (sampleRate != lastSampleRate_ || hostTicksPerFrame_ <= 0) {
+            struct mach_timebase_info tb;
+            mach_timebase_info(&tb);
+            Float64 hostClockFreq = Float64(tb.denom) / tb.numer * 1e9;
+            hostTicksPerFrame_ = hostClockFreq / sampleRate;
+            lastSampleRate_ = sampleRate;
+        }
+
+        const Float64 period = GetZeroTimeStampPeriod();
+        if (period <= 0 || hostTicksPerFrame_ <= 0) {
+            *outSampleTime = 0;
+            *outHostTime = anchorTime_;
+            *outSeed = 1;
+            return kAudioHardwareNoError;
+        }
+        const Float64 ticksPerPeriod = hostTicksPerFrame_ * period;
+
+        // Compute elapsed periods from anchor using division (not single increment)
+        if (ticksPerPeriod > 0 && now >= anchorTime_) {
+            UInt64 elapsed = now - anchorTime_;
+            UInt64 periods = (UInt64)(Float64(elapsed) / ticksPerPeriod);
+            periodCounter_ = periods;
+        }
+
+        *outSampleTime = periodCounter_ * period;
+        *outHostTime = anchorTime_ + UInt64(Float64(periodCounter_) * ticksPerPeriod);
+        *outSeed = 1;
+        return kAudioHardwareNoError;
+    }
+
+private:
+    // Thread-safety: libASPL's top-level StartIO()/GetZeroTimeStamp() take
+    // Device::ioMutex_ before invoking these Impl overrides, so these fields are
+    // serialized by the base class and do not need extra atomics here.
+    UInt64 anchorTime_;
+    UInt64 periodCounter_;
+    Float64 hostTicksPerFrame_;
+    Float64 lastSampleRate_;
 };
 
 // ULTIMATE Handler - handles ANY format, sample rate, channel count
@@ -729,8 +813,11 @@ std::shared_ptr<aspl::Device> CreateProxyDevice(const std::string& name, const s
     params.SampleRate = DEFAULT_SAMPLE_RATE;
     params.ChannelCount = DEFAULT_CHANNELS;
     params.EnableMixing = true;
+    params.ZeroTimeStampPeriod = 512;  // Clock ticks every ~10.7ms at 48kHz (was 48000 = 1s)
+    params.SafetyOffset = 64;          // ~1.3ms headroom for client scheduling
+    params.Latency = 512;              // Presentation latency (~10.7ms)
 
-    auto device = std::make_shared<aspl::Device>(g_state->context, params);
+    auto device = std::make_shared<RadioformDevice>(g_state->context, params);
     device->AddStreamWithControlsAsync(aspl::Direction::Output);
 
     auto handler = std::make_shared<UniversalAudioHandler>(uid);

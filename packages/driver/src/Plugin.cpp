@@ -176,17 +176,24 @@ public:
         , periodCounter_(0)
         , hostTicksPerFrame_(0)
         , lastSampleRate_(0)
-    {}
+        , hostClockFreq_(0)
+        , clockSeed_(1)
+    {
+        // Cache mach timebase at construction (non-RT-safe syscall).
+        // The ratio is a hardware constant and does not change at runtime.
+        struct mach_timebase_info tb = {};
+        mach_timebase_info(&tb);
+        // Guard against failure (numer==0). Fallback 1e9 = 1ns/tick, correct for Apple Silicon.
+        hostClockFreq_ = (tb.numer > 0)
+            ? Float64(tb.denom) / Float64(tb.numer) * 1.0e9
+            : 1.0e9;
+    }
 
 protected:
-    OSStatus StartIOImpl(UInt32 clientID, UInt32 startCount) override {
-        OSStatus status = aspl::Device::StartIOImpl(clientID, startCount);
-        if (status == kAudioHardwareNoError && startCount == 0) {
-            anchorTime_ = mach_absolute_time();
-            periodCounter_ = 0;
-        }
-        return status;
-    }
+    // StartIOImpl intentionally not overridden. The anchor is set once lazily in
+    // GetZeroTimeStampImpl and never reset, keeping the clock timeline continuous
+    // across IO start/stop cycles and preventing the cold-start underrun that
+    // triggers Safari's Web Audio stutter.
 
     OSStatus GetZeroTimeStampImpl(UInt32 clientID,
         Float64* outSampleTime, UInt64* outHostTime, UInt64* outSeed) override
@@ -204,19 +211,25 @@ protected:
         if (sampleRate <= 0) {
             sampleRate = (lastSampleRate_ > 0) ? lastSampleRate_ : 48000.0;
         }
-        if (sampleRate != lastSampleRate_ || hostTicksPerFrame_ <= 0) {
-            struct mach_timebase_info tb;
-            mach_timebase_info(&tb);
-            Float64 hostClockFreq = Float64(tb.denom) / tb.numer * 1e9;
-            hostTicksPerFrame_ = hostClockFreq / sampleRate;
+        if (hostTicksPerFrame_ <= 0) {
+            // First initialization — set rate, no anchor reset needed.
+            hostTicksPerFrame_ = hostClockFreq_ / sampleRate;
             lastSampleRate_ = sampleRate;
+        } else if (sampleRate != lastSampleRate_) {
+            // Genuine sample-rate change: re-anchor to now so outSampleTime stays
+            // monotonic, and bump seed so the HAL knows to re-sync its IO timeline.
+            anchorTime_ = now;
+            periodCounter_ = 0;
+            hostTicksPerFrame_ = hostClockFreq_ / sampleRate;
+            lastSampleRate_ = sampleRate;
+            ++clockSeed_;
         }
 
         const Float64 period = GetZeroTimeStampPeriod();
         if (period <= 0 || hostTicksPerFrame_ <= 0) {
             *outSampleTime = 0;
             *outHostTime = anchorTime_;
-            *outSeed = 1;
+            *outSeed = clockSeed_;
             return kAudioHardwareNoError;
         }
         const Float64 ticksPerPeriod = hostTicksPerFrame_ * period;
@@ -230,7 +243,7 @@ protected:
 
         *outSampleTime = periodCounter_ * period;
         *outHostTime = anchorTime_ + UInt64(Float64(periodCounter_) * ticksPerPeriod);
-        *outSeed = 1;
+        *outSeed = clockSeed_;
         return kAudioHardwareNoError;
     }
 
@@ -242,6 +255,8 @@ private:
     UInt64 periodCounter_;
     Float64 hostTicksPerFrame_;
     Float64 lastSampleRate_;
+    Float64 hostClockFreq_;  // (tb.denom/tb.numer)*1e9, cached at construction
+    UInt64 clockSeed_;       // increments on sample-rate change to signal HAL re-sync
 };
 
 // ULTIMATE Handler - handles ANY format, sample rate, channel count
@@ -814,7 +829,7 @@ std::shared_ptr<aspl::Device> CreateProxyDevice(const std::string& name, const s
     params.ChannelCount = DEFAULT_CHANNELS;
     params.EnableMixing = true;
     params.ZeroTimeStampPeriod = 512;  // Clock ticks every ~10.7ms at 48kHz (was 48000 = 1s)
-    params.SafetyOffset = 64;          // ~1.3ms headroom for client scheduling
+    params.SafetyOffset = 0;            // Virtual device: no hardware deadline
     params.Latency = 512;              // Presentation latency (~10.7ms)
 
     auto device = std::make_shared<RadioformDevice>(g_state->context, params);

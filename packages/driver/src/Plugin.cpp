@@ -177,12 +177,16 @@ public:
         , hostTicksPerFrame_(0)
         , lastSampleRate_(0)
         , hostClockFreq_(0)
+        , clockSeed_(1)
     {
         // Cache mach timebase at construction (non-RT-safe syscall).
         // The ratio is a hardware constant and does not change at runtime.
-        struct mach_timebase_info tb;
+        struct mach_timebase_info tb = {};
         mach_timebase_info(&tb);
-        hostClockFreq_ = Float64(tb.denom) / Float64(tb.numer) * 1.0e9;
+        // Guard against failure (numer==0). Fallback 1e9 = 1ns/tick, correct for Apple Silicon.
+        hostClockFreq_ = (tb.numer > 0)
+            ? Float64(tb.denom) / Float64(tb.numer) * 1.0e9
+            : 1.0e9;
     }
 
 protected:
@@ -207,16 +211,25 @@ protected:
         if (sampleRate <= 0) {
             sampleRate = (lastSampleRate_ > 0) ? lastSampleRate_ : 48000.0;
         }
-        if (sampleRate != lastSampleRate_ || hostTicksPerFrame_ <= 0) {
+        if (hostTicksPerFrame_ <= 0) {
+            // First initialization — set rate, no anchor reset needed.
             hostTicksPerFrame_ = hostClockFreq_ / sampleRate;
             lastSampleRate_ = sampleRate;
+        } else if (sampleRate != lastSampleRate_) {
+            // Genuine sample-rate change: re-anchor to now so outSampleTime stays
+            // monotonic, and bump seed so the HAL knows to re-sync its IO timeline.
+            anchorTime_ = now;
+            periodCounter_ = 0;
+            hostTicksPerFrame_ = hostClockFreq_ / sampleRate;
+            lastSampleRate_ = sampleRate;
+            ++clockSeed_;
         }
 
         const Float64 period = GetZeroTimeStampPeriod();
         if (period <= 0 || hostTicksPerFrame_ <= 0) {
             *outSampleTime = 0;
             *outHostTime = anchorTime_;
-            *outSeed = 1;
+            *outSeed = clockSeed_;
             return kAudioHardwareNoError;
         }
         const Float64 ticksPerPeriod = hostTicksPerFrame_ * period;
@@ -230,7 +243,7 @@ protected:
 
         *outSampleTime = periodCounter_ * period;
         *outHostTime = anchorTime_ + UInt64(Float64(periodCounter_) * ticksPerPeriod);
-        *outSeed = 1;
+        *outSeed = clockSeed_;
         return kAudioHardwareNoError;
     }
 
@@ -243,6 +256,7 @@ private:
     Float64 hostTicksPerFrame_;
     Float64 lastSampleRate_;
     Float64 hostClockFreq_;  // (tb.denom/tb.numer)*1e9, cached at construction
+    UInt64 clockSeed_;       // increments on sample-rate change to signal HAL re-sync
 };
 
 // ULTIMATE Handler - handles ANY format, sample rate, channel count

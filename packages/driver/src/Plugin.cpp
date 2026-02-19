@@ -176,17 +176,20 @@ public:
         , periodCounter_(0)
         , hostTicksPerFrame_(0)
         , lastSampleRate_(0)
-    {}
+        , hostClockFreq_(0)
+    {
+        // Cache mach timebase at construction (non-RT-safe syscall).
+        // The ratio is a hardware constant and does not change at runtime.
+        struct mach_timebase_info tb;
+        mach_timebase_info(&tb);
+        hostClockFreq_ = Float64(tb.denom) / Float64(tb.numer) * 1.0e9;
+    }
 
 protected:
-    OSStatus StartIOImpl(UInt32 clientID, UInt32 startCount) override {
-        OSStatus status = aspl::Device::StartIOImpl(clientID, startCount);
-        if (status == kAudioHardwareNoError && startCount == 0) {
-            anchorTime_ = mach_absolute_time();
-            periodCounter_ = 0;
-        }
-        return status;
-    }
+    // StartIOImpl intentionally not overridden. The anchor is set once lazily in
+    // GetZeroTimeStampImpl and never reset, keeping the clock timeline continuous
+    // across IO start/stop cycles and preventing the cold-start underrun that
+    // triggers Safari's Web Audio stutter.
 
     OSStatus GetZeroTimeStampImpl(UInt32 clientID,
         Float64* outSampleTime, UInt64* outHostTime, UInt64* outSeed) override
@@ -205,10 +208,7 @@ protected:
             sampleRate = (lastSampleRate_ > 0) ? lastSampleRate_ : 48000.0;
         }
         if (sampleRate != lastSampleRate_ || hostTicksPerFrame_ <= 0) {
-            struct mach_timebase_info tb;
-            mach_timebase_info(&tb);
-            Float64 hostClockFreq = Float64(tb.denom) / tb.numer * 1e9;
-            hostTicksPerFrame_ = hostClockFreq / sampleRate;
+            hostTicksPerFrame_ = hostClockFreq_ / sampleRate;
             lastSampleRate_ = sampleRate;
         }
 
@@ -242,6 +242,7 @@ private:
     UInt64 periodCounter_;
     Float64 hostTicksPerFrame_;
     Float64 lastSampleRate_;
+    Float64 hostClockFreq_;  // (tb.denom/tb.numer)*1e9, cached at construction
 };
 
 // ULTIMATE Handler - handles ANY format, sample rate, channel count
@@ -814,7 +815,7 @@ std::shared_ptr<aspl::Device> CreateProxyDevice(const std::string& name, const s
     params.ChannelCount = DEFAULT_CHANNELS;
     params.EnableMixing = true;
     params.ZeroTimeStampPeriod = 512;  // Clock ticks every ~10.7ms at 48kHz (was 48000 = 1s)
-    params.SafetyOffset = 64;          // ~1.3ms headroom for client scheduling
+    params.SafetyOffset = 0;            // Virtual device: no hardware deadline
     params.Latency = 512;              // Presentation latency (~10.7ms)
 
     auto device = std::make_shared<RadioformDevice>(g_state->context, params);

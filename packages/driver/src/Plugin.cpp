@@ -319,6 +319,20 @@ public:
                         // Pre-allocate conversion buffers
                         ResizeBuffers();
 
+                        // Prebuffer half a ring of silence so the host render callback always has
+                        // data to consume before Safari delivers its first real audio buffer.
+                        // The two clocks (virtual device and physical hardware) are independent;
+                        // without this cushion, the host reads before the driver writes ~50% of
+                        // cold starts, causing persistent underruns and Safari stutter.
+                        {
+                            const uint32_t prefill = shared_memory_->ring_capacity_frames / 2;
+                            const uint32_t channels = shared_memory_->channels;
+                            std::vector<float> silence(prefill * channels, 0.0f);
+                            rf_ring_write(shared_memory_, silence.data(), prefill);
+                            RF_LOG_INFO("Prebuffered %u frames of silence (%ums cushion)",
+                                prefill, prefill * 1000 / shared_memory_->sample_rate);
+                        }
+
                         // Start heartbeat
                         last_heartbeat_ = std::chrono::steady_clock::now();
                         return kAudioHardwareNoError;

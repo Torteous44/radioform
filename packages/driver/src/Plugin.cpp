@@ -55,6 +55,16 @@ namespace {
 constexpr UInt32 DEFAULT_SAMPLE_RATE = 48000;
 constexpr UInt32 DEFAULT_CHANNELS = 2;
 constexpr UInt32 DEFAULT_RING_DURATION_MS = RF_RING_DURATION_MS_DEFAULT;
+// CoreAudio AudioServerPlugIn.h documents a minimum allowed zero timestamp period
+// of 10923 frames. Use a conservative ring-sized period common to virtual drivers.
+constexpr UInt32 HAL_ZERO_TIMESTAMP_PERIOD_FRAMES = 16384;
+constexpr UInt32 HAL_SAFETY_OFFSET_FRAMES = 128;
+constexpr UInt32 HAL_PRESENTATION_LATENCY_FRAMES = 512;
+static_assert(HAL_ZERO_TIMESTAMP_PERIOD_FRAMES >= 10923,
+    "ZeroTimeStampPeriod must satisfy CoreAudio minimum (10923 frames)");
+constexpr int ADAPTIVE_FILL_TARGET_DIVISOR = 2;     // Keep ring near 50% full
+constexpr int ADAPTIVE_FILL_DEADBAND_PERCENT = 8;   // Ignore small fill variance
+constexpr double ADAPTIVE_MAX_ADJUST_PPM = 1500.0;  // +/-0.15% drift correction
 
 // Health monitoring
 constexpr int HEALTH_CHECK_INTERVAL_SEC = 3;
@@ -90,11 +100,25 @@ const char* StateToString(DeviceState state) {
 // Sample rate conversion (simple linear interpolation)
 class SimpleResampler {
 public:
-    SimpleResampler(uint32_t from_rate, uint32_t to_rate, uint32_t channels)
-        : from_rate_(from_rate), to_rate_(to_rate), channels_(channels), position_(0.0)
+    SimpleResampler(double from_rate, double to_rate, uint32_t channels)
+        : from_rate_(from_rate), to_rate_(to_rate), channels_(channels), ratio_(1.0), position_(0.0)
     {
-        ratio_ = (double)from_rate / (double)to_rate;
-        RF_LOG_INFO("Resampler: %u -> %u Hz (ratio: %.4f)", from_rate, to_rate, ratio_);
+        SetRates(from_rate, to_rate);
+        RF_LOG_INFO("Resampler: %.2f -> %.2f Hz (ratio: %.8f)", from_rate_, to_rate_, ratio_);
+    }
+
+    void SetRates(double from_rate, double to_rate)
+    {
+        if (from_rate <= 0.0) from_rate = 48000.0;
+        if (to_rate <= 0.0) to_rate = from_rate;
+        from_rate_ = from_rate;
+        to_rate_ = to_rate;
+        ratio_ = from_rate_ / to_rate_;
+    }
+
+    void SetChannels(uint32_t channels)
+    {
+        channels_ = std::max<uint32_t>(1, channels);
     }
 
     // Resample input to output
@@ -120,14 +144,17 @@ public:
         }
 
         position_ -= input_frames;
+        if (position_ < 0.0) {
+            position_ = 0.0;
+        }
         return output_frames;
     }
 
     void Reset() { position_ = 0.0; }
 
 private:
-    uint32_t from_rate_;
-    uint32_t to_rate_;
+    double from_rate_;
+    double to_rate_;
     uint32_t channels_;
     double ratio_;
     double position_;
@@ -163,9 +190,9 @@ struct AudioStats {
 
 // Custom Device subclass with correct GetZeroTimeStamp implementation.
 // libASPL's default GetZeroTimeStampImpl only increments periodCounter_ by 1 per
-// call. With a 512-frame period (~10.7ms), if the HAL calls GetZeroTimeStamp
-// slightly late the counter falls behind and can never catch up, causing monotonic
-// clock drift that Safari's Web Audio drift-compensation interprets as stutter.
+// call. If the HAL calls GetZeroTimeStamp late, the counter can fall behind and
+// never catch up, causing monotonic clock drift that Safari's Web Audio
+// drift-compensation interprets as stutter.
 // This override computes elapsed periods via integer division from an anchor time.
 class RadioformDevice : public aspl::Device {
 public:
@@ -274,7 +301,8 @@ public:
         , last_host_hb_change_(std::chrono::steady_clock::now())
         , current_sample_rate_(DEFAULT_SAMPLE_RATE)
         , current_channels_(DEFAULT_CHANNELS)
-        , resampler_()
+        , resampler_(std::make_unique<SimpleResampler>(
+            DEFAULT_SAMPLE_RATE, DEFAULT_SAMPLE_RATE, DEFAULT_CHANNELS))
     {
         std::string safe_uid = deviceUID;
         for (char& c : safe_uid) {
@@ -356,12 +384,7 @@ public:
             return kAudioHardwareUnspecifiedError;
         }
 
-        // Additional client - verify health
-        if (!IsHealthy()) {
-            RF_LOG_ERROR("Unhealthy connection for client #%d", count);
-            AttemptRecovery();
-        }
-
+        // Additional client path intentionally does no recovery work.
         return shared_memory_ ? kAudioHardwareNoError : kAudioHardwareUnspecifiedError;
     }
 
@@ -394,36 +417,13 @@ public:
     {
         stats_.total_writes++;
 
-        // Periodic health check
-        auto now = std::chrono::steady_clock::now();
-        auto health_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - last_health_check_).count();
-
-        if (health_elapsed >= HEALTH_CHECK_INTERVAL_SEC) {
-            if (!IsHealthy()) {
-                stats_.health_failures++;
-                RF_LOG_ERROR("Health check failed!");
-                std::lock_guard<std::mutex> lock(io_mutex_);
-                AttemptRecovery();
-            }
-            last_health_check_ = now;
-        }
-
-        // Periodic heartbeat
-        auto hb_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - last_heartbeat_).count();
-
-        if (hb_elapsed >= HEARTBEAT_INTERVAL_SEC) {
-            if (shared_memory_) {
-                rf_update_driver_heartbeat(shared_memory_);
-            }
-            last_heartbeat_ = now;
-        }
-
         if (!shared_memory_) {
             stats_.failed_writes++;
             return;
         }
+
+        // Keep callback RT-safe: avoid filesystem checks/recovery here.
+        rf_update_driver_heartbeat(shared_memory_);
 
         // Get stream format
         AudioStreamBasicDescription fmt = stream->GetPhysicalFormat();
@@ -462,13 +462,50 @@ public:
             return;
         }
 
+        // Compensate callback timestamp discontinuities (gaps/overlaps) to keep
+        // a continuous producer timeline for the host reader.
+        uint32_t skip_frames = 0;
+        uint32_t prepend_silence_frames = 0;
+        if (has_last_output_timestamp_) {
+            const double delta = timestamp - last_output_timestamp_end_;
+            if (delta > 0.5) {
+                prepend_silence_frames = static_cast<uint32_t>(
+                    std::min<double>(delta, shared_memory_->ring_capacity_frames / 2.0));
+            } else if (delta < -0.5) {
+                skip_frames = static_cast<uint32_t>(std::min<double>(-delta, frameCount));
+            }
+        }
+        has_last_output_timestamp_ = true;
+        last_output_timestamp_end_ = timestamp + frameCount;
+
         // Handle sample rate conversion if needed
         if (fmt.mSampleRate != shared_memory_->sample_rate) {
-            ProcessWithSampleRateConversion(interleaved_buf_.data(), frameCount,
-                                            fmt.mSampleRate, fmt.mChannelsPerFrame);
+            const float* payload = interleaved_buf_.data() + (skip_frames * fmt.mChannelsPerFrame);
+            const uint32_t payload_frames = frameCount - skip_frames;
+            if (payload_frames > 0) {
+                ProcessWithSampleRateConversion(payload, payload_frames,
+                                            fmt.mSampleRate, shared_memory_->sample_rate,
+                                            fmt.mChannelsPerFrame);
+            }
         } else {
-            // Direct write
-            rf_ring_write(shared_memory_, interleaved_buf_.data(), frameCount);
+            if (prepend_silence_frames > 0) {
+                const size_t available_silence_frames =
+                    silence_buf_.size() / fmt.mChannelsPerFrame;
+                if (prepend_silence_frames > available_silence_frames) {
+                    prepend_silence_frames = static_cast<uint32_t>(available_silence_frames);
+                }
+                const size_t silence_needed = prepend_silence_frames * fmt.mChannelsPerFrame;
+                std::fill_n(silence_buf_.begin(), silence_needed, 0.0f);
+                WriteWithAdaptiveDriftCompensation(silence_buf_.data(), prepend_silence_frames,
+                                                   fmt.mSampleRate, fmt.mChannelsPerFrame);
+            }
+
+            const float* payload = interleaved_buf_.data() + (skip_frames * fmt.mChannelsPerFrame);
+            const uint32_t payload_frames = frameCount - skip_frames;
+            if (payload_frames > 0) {
+                WriteWithAdaptiveDriftCompensation(payload, payload_frames,
+                                               fmt.mSampleRate, fmt.mChannelsPerFrame);
+            }
         }
 
         stats_.LogPeriodic();
@@ -560,7 +597,9 @@ private:
             shared_memory_ = nullptr;
         }
 
-        resampler_.reset();
+        if (resampler_) {
+            resampler_->Reset();
+        }
     }
 
     bool ValidateConnection() {
@@ -674,6 +713,9 @@ private:
 
         interleaved_buf_.resize(max_frames * max_channels);
         resampled_buf_.resize(max_frames * 2 * max_channels); // 2x for upsampling headroom
+        const uint32_t max_silence_frames = std::max<uint32_t>(
+            1, shared_memory_->ring_capacity_frames / 2);
+        silence_buf_.resize(max_silence_frames * max_channels, 0.0f);
     }
 
     void HandleFormatChange(const AudioStreamBasicDescription& new_fmt) {
@@ -682,14 +724,10 @@ private:
         current_sample_rate_ = (uint32_t)new_fmt.mSampleRate;
         current_channels_ = new_fmt.mChannelsPerFrame;
 
-        // Update or create resampler if needed
-        if (shared_memory_ && new_fmt.mSampleRate != shared_memory_->sample_rate) {
-            resampler_ = std::make_unique<SimpleResampler>(
-                (uint32_t)new_fmt.mSampleRate,
-                shared_memory_->sample_rate,
-                new_fmt.mChannelsPerFrame);
-
-            RF_LOG_INFO("Created resampler: %.0f -> %u Hz",
+        if (shared_memory_ && resampler_) {
+            resampler_->SetChannels(new_fmt.mChannelsPerFrame);
+            resampler_->SetRates(new_fmt.mSampleRate, shared_memory_->sample_rate);
+            RF_LOG_INFO("Configured resampler: %.0f -> %u Hz",
                 new_fmt.mSampleRate, shared_memory_->sample_rate);
         }
 
@@ -744,17 +782,18 @@ private:
         return true;
     }
 
-    void ProcessWithSampleRateConversion(float* input, uint32_t input_frames,
-                                        uint32_t input_rate, uint32_t channels) {
-        if (!resampler_) {
-            RF_LOG_ERROR("Resampler not initialized!");
-            return;
-        }
+    void ProcessWithSampleRateConversion(const float* input, uint32_t input_frames,
+                                        double input_rate, double output_rate,
+                                        uint32_t channels) {
+        if (!resampler_) return;
+        resampler_->SetChannels(channels);
+        resampler_->SetRates(input_rate, output_rate);
 
         stats_.sample_rate_conversions++;
 
         // Calculate output size and ensure buffer is large enough
-        uint32_t output_capacity = (input_frames * shared_memory_->sample_rate) / input_rate + 10;
+        uint32_t output_capacity =
+            static_cast<uint32_t>((input_frames * output_rate) / input_rate) + 10;
         size_t needed = output_capacity * channels;
         if (resampled_buf_.size() < needed) {
             resampled_buf_.resize(needed);
@@ -767,6 +806,44 @@ private:
         if (output_frames > 0) {
             rf_ring_write(shared_memory_, resampled_buf_.data(), output_frames);
         }
+    }
+
+    void WriteWithAdaptiveDriftCompensation(const float* input,
+                                            uint32_t input_frames,
+                                            double sample_rate,
+                                            uint32_t channels) {
+        if (!shared_memory_) return;
+
+        const uint64_t write_idx = atomic_load(&shared_memory_->write_index);
+        const uint64_t read_idx = atomic_load(&shared_memory_->read_index);
+        const uint32_t capacity = shared_memory_->ring_capacity_frames;
+        const uint64_t used = write_idx - read_idx;
+
+        if (capacity == 0) {
+            rf_ring_write(shared_memory_, input, input_frames);
+            return;
+        }
+
+        const int64_t target_fill = static_cast<int64_t>(capacity / ADAPTIVE_FILL_TARGET_DIVISOR);
+        const int64_t error = target_fill - static_cast<int64_t>(used);
+        const int64_t deadband = std::max<int64_t>(1,
+            (capacity * ADAPTIVE_FILL_DEADBAND_PERCENT) / 100);
+
+        // Within deadband, keep exact nominal rate and avoid extra SRC work.
+        if (std::llabs(error) <= deadband) {
+            rf_ring_write(shared_memory_, input, input_frames);
+            return;
+        }
+
+        // Small adaptive ratio correction to keep producer/consumer clocks centered.
+        const double normalized_error =
+            static_cast<double>(error) / std::max<int64_t>(1, target_fill);
+        const double ppm_adjust =
+            std::clamp(normalized_error * ADAPTIVE_MAX_ADJUST_PPM,
+                       -ADAPTIVE_MAX_ADJUST_PPM, ADAPTIVE_MAX_ADJUST_PPM);
+        const double adjusted_output_rate = sample_rate * (1.0 + (ppm_adjust / 1'000'000.0));
+
+        ProcessWithSampleRateConversion(input, input_frames, sample_rate, adjusted_output_rate, channels);
     }
 
     void PrintDetailedError() {
@@ -807,6 +884,10 @@ private:
     // Pre-allocated buffers to avoid heap allocation on the audio thread
     std::vector<float> interleaved_buf_;
     std::vector<float> resampled_buf_;
+    std::vector<float> silence_buf_;
+
+    bool has_last_output_timestamp_{false};
+    double last_output_timestamp_end_{0.0};
 
     AudioStats stats_;
 };
@@ -842,9 +923,9 @@ std::shared_ptr<aspl::Device> CreateProxyDevice(const std::string& name, const s
     params.SampleRate = DEFAULT_SAMPLE_RATE;
     params.ChannelCount = DEFAULT_CHANNELS;
     params.EnableMixing = true;
-    params.ZeroTimeStampPeriod = 512;  // Clock ticks every ~10.7ms at 48kHz (was 48000 = 1s)
-    params.SafetyOffset = 0;            // Virtual device: no hardware deadline
-    params.Latency = 512;              // Presentation latency (~10.7ms)
+    params.ZeroTimeStampPeriod = HAL_ZERO_TIMESTAMP_PERIOD_FRAMES;
+    params.SafetyOffset = HAL_SAFETY_OFFSET_FRAMES;
+    params.Latency = HAL_PRESENTATION_LATENCY_FRAMES;
 
     auto device = std::make_shared<RadioformDevice>(g_state->context, params);
     device->AddStreamWithControlsAsync(aspl::Direction::Output);

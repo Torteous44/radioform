@@ -1,12 +1,36 @@
-#!/bin/bash
-echo "Testing preset switching..."
+#!/usr/bin/env bash
+set -euo pipefail
 
-for preset in BassBoost VocalEnhance TrebleBoost Flat Jazz Rock; do
-    echo "→ Applying $preset..."
-    preset_dir="$HOME/Library/Application Support/Radioform"
-    mkdir -p "$preset_dir"
-    cat "Sources/Resources/Presets/${preset}.json" > "$preset_dir/preset.json"
-    sleep 1.5
+echo "Testing bundled preset switching..."
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+preset_src_dir="${script_dir}/Sources/Resources/Presets"
+preset_dest_dir="${HOME}/Library/Application Support/Radioform"
+preset_dest_file="${preset_dest_dir}/preset.json"
+
+mkdir -p "${preset_dest_dir}"
+
+presets=(
+  "Acoustic"
+  "Classical"
+  "Electronic"
+  "Flat"
+  "Hip-Hop"
+  "Pop"
+  "R&B"
+  "Rock"
+)
+
+for preset in "${presets[@]}"; do
+  src="${preset_src_dir}/${preset}.json"
+  if [[ ! -f "${src}" ]]; then
+    echo "Missing preset file: ${src}" >&2
+    exit 1
+  fi
+
+  echo "Applying ${preset}..."
+  cp "${src}" "${preset_dest_file}"
+  sleep 1.5
 done
 
-echo "✓ Test complete! Check the 'Now Playing' in menu bar UI"
+echo "Preset switch test complete."

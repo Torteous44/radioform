@@ -8,6 +8,7 @@ class ProxyDeviceManager {
     private let switchCooldown: TimeInterval = 0.5
     private var monitoredProxyDeviceID: AudioDeviceID?
     private var monitoredVolumeElements: [UInt32] = []
+    private var monitoredMuteRegistered = false
     private let volumeForwardQueue = DispatchQueue(label: "com.radioform.host.proxy-volume-forward")
     private let volumeForwardEpsilon: Float32 = 0.001
     private var lastForwardedProxyVolume: Float32?
@@ -476,6 +477,21 @@ class ProxyDeviceManager {
             monitoredProxyDeviceID = nil
             print("[VolumeForward] WARNING: No volume listener registered for proxy device \(proxyDeviceID)")
         }
+
+        // Register mute listener (mute key, distinct from volume scalar)
+        var muteAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        if AudioObjectHasProperty(proxyDeviceID, &muteAddress) {
+            let status = AudioObjectAddPropertyListener(proxyDeviceID, &muteAddress, proxyMuteChangedCallback, selfPtr)
+            if status == noErr {
+                monitoredMuteRegistered = true
+            } else {
+                print("[MuteForward] Failed to add mute listener (OSStatus: \(status))")
+            }
+        }
     }
 
     private func stopVolumeForwarding() {
@@ -483,6 +499,7 @@ class ProxyDeviceManager {
         defer {
             monitoredProxyDeviceID = nil
             monitoredVolumeElements.removeAll(keepingCapacity: false)
+            monitoredMuteRegistered = false
             volumeForwardQueue.async { [weak self] in
                 self?.lastForwardedProxyVolume = nil
             }
@@ -501,6 +518,18 @@ class ProxyDeviceManager {
                 print("[VolumeForward] Failed to remove listener for element \(element) (OSStatus: \(status))")
             }
         }
+
+        if monitoredMuteRegistered {
+            var muteAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyMute,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            let status = AudioObjectRemovePropertyListener(proxyDeviceID, &muteAddress, proxyMuteChangedCallback, selfPtr)
+            if status != noErr {
+                print("[MuteForward] Failed to remove mute listener (OSStatus: \(status))")
+            }
+        }
     }
 
     fileprivate func handleProxyVolumeChanged(from objectID: AudioObjectID) {
@@ -509,6 +538,79 @@ class ProxyDeviceManager {
         }
 
         enqueueProxyVolumeForward()
+    }
+
+    fileprivate func handleProxyMuteChanged(from objectID: AudioObjectID) {
+        guard monitoredProxyDeviceID == objectID, activeProxyDeviceID == objectID else {
+            return
+        }
+
+        let proxyDeviceID = activeProxyDeviceID
+        let physicalDeviceID = activePhysicalDeviceID
+        guard proxyDeviceID != 0, physicalDeviceID != 0 else { return }
+
+        volumeForwardQueue.async { [weak self] in
+            self?.forwardProxyMuteToPhysical(proxyDeviceID: proxyDeviceID, physicalDeviceID: physicalDeviceID)
+        }
+    }
+
+    private func forwardProxyMuteToPhysical(proxyDeviceID: AudioDeviceID, physicalDeviceID: AudioDeviceID) {
+        guard let muted = getDeviceMute(proxyDeviceID) else { return }
+        _ = setDeviceMute(physicalDeviceID, muted: muted)
+    }
+
+    private func getDeviceMute(_ deviceID: AudioDeviceID) -> Bool? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
+        var muted: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &muted) == noErr else { return nil }
+        return muted != 0
+    }
+
+    private func setDeviceMute(_ deviceID: AudioDeviceID, muted: Bool) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(deviceID, &address) else { return false }
+        var value: UInt32 = muted ? 1 : 0
+        return AudioObjectSetPropertyData(
+            deviceID, &address, 0, nil,
+            UInt32(MemoryLayout<UInt32>.size), &value
+        ) == noErr
+    }
+
+    /// Re-register the proxy volume listener after sleep/wake.
+    ///
+    /// coreaudiod silently drops all AudioObjectAddPropertyListener registrations
+    /// when it restarts (which happens on sleep/wake). Calling startVolumeForwarding
+    /// directly would no-op if the proxy device ID is unchanged (the common case),
+    /// so we force teardown first to clear monitoredProxyDeviceID and bypass that guard.
+    func reregisterVolumeForwarding() {
+        // stopVolumeForwarding clears monitoredProxyDeviceID, so the same-ID
+        // early-return guard in startVolumeForwarding will not block re-registration.
+        stopVolumeForwarding()
+
+        guard activeProxyDeviceID != 0 else {
+            print("[VolumeForward] No active proxy — skipping re-registration")
+            return
+        }
+
+        startVolumeForwarding(proxyDeviceID: activeProxyDeviceID)
+        enqueueProxyVolumeForward(force: true)
+
+        let proxyID = activeProxyDeviceID
+        let physicalID = activePhysicalDeviceID
+        volumeForwardQueue.async { [weak self] in
+            self?.forwardProxyMuteToPhysical(proxyDeviceID: proxyID, physicalDeviceID: physicalID)
+        }
+        print("[VolumeForward] Volume and mute listeners re-registered after wake")
     }
 
     private func enqueueProxyVolumeForward(force: Bool = false) {
@@ -554,5 +656,17 @@ private func proxyVolumeChangedCallback(
     guard let clientData else { return noErr }
     let manager = Unmanaged<ProxyDeviceManager>.fromOpaque(clientData).takeUnretainedValue()
     manager.handleProxyVolumeChanged(from: objectID)
+    return noErr
+}
+
+private func proxyMuteChangedCallback(
+    _ objectID: AudioObjectID,
+    _ numberAddresses: UInt32,
+    _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
+    _ clientData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let clientData else { return noErr }
+    let manager = Unmanaged<ProxyDeviceManager>.fromOpaque(clientData).takeUnretainedValue()
+    manager.handleProxyMuteChanged(from: objectID)
     return noErr
 }

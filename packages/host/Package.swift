@@ -26,6 +26,7 @@ let package = Package(
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("CoreFoundation"),
+                .linkedFramework("IOKit"),
                 .linkedLibrary("c++"),
                 .unsafeFlags([
                     "-L../dsp/build",

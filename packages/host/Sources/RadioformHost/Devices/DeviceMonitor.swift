@@ -10,6 +10,9 @@ class DeviceMonitor {
     private var lastHandledDeviceID: AudioDeviceID = 0
     private var lastHandledTime: Date = .distantPast
     private let callbackDebounce: TimeInterval = 0.3
+    private var listenersRegistered = false
+    private var devicesListenerRegistered = false
+    private var defaultOutputListenerRegistered = false
 
     init(
         registry: DeviceRegistry,
@@ -26,50 +29,94 @@ class DeviceMonitor {
     }
 
     func registerListeners() {
+        guard !listenersRegistered else { return }
+
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+
         var devicesAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-
-        let deviceListCallback: AudioObjectPropertyListenerProc = { _, _, _, clientData in
-            guard let clientData = clientData else { return noErr }
-            let monitor = Unmanaged<DeviceMonitor>.fromOpaque(clientData).takeUnretainedValue()
-            monitor.handleDeviceListChanged()
-            return noErr
-        }
-
-        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
-
-        AudioObjectAddPropertyListener(
+        let devicesStatus = AudioObjectAddPropertyListener(
             AudioObjectID(kAudioObjectSystemObject),
             &devicesAddress,
-            deviceListCallback,
+            deviceListChangedCallbackC,
             selfPtr
         )
+        devicesListenerRegistered = (devicesStatus == noErr)
+        if devicesStatus != noErr {
+            print("[DeviceMonitor] ERROR: Failed to register devices listener (\(devicesStatus))")
+        }
 
         var defaultOutputAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-
-        let defaultOutputCallback: AudioObjectPropertyListenerProc = { _, _, _, clientData in
-            guard let clientData = clientData else { return noErr }
-            let monitor = Unmanaged<DeviceMonitor>.fromOpaque(clientData).takeUnretainedValue()
-            monitor.handleDefaultOutputChanged()
-            return noErr
-        }
-
-        AudioObjectAddPropertyListener(
+        let outputStatus = AudioObjectAddPropertyListener(
             AudioObjectID(kAudioObjectSystemObject),
             &defaultOutputAddress,
-            defaultOutputCallback,
+            defaultOutputChangedCallbackC,
             selfPtr
         )
+        defaultOutputListenerRegistered = (outputStatus == noErr)
+        if outputStatus != noErr {
+            print("[DeviceMonitor] ERROR: Failed to register default output listener (\(outputStatus))")
+        }
+
+        listenersRegistered = devicesListenerRegistered && defaultOutputListenerRegistered
     }
 
-    private func handleDeviceListChanged() {
+    private func removeListeners() {
+        guard devicesListenerRegistered || defaultOutputListenerRegistered else { return }
+        listenersRegistered = false
+
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+
+        var devicesAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        if devicesListenerRegistered {
+            AudioObjectRemovePropertyListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                &devicesAddress,
+                deviceListChangedCallbackC,
+                selfPtr
+            )
+            devicesListenerRegistered = false
+        }
+
+        var defaultOutputAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        if defaultOutputListenerRegistered {
+            AudioObjectRemovePropertyListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                &defaultOutputAddress,
+                defaultOutputChangedCallbackC,
+                selfPtr
+            )
+            defaultOutputListenerRegistered = false
+        }
+    }
+
+    func reregisterListeners() {
+        removeListeners()
+        registerListeners()
+        print("[DeviceMonitor] Listeners re-registered after wake")
+    }
+
+    func resetDebounce() {
+        lastHandledDeviceID = 0
+        lastHandledTime = .distantPast
+    }
+
+    fileprivate func handleDeviceListChanged() {
         let oldDevices = registry.devices
         let newDevices = discovery.enumeratePhysicalDevices()
 
@@ -97,7 +144,7 @@ class DeviceMonitor {
         }
     }
 
-    private func handleDefaultOutputChanged() {
+    fileprivate func handleDefaultOutputChanged() {
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -196,4 +243,30 @@ class DeviceMonitor {
 
         return deviceUID as String
     }
+}
+
+// File-level C callbacks — stable function pointers required for AudioObjectRemovePropertyListener.
+// AudioObjectPropertyListenerProc requires non-optional UnsafePointer<AudioObjectPropertyAddress>.
+private func deviceListChangedCallbackC(
+    _ objectID: AudioObjectID,
+    _ numAddresses: UInt32,
+    _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
+    _ clientData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let clientData else { return noErr }
+    Unmanaged<DeviceMonitor>.fromOpaque(clientData).takeUnretainedValue()
+        .handleDeviceListChanged()
+    return noErr
+}
+
+private func defaultOutputChangedCallbackC(
+    _ objectID: AudioObjectID,
+    _ numAddresses: UInt32,
+    _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
+    _ clientData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let clientData else { return noErr }
+    Unmanaged<DeviceMonitor>.fromOpaque(clientData).takeUnretainedValue()
+        .handleDefaultOutputChanged()
+    return noErr
 }

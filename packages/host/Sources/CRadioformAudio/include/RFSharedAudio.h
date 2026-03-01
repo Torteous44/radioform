@@ -41,7 +41,7 @@ static const uint32_t RF_SUPPORTED_SAMPLE_RATES[] = {
 // We use milliseconds to be sample-rate independent
 #define RF_RING_DURATION_MS_MIN 20    // Minimum 20ms
 #define RF_RING_DURATION_MS_MAX 100   // Maximum 100ms
-#define RF_RING_DURATION_MS_DEFAULT 40  // Default 40ms
+#define RF_RING_DURATION_MS_DEFAULT 100  // Default 100ms
 
 // Calculate frames for given sample rate and duration
 static inline uint32_t rf_frames_for_duration(uint32_t sample_rate, uint32_t duration_ms) {

@@ -1,76 +1,64 @@
 # Radioform DSP Library
 
-Digital signal processing core for the Radioform macOS equalizer, built for predictable performance, clean integration points, and thorough test coverage.
+Digital signal processing core for Radioform. The library provides a C ABI (`include/radioform_dsp.h`) over a C++ implementation (`src/`) and an Objective-C++ bridge (`bridge/`) for Swift integration.
 
 ## Features
 
-- 10-band parametric EQ with seven filter types
-- Self-contained C++ implementation with no external DSP dependencies
-- Realtime-safe processing with lock-free bypass and zero audio-path allocations
-- Objective-C++ bridge using Foundation types for Swift interoperability
-- Automated verification with 33 tests and measured THD below 0.1%
-- Low CPU overhead on Apple Silicon at 48 kHz (under 1%)
+- 10-band parametric EQ (`RADIOFORM_MAX_BANDS = 10`)
+- Seven filter types: peak, low shelf, high shelf, low pass, high pass, notch, band pass
+- Stereo processing in interleaved and planar formats
+- Preamp control and optional soft limiter
+- DC blocker stage to reduce offset buildup
+- C ABI with POD types for C / ObjC++ / Swift interop
+- Objective-C++ wrapper (`RadioformDSPEngine`) for Foundation-friendly Swift usage
 
 ## Architecture
 
 ```
-┌──────────────────────────────────┐
-│  Swift Application              │
-└───────────────┬──────────────────┘
-                │
-┌───────────────▼──────────────────┐
-│  RadioformDSPEngine (ObjC++)    │  ← bridge/RadioformDSPEngine.{h,mm}
-│  - Foundation types             │
-│  - Memory management (ARC)      │
-└───────────────┬──────────────────┘
-                │
-┌───────────────▼──────────────────┐
-│  radioform_dsp.h (C API)        │  ← include/radioform_dsp.h
-│  - Clean ABI boundary           │
-│  - POD types                    │
-└───────────────┬──────────────────┘
-                │
-┌───────────────▼──────────────────┐
-│  C++ DSP Engine                 │  ← src/engine.cpp
-│  - RBJ biquad filters           │
-│  - Parameter smoothing          │
-│  - Soft limiter                 │
-│  - Lock-free bypass             │
-└──────────────────────────────────┘
+Swift App
+    |
+    v
+RadioformDSPEngine (ObjC++)   bridge/RadioformDSPEngine.{h,mm}
+    |
+    v
+C API                         include/radioform_dsp.h
+    |
+    v
+C++ Engine                    src/engine.cpp + filter/smoother/limiter modules
 ```
 
 ## Directory Structure
 
 ```
 packages/dsp/
-├── include/              # Public C API
-│   ├── radioform_types.h    # POD types, enums
-│   └── radioform_dsp.h      # Engine API
-├── src/                  # C++ implementation
-│   ├── engine.cpp           # DSP engine
-│   ├── biquad.h / .cpp      # RBJ biquad filters (7 types)
-│   ├── smoothing.h / .cpp   # Parameter smoothing
-│   ├── limiter.h / .cpp     # Soft limiter
-│   ├── dc_blocker.h         # DC offset removal filter
-│   ├── cpu_util.h           # Denormal suppression (x86/ARM)
-│   ├── preset.cpp           # Preset validation
-│   └── version.cpp          # Version info
-├── bridge/               # Objective-C++ bridge
-│   ├── RadioformDSPEngine.h     # ObjC public API
-│   ├── RadioformDSPEngine.mm    # ObjC++ implementation
-│   ├── SwiftUsageExample.swift  # Usage examples
-│   └── README.md                # Bridge documentation
-├── tests/                # Automated test suite (33 tests)
-│   ├── test_main.cpp            # Test runner
-│   ├── test_utils.h             # Test framework
-│   ├── test_preset.cpp          # Preset validation
-│   ├── test_smoothing.cpp       # Smoothing and zipper noise
-│   ├── test_biquad.cpp          # Filter correctness
-│   ├── test_engine.cpp          # Engine integration
-│   └── test_frequency_response.cpp  # Accuracy validation
-├── tools/                # Command-line tools
-│   └── wav_processor.cpp        # Audio file processor
-└── CMakeLists.txt        # Build configuration
+├── include/
+│   ├── radioform_types.h
+│   └── radioform_dsp.h
+├── src/
+│   ├── engine.cpp
+│   ├── biquad.h / biquad.cpp
+│   ├── smoothing.h / smoothing.cpp
+│   ├── limiter.h / limiter.cpp
+│   ├── dc_blocker.h
+│   ├── cpu_util.h
+│   ├── preset.cpp
+│   └── version.cpp
+├── bridge/
+│   ├── RadioformDSPEngine.h
+│   ├── RadioformDSPEngine.mm
+│   ├── SwiftUsageExample.swift
+│   └── README.md
+├── tests/
+│   ├── test_main.cpp
+│   ├── test_utils.h
+│   ├── test_preset.cpp
+│   ├── test_smoothing.cpp
+│   ├── test_biquad.cpp
+│   ├── test_engine.cpp
+│   └── test_frequency_response.cpp
+├── tools/
+│   └── wav_processor.cpp
+└── CMakeLists.txt
 ```
 
 ## Quick Start
@@ -79,28 +67,27 @@ packages/dsp/
 
 ```bash
 cd packages/dsp
-mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
 
 ### Run Tests
 
 ```bash
-./tests/radioform_dsp_tests
+./build/tests/radioform_dsp_tests
 ```
 
-### Try Audio Processing
+### Process WAV Files
 
 ```bash
-./tools/wav_processor input.wav output_bass.wav bass
-./tools/wav_processor input.wav output_treble.wav treble
-./tools/wav_processor input.wav output_vocal.wav vocal
+./build/tools/wav_processor input.wav output_bass.wav bass
+./build/tools/wav_processor input.wav output_treble.wav treble
+./build/tools/wav_processor input.wav output_vocal.wav vocal
 ```
 
 ## Swift Usage
 
-See `bridge/SwiftUsageExample.swift` for a full example. Quick usage:
+See `bridge/SwiftUsageExample.swift` for examples.
 
 ```swift
 let engine = try RadioformDSPEngine(sampleRate: 48000)
@@ -116,91 +103,57 @@ engine.bypass = true
 
 ## Technical Specifications
 
-- Sample rates: 8 kHz–384 kHz (optimized for 48 kHz)
-- Processing: 32-bit float, stereo (dual mono), zero algorithmic latency
-- Formats: Interleaved (LRLR...) and planar (LLL...RRR...)
-- Filters: Up to 10 bands, seven types, ±12 dB gain, 20 Hz–20 kHz, Q 0.1–10.0
-- Implementation: RBJ Audio EQ Cookbook formulas, Direct Form II Transposed biquads
+- Supported sample rate range: 8,000 Hz to 384,000 Hz (`radioform_dsp_create` validation)
+- Sample format: 32-bit float
+- Channels: stereo (left/right)
+- Supported buffer layout: interleaved (`radioform_dsp_process_interleaved`)
+- Supported buffer layout: planar (`radioform_dsp_process_planar`)
+- EQ gain range (preset validation): -12 dB to +12 dB
+- EQ frequency range (preset validation): 20 Hz to 20,000 Hz
+- EQ Q range (preset validation): 0.1 to 10.0
+- Limiter threshold range: -6 dB to 0 dB
 
-### Performance (Apple M1 @ 48 kHz)
+## Tests and Verification
 
-| Configuration | CPU Usage |
-|--------------|-----------|
-| Bypass | <0.1% |
-| 3-band EQ + limiter | 0.3% |
-| 10-band EQ + limiter | 0.8% |
+`tests/test_main.cpp` registers 33 automated tests covering:
 
-### Quality Metrics
+- Preset initialization and validation
+- Parameter smoothing behavior
+- Biquad behavior and frequency-dependent attenuation/boost
+- Engine lifecycle, bypass behavior, limiter behavior, statistics
+- Frequency response scenarios and THD check (`freq_response_thd_remains_low` asserts THD < 0.001)
 
-- THD+N below 0.1% with moderate EQ
-- Frequency response within ±1 dB
-- Bypass is bit-perfect
-- Noise floor below -140 dBFS (32-bit float)
+## Realtime/Threading Notes
 
-## Design Principles
-
-- Self-contained implementation of RBJ biquads to avoid external dependencies
-- Clean C ABI with POD types to keep Swift interoperability stable
-- Support for both interleaved and planar audio formats
-- Atomics and smoothing to keep realtime operations lock-free
-- Direct Form II Transposed structure for numerical stability and efficiency
-
-## Test Coverage
-
-- 33 automated tests across presets, smoothing, biquads, engine integration, and frequency response
-- Includes impulse response checks, sweep analysis, THD+N measurement, bypass verification, and realtime safety validation
-
-## Thread Safety
-
-Audio-thread safe:
-
-```c
-void radioform_dsp_process_interleaved(...);
-void radioform_dsp_process_planar(...);
-void radioform_dsp_set_bypass(...);
-void radioform_dsp_update_band_gain(...);
-void radioform_dsp_update_band_frequency(...);
-void radioform_dsp_update_band_q(...);
-void radioform_dsp_update_preamp(...);
-```
-
-Configuration-thread only:
-
-```c
-radioform_error_t radioform_dsp_apply_preset(...);
-radioform_error_t radioform_dsp_set_sample_rate(...);
-void radioform_dsp_reset(...);
-radioform_error_t radioform_dsp_get_preset(...);
-void radioform_dsp_get_stats(...);
-```
+- `radioform_dsp_process_interleaved` and `radioform_dsp_process_planar` are implemented without heap allocation.
+- Bypass state is controlled via `std::atomic<bool>`.
+- Use the API thread-safety contract in `include/radioform_dsp.h` as the authoritative reference for calling patterns.
 
 ## Build Options
 
 ```bash
-cmake .. -DCMAKE_BUILD_TYPE=Release  # Optimized (-O3)
-cmake .. -DCMAKE_BUILD_TYPE=Debug    # Debug symbols + AddressSanitizer
-cmake .. -DBUILD_TESTS=OFF           # Skip tests
-cmake .. -DBUILD_BRIDGE=OFF          # Skip ObjC++ bridge
-cmake .. -DBUILD_TOOLS=OFF           # Skip command-line tools
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DCMAKE_BUILD_TYPE=Debug
+cmake -B build -DBUILD_TESTS=OFF
+cmake -B build -DBUILD_BRIDGE=OFF
+cmake -B build -DBUILD_TOOLS=OFF
 ```
 
 ## Documentation
 
-- `bridge/README.md` — ObjC++ bridge overview
-- `bridge/SwiftUsageExample.swift` — Usage examples
+- `include/radioform_dsp.h` — public C API contract
+- `include/radioform_types.h` — public types and enums
+- `bridge/README.md` — Objective-C++ bridge details
+- `bridge/SwiftUsageExample.swift` — Swift usage patterns
+- `tests/README.md` — test suite overview
 
 ## References
 
-### DSP Theory
 - W3C Audio EQ Cookbook: https://www.w3.org/TR/audio-eq-cookbook/
-- Web Audio API Specification: https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
-- MusicDSP.org: https://www.musicdsp.org/en/latest/Filters/197-rbj-audio-eq-cookbook.html
-- EarLevel Engineering: https://www.earlevel.com/main/2003/02/28/biquads/
-
-### Numerical Stability
-- Wikipedia: https://en.wikipedia.org/wiki/Digital_biquad_filter
-- ARM CMSIS-DSP Documentation: https://arm-software.github.io/CMSIS-DSP/main/group__BiquadCascadeDF2T.html
+- Web Audio Cookbook mirror: https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+- MusicDSP RBJ notes: https://www.musicdsp.org/en/latest/Filters/197-rbj-audio-eq-cookbook.html
+- EarLevel biquad notes: https://www.earlevel.com/main/2003/02/28/biquads/
 
 ## License
 
-See the root `LICENSE` file.
+See the repository root `LICENSE` file.

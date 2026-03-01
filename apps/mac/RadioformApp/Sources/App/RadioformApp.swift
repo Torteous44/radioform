@@ -509,7 +509,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Check if driver is installed
         let driverPath = "/Library/Audio/Plug-Ins/HAL/RadioformDriver.driver"
         guard FileManager.default.fileExists(atPath: driverPath) else {
-            showAlert("Driver Not Installed", "Radioform driver is not installed at \(driverPath)\n\nPlease run setup.sh first.")
+            showAlert(
+                "Driver Not Installed",
+                "Radioform driver is not installed at \(driverPath)\n\nInstall it with:\ncd packages/driver && ./install.sh && sudo killall coreaudiod"
+            )
             return
         }
 

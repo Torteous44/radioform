@@ -41,7 +41,7 @@ preset.bands = [band]
 try engine.apply(preset)
 
 // Process audio
-engine.processInterleaved(inputBuffer, output: outputBuffer, frameCount: 512)
+engine.processInterleaved(inputBuffer, output: &outputBuffer, frameCount: 512)
 
 // Realtime control
 engine.bypass = true
@@ -84,4 +84,5 @@ The bridge is built as part of the main DSP library. Include both the DSP librar
 
 ## Testing
 
-The bridge can be tested from Swift unit tests. See the test suite in the main app for examples.
+Bridge behavior is exercised indirectly through the C API implementation in this package.
+For Objective-C++/Swift integration tests, add host-app tests that call `RadioformDSPEngine` directly.

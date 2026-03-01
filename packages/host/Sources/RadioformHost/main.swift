@@ -24,6 +24,7 @@ let deviceMonitor = DeviceMonitor(
 )
 let presetLoader = PresetLoader()
 let presetMonitor = PresetMonitor(loader: presetLoader, processor: dspProcessor)
+let sleepWakeMonitor = SleepWakeMonitor()
 
 func main() {
 
@@ -90,6 +91,15 @@ func main() {
 
     print("[Step 7] Auto-selecting proxy device...")
     proxyManager.autoSelectProxy()
+
+    print("[Step 7.5] Registering sleep/wake handler...")
+    sleepWakeMonitor.onWake = {
+        print("[SleepWake] Recovering volume forwarding after wake...")
+        deviceMonitor.reregisterListeners()
+        deviceMonitor.resetDebounce()
+        proxyManager.reregisterVolumeForwarding()
+    }
+    sleepWakeMonitor.start()
 
     print("[Step 8] Initializing DSP engine...")
     // Update DSP to match device sample rate
@@ -167,6 +177,7 @@ func setupSignalHandlers() {
 func cleanup() {
     print("\n[Cleanup] Starting cleanup process...")
 
+    sleepWakeMonitor.stop()
     memoryManager.stopHeartbeat()
 
     _ = proxyManager.restorePhysicalDevice()

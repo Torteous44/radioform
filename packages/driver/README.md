@@ -1,53 +1,56 @@
 # Radioform HAL Driver
 
-A CoreAudio HAL (Hardware Abstraction Layer) plugin that creates virtual proxy audio output devices on macOS. When an application sends audio to a proxy device, the driver captures it and writes it into a shared memory ring buffer. The Host process reads from this buffer, applies DSP, and plays the result on the real hardware device.
+A CoreAudio HAL (Hardware Abstraction Layer) plugin for macOS that creates virtual proxy output devices. When an app sends audio to a proxy device, the driver writes it into shared memory. The host process reads from shared memory, runs DSP, and renders to the real hardware device.
+
+The driver runs inside `coreaudiod` (not as a standalone process). When installed at `/Library/Audio/Plug-Ins/HAL/RadioformDriver.driver`, macOS loads it as a system audio plugin.
 
 ## How it works
 
 ```
 Application audio
-    │
-    ▼
-┌──────────────────────────┐
-│  macOS CoreAudio (HAL)   │
-│  routes output to proxy  │
-└──────────┬───────────────┘
-           │
-           ▼
-┌──────────────────────────┐
-│  RadioformDriver         │
-│  (this plugin)           │
-│                          │
-│  OnWriteMixedOutput()    │
-│  ├─ format conversion    │
-│  ├─ sample rate convert  │
-│  └─ ring buffer write    │
-└──────────┬───────────────┘
-           │  shared memory (mmap)
-           │  /tmp/radioform-<uid>
-           ▼
-┌──────────────────────────┐
-│  RadioformHost           │
-│  ├─ ring buffer read     │
-│  ├─ DSP processing       │
-│  └─ real device output   │
-└──────────────────────────┘
+    |
+    v
++--------------------------+
+| macOS CoreAudio (HAL)    |
+| routes output to proxy   |
++-----------+--------------+
+            |
+            v
++--------------------------+
+| RadioformDriver          |
+| (this plugin)            |
+|                          |
+| OnWriteMixedOutput()     |
+| - format conversion      |
+| - sample rate conversion |
+| - ring buffer write      |
++-----------+--------------+
+            | shared memory (mmap)
+            | /tmp/radioform-<uid>
+            v
++--------------------------+
+| RadioformHost            |
+| - ring buffer read       |
+| - DSP processing         |
+| - hardware output        |
++--------------------------+
 ```
-
-The driver runs inside `coreaudiod` (the system audio daemon), not as a standalone process. It is loaded automatically when installed to `/Library/Audio/Plug-Ins/HAL/`.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `src/Plugin.cpp` | All driver logic: device creation, audio capture, health monitoring, device sync |
-| `include/RFSharedAudio.h` | Shared memory layout and ring buffer read/write functions. Shared with the Host (identical copy at `packages/host/Sources/CRadioformAudio/include/RFSharedAudio.h`) |
-| `CMakeLists.txt` | Build configuration. Produces `RadioformDriver.driver` bundle |
-| `Info.plist` | Bundle metadata, plugin factory UUID, bundle identifier (`com.radioform.driver`) |
-| `install.sh` | Copies built driver to `/Library/Audio/Plug-Ins/HAL/` with `root:wheel` ownership |
-| `uninstall.sh` | Removes the installed driver |
-| `VERSION` | Current version string |
-| `vendor/libASPL/` | Third-party library that wraps the CoreAudio HAL plugin C API in C++ classes |
+| `src/Plugin.cpp` | Driver runtime logic: plugin factory, device creation/removal, IO handling, health checks |
+| `include/RFSharedAudio.h` | Shared memory protocol and ring buffer helpers |
+| `CMakeLists.txt` | Build config for `RadioformDriver.driver` |
+| `Info.plist` | Bundle metadata, factory UUID, bundle identifier (`com.radioform.driver`) |
+| `install.sh` | Installs `build/RadioformDriver.driver` to `/Library/Audio/Plug-Ins/HAL/` |
+| `uninstall.sh` | Removes the installed driver bundle |
+| `VERSION` | Driver version (`2.0.8`) |
+| `vendor/libASPL/` | Third-party C++ wrapper around CoreAudio HAL plugin APIs |
+
+`include/RFSharedAudio.h` is intentionally kept in sync with:
+`packages/host/Sources/CRadioformAudio/include/RFSharedAudio.h`
 
 ## Entry point
 
@@ -55,156 +58,158 @@ The driver runs inside `coreaudiod` (the system audio daemon), not as a standalo
 extern "C" void* RadioformDriverPluginFactory(CFAllocatorRef allocator, CFUUIDRef typeUUID)
 ```
 
-This is the standard `CFPlugIn` factory function. CoreAudio calls it once when the plugin is loaded. It creates the global state, starts the device monitor thread, and returns a reference to the `aspl::Driver` singleton. The factory UUID is `B3F04000-8F04-4F84-A72E-B2D4F8E6F1DA` (registered in `Info.plist`).
+If `typeUUID` matches `kAudioServerPlugInTypeUUID`, this function lazily creates global driver state and returns the plugin reference. The factory UUID is `B3F04000-8F04-4F84-A72E-B2D4F8E6F1DA` (declared in `Info.plist`).
 
 ## Device lifecycle
 
-The driver does not hardcode any devices. It dynamically creates and destroys proxy devices by polling a control file written by the Host.
+The driver does not hardcode proxy devices. It reconciles desired devices from a host-written control file.
 
 ### Control file: `/tmp/radioform-devices.txt`
 
-Written by the Host. Each line has the format:
+Format per line:
 
 ```
 DeviceName|DeviceUID
 ```
 
-The driver's monitor thread (`MonitorControlFile`) reads this file every 1 second and calls `SyncDevices()` to reconcile the desired state with the current state:
+`MonitorControlFile()` calls `SyncDevices()` every ~1 second (10x 100ms sleeps).
 
-- **Add**: If a UID appears in the control file but has no proxy device, and the Host heartbeat for that UID is fresh, and the device is not in cooldown, create a proxy device.
-- **Remove**: If a proxy device exists but its UID is absent from the control file (or the Host heartbeat is stale), remove it.
-- **Cooldown**: After removing a device, the same UID cannot be re-added for 10 seconds. This prevents rapid add/remove cycling.
+`SyncDevices()` behavior:
+
+- Add proxy device when UID exists in control file, heartbeat for that UID is fresh, and UID is not in cooldown.
+- Remove proxy device when UID is no longer desired (missing from file or heartbeat stale).
+- Enforce a 10-second cooldown (`DEVICE_COOLDOWN_SEC`) after removal to prevent rapid add/remove cycling.
 
 ### Proxy device creation
 
-Each proxy device is created via `CreateProxyDevice()`:
+`CreateProxyDevice()` creates one output-only proxy device with:
 
 - Name: `"<OriginalName> (Radioform)"`
 - UID: `"<OriginalUID>-radioform"`
 - Manufacturer: `"Radioform"`
-- Default format: 48 kHz, 2 channels, mixing enabled
-- One output stream with volume/mute controls
-- IO and control handled by a `UniversalAudioHandler` instance
+- Default format: 48 kHz, 2 channels
+- Mixing enabled
+- Stream controls via `AddStreamWithControlsAsync(aspl::Direction::Output)`
+- IO/control callbacks handled by `UniversalAudioHandler`
 
 ## Audio path
 
 ### OnStartIO
 
-Called by CoreAudio when the first application begins sending audio to a proxy device. The handler:
+When the first client starts IO, the handler:
 
-1. Opens the shared memory file at `/tmp/radioform-<sanitized-uid>`
-2. Memory-maps it with `PROT_READ | PROT_WRITE` and `MAP_SHARED`
-3. Validates the connection: checks protocol version (`0x00020000`), sample rate, channel count
-4. Pre-allocates conversion buffers (4096 frames * 8 channels) to avoid heap allocation during audio callbacks
-5. Sets `driver_connected = 1` in shared memory
-6. Retries up to 15 times with exponential backoff (30ms base, max ~1.9s) if the shared memory file doesn't exist yet
+1. Opens `/tmp/radioform-<sanitized-uid>`
+2. Maps shared memory with `PROT_READ | PROT_WRITE` and `MAP_SHARED`
+3. Validates protocol version, sample rate, and channel count
+4. Sets `driver_connected = 1`
+5. Pre-allocates conversion buffers (`4096 * RF_MAX_CHANNELS` frames)
+6. Prefills half the ring with silence to reduce cold-start underruns
+7. Retries up to 15 times with exponential backoff (30ms base, capped growth) if connection is not ready
 
-Multiple IO clients are reference-counted. `OnStopIO` disconnects shared memory when the last client stops.
+IO clients are reference-counted; `OnStopIO` disconnects shared memory when the last client stops.
 
 ### OnWriteMixedOutput
 
-Called by CoreAudio on the IO thread for every audio buffer. This is the hot path (~1000 calls/second at 48 kHz with 48-frame buffers). The handler:
+This callback runs on the audio IO thread for each buffer. It:
 
-1. Runs a health check every 3 seconds (file existence, host connection flag, host heartbeat, ring buffer integrity)
-2. Updates the driver heartbeat every 1 second
-3. Reads the stream's current `AudioStreamBasicDescription`
-4. Detects format changes (sample rate or channel count) and creates a resampler if needed
-5. Converts incoming audio to interleaved float32 (supports float32, int16, int24, int32, non-interleaved layouts)
-6. If the stream sample rate differs from the shared memory sample rate, resamples using linear interpolation
-7. Writes the converted frames into the ring buffer via `rf_ring_write()`
-8. Logs stats every 30 seconds
+1. Runs a health check every 3 seconds
+2. Updates `driver_heartbeat` roughly every 1 second
+3. Reads current stream `AudioStreamBasicDescription`
+4. Rebuilds conversion/resampler state on format changes (sample rate/channel count)
+5. Converts input to interleaved float32
+6. Applies linear-interpolation sample-rate conversion when needed
+7. Writes frames with `rf_ring_write()`
+8. Logs periodic stats every 30 seconds
 
-All conversion uses pre-allocated member buffers (`interleaved_buf_`, `resampled_buf_`) that grow as needed but never shrink, so the steady-state audio path performs zero heap allocations.
+Implemented input conversion paths in `ConvertToFloat32Interleaved()`:
+
+- Float32 (interleaved and non-interleaved)
+- Signed Int16
+- Signed Int24 (packed 3-byte)
+- Signed Int32
 
 ## Shared memory layout (`RFSharedAudio`)
 
-Defined in `include/RFSharedAudio.h`. The struct is 256 bytes (padded with `_reserved` for future expansion) followed by a flexible array member for audio data.
+Defined in `include/RFSharedAudio.h`.
+In this build, `sizeof(RFSharedAudio)` is 264 bytes, and `audio_data[]` begins at offset 264.
 
 ### Header fields
 
 | Offset | Field | Type | Description |
 |---|---|---|---|
 | 0 | `protocol_version` | `uint32_t` | `0x00020000` |
-| 4 | `header_size` | `uint32_t` | `sizeof(RFSharedAudio)` (256) |
-| 8 | `sample_rate` | `uint32_t` | 44100, 48000, 88200, 96000, 176400, or 192000 |
+| 4 | `header_size` | `uint32_t` | `sizeof(RFSharedAudio)` |
+| 8 | `sample_rate` | `uint32_t` | 44100, 48000, 88200, 96000, 176400, 192000 |
 | 12 | `channels` | `uint32_t` | 1-8 |
-| 16 | `format` | `uint32_t` | `RFAudioFormat` enum (0=float32, 1=float64, 2=int16, 3=int24, 4=int32) |
-| 20 | `bytes_per_sample` | `uint32_t` | Derived from format (2, 3, 4, or 8) |
+| 16 | `format` | `uint32_t` | `RFAudioFormat` enum |
+| 20 | `bytes_per_sample` | `uint32_t` | Derived from format |
 | 24 | `bytes_per_frame` | `uint32_t` | `bytes_per_sample * channels` |
 | 28 | `ring_capacity_frames` | `uint32_t` | `sample_rate * duration_ms / 1000` |
-| 32 | `ring_duration_ms` | `uint32_t` | Typically 40 (range: 20-100) |
-| 36 | `driver_capabilities` | `uint32_t` | Bitmask of `RF_CAP_*` flags |
-| 40 | `host_capabilities` | `uint32_t` | Bitmask of `RF_CAP_*` flags |
-| 44 | `creation_timestamp` | `uint64_t` | Unix epoch seconds |
-| 52 | `format_change_counter` | `atomic uint64_t` | Incremented on format change |
-| 60 | `write_index` | `atomic uint64_t` | Monotonically increasing frame count (producer) |
-| 68 | `read_index` | `atomic uint64_t` | Monotonically increasing frame count (consumer) |
-| 76 | `total_frames_written` | `atomic uint64_t` | Cumulative write counter |
-| 84 | `total_frames_read` | `atomic uint64_t` | Cumulative read counter |
-| 92 | `overrun_count` | `atomic uint64_t` | Times write overtook read |
-| 100 | `underrun_count` | `atomic uint64_t` | Times read had no data |
-| 108 | `format_mismatch_count` | `atomic uint64_t` | Format negotiation failures |
-| 116 | `driver_connected` | `atomic uint32_t` | 1 if driver is active |
-| 120 | `host_connected` | `atomic uint32_t` | 1 if host is active |
-| 124 | `driver_heartbeat` | `atomic uint64_t` | Incremented every ~1s by driver |
-| 132 | `host_heartbeat` | `atomic uint64_t` | Incremented every ~1s by host |
-| 136-255 | `_reserved` | `uint8_t[120]` | Padding for future expansion |
-| 256+ | `audio_data[]` | `uint8_t[]` | Ring buffer: `ring_capacity_frames * bytes_per_frame` bytes |
+| 32 | `ring_duration_ms` | `uint32_t` | Default 40 (allowed 20-100) |
+| 36 | `driver_capabilities` | `uint32_t` | `RF_CAP_*` bitmask |
+| 40 | `host_capabilities` | `uint32_t` | `RF_CAP_*` bitmask |
+| 48 | `creation_timestamp` | `uint64_t` | Unix epoch seconds |
+| 56 | `format_change_counter` | `atomic uint64_t` | Format-change counter |
+| 64 | `write_index` | `atomic uint64_t` | Producer frame index |
+| 72 | `read_index` | `atomic uint64_t` | Consumer frame index |
+| 80 | `total_frames_written` | `atomic uint64_t` | Cumulative writes |
+| 88 | `total_frames_read` | `atomic uint64_t` | Cumulative reads |
+| 96 | `overrun_count` | `atomic uint64_t` | Overflow events |
+| 104 | `underrun_count` | `atomic uint64_t` | Underrun events |
+| 112 | `format_mismatch_count` | `atomic uint64_t` | Negotiation failures |
+| 120 | `driver_connected` | `atomic uint32_t` | Driver connection flag |
+| 124 | `host_connected` | `atomic uint32_t` | Host connection flag |
+| 128 | `driver_heartbeat` | `atomic uint64_t` | Driver heartbeat |
+| 136 | `host_heartbeat` | `atomic uint64_t` | Host heartbeat |
+| 144-263 | `_reserved` | `uint8_t[120]` | Future expansion |
+| 264+ | `audio_data[]` | `uint8_t[]` | `ring_capacity_frames * bytes_per_frame` bytes |
 
-### Total file size
+### Total mapped size
 
 ```
-256 + (ring_capacity_frames * channels * bytes_per_sample)
+sizeof(RFSharedAudio) + (ring_capacity_frames * channels * bytes_per_sample)
 ```
 
-At 48 kHz, 2 channels, float32, 40ms: `256 + (1920 * 2 * 4)` = 15,616 bytes.
+Example at 48 kHz, 2 channels, float32, 40 ms (in this build):
+`264 + (1920 * 2 * 4) = 15624` bytes.
 
-### Ring buffer
+### Ring buffer behavior
 
-Single-producer (driver), single-consumer (host). Uses monotonically increasing 64-bit indices with modulo for position. On overflow (write catches up to read), the driver advances `read_index` to make room (dropping the oldest samples) and increments `overrun_count`. On underrun (read has no data), the host fills silence and increments `underrun_count`.
+Single producer (driver) and single consumer (host), with monotonically increasing 64-bit indices.
 
-The ring buffer always stores audio in the format specified by the `format` field. `rf_ring_write()` accepts float32 and converts on write. `rf_ring_read()` converts back to float32 on read.
+- Overflow (`used + write > capacity`): advance `read_index` and increment `overrun_count`
+- Underrun on host read: host emits silence and increments `underrun_count`
+
+`rf_ring_write()` accepts float32 input and stores samples in negotiated shared format. `rf_ring_read()` outputs float32 for host-side processing.
 
 ## Health monitoring
 
-The driver monitors connection health every 3 seconds during active IO:
+During active IO, health checks run every 3 seconds:
 
 | Check | Failure condition |
 |---|---|
-| File existence | Shared memory file at `/tmp/radioform-<uid>` was deleted |
-| Host connection | `host_connected` flag is 0 |
-| Host heartbeat | `host_heartbeat` value hasn't changed for 5+ seconds |
-| Ring integrity | `write_index < read_index` (corruption) |
-| Ring overflow | `write_index - read_index > ring_capacity_frames` |
+| File existence | Shared memory file missing |
+| Host connection | `host_connected == 0` |
+| Host heartbeat | No `host_heartbeat` change for >= 5 seconds |
+| Ring integrity | `write_index < read_index` |
+| Ring capacity | `write_index - read_index > ring_capacity_frames` |
 
-On failure, the driver attempts recovery: disconnects, re-opens the shared memory file, and re-validates.
+On failure, the driver attempts recovery by disconnecting, reopening shared memory, and re-validating.
 
 ## Heartbeat protocol
 
-Both driver and host increment their respective heartbeat counters every ~1 second:
+- Driver calls `rf_update_driver_heartbeat()` during `OnWriteMixedOutput` (~1s cadence).
+- Host calls `rf_update_host_heartbeat()` on a timer (`DispatchSourceTimer` in host code).
 
-- **Driver**: Increments `driver_heartbeat` and sets `driver_connected = 1` during `OnWriteMixedOutput`
-- **Host**: Increments `host_heartbeat` and sets `host_connected = 1` via a `DispatchSourceTimer`
-
-The driver considers the host stale if `host_heartbeat` hasn't changed for 5 seconds. The device monitor thread also checks host heartbeat freshness before adding new proxy devices, preventing ghost devices from stale control file entries.
-
-## Format conversion
-
-The driver accepts any format CoreAudio sends and converts to interleaved float32 for the ring buffer:
-
-| Input format | Conversion |
-|---|---|
-| Float32 interleaved | `memcpy` (zero-cost) |
-| Float32 non-interleaved | Channel interleaving |
-| Int16 | `sample / 32768.0f` |
-| Int24 (packed 3-byte) | Sign-extend to int32, then `sample / 8388608.0f` |
-| Int32 | `sample / 2147483648.0f` |
-
-### Sample rate conversion
-
-If the stream sample rate differs from the shared memory sample rate, a `SimpleResampler` performs linear interpolation. This is a basic resampler — adequate for the common case where rates match, but introduces some aliasing when active.
+A host heartbeat older than 5 seconds is treated as stale.
 
 ## Building
+
+Requirements:
+
+- macOS (HAL driver target)
+- CMake >= 3.20
+- C++17 toolchain
 
 ```sh
 cd packages/driver
@@ -212,9 +217,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-Produces `build/RadioformDriver.driver` (a macOS bundle).
+Output bundle: `build/RadioformDriver.driver`
 
-Debug build enables AddressSanitizer:
+Debug build (AddressSanitizer enabled by project flags):
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
@@ -229,7 +234,12 @@ cd packages/driver
 sudo killall coreaudiod
 ```
 
-The driver is installed to `/Library/Audio/Plug-Ins/HAL/RadioformDriver.driver` with `root:wheel` ownership. Restarting `coreaudiod` is required for the system to load the new plugin. This interrupts all audio for ~2 seconds.
+Notes:
+
+- `install.sh` expects `./build/RadioformDriver.driver` to exist.
+- Script prompts for admin rights (`sudo`) internally for copy/ownership changes.
+- Install target: `/Library/Audio/Plug-Ins/HAL/RadioformDriver.driver`
+- Restarting `coreaudiod` is required for load/unload and interrupts audio briefly.
 
 ## Uninstalling
 
@@ -241,48 +251,36 @@ sudo killall coreaudiod
 
 ## Logging
 
-Two logging systems:
+- `os_log` subsystem: `com.radioform.driver`
+- Fallback file log: `/tmp/radioform-driver-debug.log`
 
-- **os_log**: Subsystem `com.radioform.driver`. View with:
-  ```sh
-  log show --predicate 'subsystem == "com.radioform.driver"' --last 5m
-  ```
-- **File log**: `/tmp/radioform-driver-debug.log`. Fallback for when unified logs are unavailable (e.g., early in plugin loading). Append-only, mutex-protected.
+Example unified log query:
 
-### Stats output
-
-Every 30 seconds during active IO, the driver logs a stats summary:
-
-```
-╔══════════════ STATS (30s) ══════════════╗
-║ Writes: 31250 (failed: 0)
-║ Clients: starts=1 stops=0
-║ Health: failures=0 reconnects=0
-║ Format: changes=0 SRC=0
-╚══════════════════════════════════════════╝
+```sh
+log show --predicate 'subsystem == "com.radioform.driver"' --last 5m
 ```
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| No proxy devices appear | Is the Host running? Check `ls /tmp/radioform-devices.txt` |
-| `OnStartIO` fails after 15 retries | Shared memory file missing. Check `ls /tmp/radioform-*` |
-| Audio dropouts | Check overrun/underrun counts in stats log. May indicate Host is not reading fast enough |
-| Driver not loading | Verify install path: `ls /Library/Audio/Plug-Ins/HAL/RadioformDriver.driver`. Restart coreaudiod |
-| Stale proxy devices | Host may have crashed without cleanup. Delete `/tmp/radioform-devices.txt` and restart coreaudiod |
+| No proxy devices appear | Confirm host is running and `/tmp/radioform-devices.txt` exists |
+| `OnStartIO` fails after retries | Confirm shared memory files exist: `ls /tmp/radioform-*` |
+| Audio dropouts | Inspect overrun/underrun stats in logs |
+| Driver not loading | Verify install path and restart `coreaudiod` |
+| Stale proxy devices | Remove stale `/tmp/radioform-devices.txt` entry source and restart host/`coreaudiod` |
 
 ## Constants
 
-| Constant | Value | Description |
-|---|---|---|
-| `DEFAULT_SAMPLE_RATE` | 48000 | Default device sample rate |
-| `DEFAULT_CHANNELS` | 2 | Default channel count |
-| `HEALTH_CHECK_INTERVAL_SEC` | 3 | Seconds between health checks |
-| `HEARTBEAT_INTERVAL_SEC` | 1 | Seconds between heartbeat updates |
-| `HEARTBEAT_TIMEOUT_SEC` | 5 | Seconds before declaring host stale |
-| `STATS_LOG_INTERVAL_SEC` | 30 | Seconds between stats log output |
-| `DEVICE_COOLDOWN_SEC` | 10 | Minimum seconds between device remove and re-add |
-| `RF_MAX_CHANNELS` | 8 | Maximum supported channel count |
-| `RF_RING_DURATION_MS_DEFAULT` | 40 | Default ring buffer duration |
-| `RF_AUDIO_PROTOCOL_VERSION` | `0x00020000` | Shared memory protocol version |
+| Constant | Value |
+|---|---|
+| `DEFAULT_SAMPLE_RATE` | 48000 |
+| `DEFAULT_CHANNELS` | 2 |
+| `HEALTH_CHECK_INTERVAL_SEC` | 3 |
+| `HEARTBEAT_INTERVAL_SEC` | 1 |
+| `HEARTBEAT_TIMEOUT_SEC` | 5 |
+| `STATS_LOG_INTERVAL_SEC` | 30 |
+| `DEVICE_COOLDOWN_SEC` | 10 |
+| `RF_MAX_CHANNELS` | 8 |
+| `RF_RING_DURATION_MS_DEFAULT` | 40 |
+| `RF_AUDIO_PROTOCOL_VERSION` | `0x00020000` |

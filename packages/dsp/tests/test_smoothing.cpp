@@ -47,7 +47,7 @@ TEST(smoother_ramps_to_target) {
     // Check: should start near 0
     ASSERT_NEAR(values[0], 0.0f, 0.1f);
 
-    // Check: should end near 1.0 (zero-zipper takes longer but is smoother)
+    // Value should approach 1.0 without discontinuities.
     ASSERT_NEAR(values[values.size() - 1], 1.0f, 0.05f);
 
     // Check: should be monotonically increasing

@@ -30,7 +30,7 @@ error() {
 
 # Function to print warnings
 warn() {
-    echo -e "${YELLOW}⚠️  WARNING: $1${NC}"
+    echo -e "${YELLOW} WARNING: $1${NC}"
 }
 
 # Function to print success

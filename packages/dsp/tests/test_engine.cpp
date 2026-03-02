@@ -187,7 +187,7 @@ TEST(engine_limiter_prevents_clipping) {
     auto* engine = radioform_dsp_create(48000);
     ASSERT(engine != nullptr);
 
-    // Create preset with heavy boost
+    // Create preset with significant boost
     radioform_preset_t preset;
     radioform_dsp_preset_init_flat(&preset);
 

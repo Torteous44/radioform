@@ -2,8 +2,8 @@
  * @file biquad.cpp
  * @brief Biquad filter implementation (no dependencies, clean RBJ cookbook)
  *
- * This is intentionally self-contained and straightforward.
- * It uses the well-tested Audio EQ Cookbook formulas.
+ * This file is intentionally minimal.
+ * Coefficient math is implemented in biquad.h from the Audio EQ Cookbook formulas.
  */
 
 #include "biquad.h"

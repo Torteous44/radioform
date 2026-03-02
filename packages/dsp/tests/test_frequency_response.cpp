@@ -371,7 +371,7 @@ TEST(freq_response_thd_remains_low) {
     // Measure THD - should be very low for a linear EQ
     float thd = compute_thd(output_left, 1000.0f, 48000.0f, 5);
 
-    // THD should be < 0.1% for a clean parametric EQ
+    // THD should remain below 0.1% for this linear EQ configuration.
     ASSERT(thd < 0.001f);
 
     radioform_dsp_destroy(engine);

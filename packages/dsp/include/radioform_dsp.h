@@ -61,18 +61,18 @@ void radioform_dsp_destroy(radioform_dsp_engine_t* engine);
  * @param engine Engine instance (must not be NULL)
  *
  * @note Useful when seeking in audio or recovering from underrun.
- * @note This is NOT realtime-safe (may allocate).
+ * @note Not realtime-safe with concurrent processing.
  */
 void radioform_dsp_reset(radioform_dsp_engine_t* engine);
 
 /**
- * @brief Change sample rate (requires reset)
+ * @brief Change sample rate
  *
  * @param engine Engine instance (must not be NULL)
  * @param sample_rate New sample rate in Hz
  * @return RADIOFORM_OK on success, error code otherwise
  *
- * @note This will reset filter state and recalculate coefficients.
+ * @note Recalculates coefficients and reinitializes related state.
  * @note NOT realtime-safe.
  */
 radioform_error_t radioform_dsp_set_sample_rate(
@@ -92,7 +92,7 @@ radioform_error_t radioform_dsp_set_sample_rate(
  * @param output Interleaved output buffer [L0, R0, L1, R1, ...]
  * @param num_frames Number of stereo frames to process
  *
- * @note REALTIME-SAFE: No allocations, no locks, no system calls
+ * @note REALTIME-SAFE: No heap allocations or locks in the processing path
  * @note Buffers must be at least num_frames * 2 samples in size
  * @note Input and output may point to the same buffer (in-place processing)
  */
@@ -113,7 +113,7 @@ void radioform_dsp_process_interleaved(
  * @param output_right Right channel output buffer
  * @param num_frames Number of frames to process per channel
  *
- * @note REALTIME-SAFE: No allocations, no locks, no system calls
+ * @note REALTIME-SAFE: No heap allocations or locks in the processing path
  * @note Buffers must be at least num_frames samples in size
  * @note Input and output may point to the same buffers (in-place processing)
  */
@@ -138,7 +138,7 @@ void radioform_dsp_process_planar(
  * @return RADIOFORM_OK on success, error code otherwise
  *
  * @note NOT realtime-safe (recalculates filter coefficients)
- * @note Changes will be smoothly ramped in over ~50ms to avoid clicks
+ * @note Band coefficients are applied immediately; preamp changes follow smoother settings
  * @note Call this from UI thread, not audio thread
  */
 radioform_error_t radioform_dsp_apply_preset(

@@ -15,12 +15,10 @@ namespace radioform {
 /**
  * @brief soft-knee limiter
  *
- * Uses a rational function soft clipping curve that is smoother and more
- * transparent than tanh, with the same computational cost.
+ * Uses a rational soft-clipping curve with a smooth knee region.
  *
  * This is not a look-ahead limiter, so it's very low latency but may
- * still clip on extremely fast transients. The rational function provides
- * cleaner harmonics and less "grunge" than tanh.
+ * still clip on very fast transients.
  */
 class SoftLimiter {
 public:
@@ -60,9 +58,8 @@ public:
             return input;
         }
 
-        // Above knee: apply soft limiting
-        // Using rational function: x / (1 + |x|)
-        // This is smoother than tanh and produces cleaner harmonics
+        // Above knee: apply rational soft-limiting curve.
+        // Curve: x / (1 + |x|) in normalized knee space.
         const float scaled = (abs_input - knee_start_) / (threshold_ - knee_start_);
         const float limited = knee_start_ + (threshold_ - knee_start_) *
                              (scaled / (1.0f + scaled));
@@ -98,7 +95,7 @@ private:
 };
 
 /**
- * @brief Hard clipper (simpler, more aggressive)
+ * @brief Hard clipper
  *
  * Just clamps values to [-threshold, +threshold].
  * Can cause harsh distortion but is very fast.

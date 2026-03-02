@@ -12,11 +12,10 @@
 namespace radioform {
 
 /**
- * @brief Zero-zipper parameter smoother with polynomial ramping
+ * @brief Parameter smoother with velocity-assisted exponential response
  *
- * Uses exponential smoothing with improved ramping characteristics.
- * This prevents audible clicks/zippers when parameters change, with
- * smoother transitions than simple one-pole filters.
+ * Uses exponential smoothing with a velocity term to reduce zipper noise
+ * during parameter changes.
  */
 class ParameterSmoother {
 public:
@@ -75,10 +74,9 @@ public:
     }
 
     /**
-     * @brief Get next smoothed value (zero-zipper algorithm)
+     * @brief Get next smoothed value
      *
      * Uses velocity tracking for smoother parameter transitions.
-     * This eliminates subtle phase modulation artifacts during parameter sweeps.
      *
      * @return Smoothed value (moves toward target)
      */

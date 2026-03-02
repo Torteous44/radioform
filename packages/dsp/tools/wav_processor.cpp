@@ -210,7 +210,7 @@ void createBassBoostPreset(radioform_preset_t* preset) {
 
 void createTrebleBoostPreset(radioform_preset_t* preset) {
     radioform_dsp_preset_init_flat(preset);
-    strncpy(preset->name, "EXTREME Treble", sizeof(preset->name) - 1);
+    strncpy(preset->name, "Treble Boost", sizeof(preset->name) - 1);
 
     preset->num_bands = 4;
 
@@ -221,7 +221,7 @@ void createTrebleBoostPreset(radioform_preset_t* preset) {
     preset->bands[0].q_factor = 1.5f;
     preset->bands[0].type = RADIOFORM_FILTER_PEAK;
 
-    // Presence MASSIVE boost (+10 dB at 4 kHz)
+    // Presence boost (+10 dB at 4 kHz)
     preset->bands[1].enabled = true;
     preset->bands[1].frequency_hz = 4000.0f;
     preset->bands[1].gain_db = 10.0f;
@@ -313,7 +313,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Only support stereo files for now
+    // WAV processor currently supports stereo input.
     if (header.num_channels != 2) {
         std::cerr << "Error: Only stereo files are supported" << std::endl;
         return 1;

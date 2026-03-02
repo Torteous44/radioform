@@ -2,8 +2,8 @@
  * @file engine.cpp
  * @brief Main DSP engine implementation
  *
- * This implements the public C API defined in radioform_dsp.h.
- * It's a clean, self-contained parametric EQ with no external dependencies.
+ * Implements the public C API defined in radioform_dsp.h.
+ * The engine is self-contained and does not require external DSP libraries.
  */
 
 #include "radioform_dsp.h"

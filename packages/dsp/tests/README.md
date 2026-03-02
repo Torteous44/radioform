@@ -10,7 +10,7 @@ Test suite for DSP library correctness.
 - Parameter smoothing
 - Engine integration
 - Frequency response
-- THD+N measurement
+- THD measurement
 
 ## Framework
 

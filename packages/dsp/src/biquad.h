@@ -178,9 +178,9 @@ private:
     /**
      * @brief Calculate biquad coefficients from band parameters
      *
-     * Using Robert Bristow-Johnson's cookbook formulas with audiophile enhancements:
-     * - Enhanced bandwidth prewarping for peak filters (reduces cramping at high frequencies)
-     * - Standard RBJ formulas for shelving filters (well-tested, reliable)
+     * Based on Robert Bristow-Johnson cookbook formulas.
+     * Uses a bandwidth warp term in the alpha calculation to reduce
+     * high-frequency bandwidth cramping.
      * https://www.w3.org/TR/audio-eq-cookbook/
      */
     BiquadCoeffs calculateCoeffs(const radioform_band_t& band, float sample_rate) {
@@ -215,7 +215,7 @@ private:
             }
 
             case RADIOFORM_FILTER_LOW_SHELF: {
-                // Low shelf (RBJ cookbook - well-tested formula)
+                // Low shelf.
                 const float beta = std::sqrt(A) / Q;
                 const float a0 = (A + 1.0f) + (A - 1.0f) * cos_w0 + beta * sin_w0;
 
@@ -228,7 +228,7 @@ private:
             }
 
             case RADIOFORM_FILTER_HIGH_SHELF: {
-                // High shelf (RBJ cookbook - well-tested formula)
+                // High shelf.
                 const float beta = std::sqrt(A) / Q;
                 const float a0 = (A + 1.0f) - (A - 1.0f) * cos_w0 + beta * sin_w0;
 

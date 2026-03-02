@@ -1,5 +1,5 @@
-name: "Bug: audio pipeline issue"
-description: Report reproducible problems in the HAL driver, host engine, DSP, or macOS app.
+name: "Bug"
+description: Report a problem with Radioform.
 labels: ["bug"]
 body:
   - type: markdown
@@ -18,7 +18,7 @@ body:
         - label: Web/app UI (`apps/web`)
         - label: Documentation or scripts
     validations:
-      required: true
+      required: false
   - type: textarea
     id: environment
     attributes:

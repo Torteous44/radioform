@@ -1,4 +1,4 @@
-name: "Feature: capability or UX improvement"
+name: "Feature Request"
 description: Propose a new capability, integration, or user experience improvement.
 labels: ["enhancement"]
 body:
@@ -37,7 +37,7 @@ body:
       description: Measurable outcomes or acceptance tests (e.g., latency budget, UX flow, install friction).
       placeholder: "- Switching devices never drops audio\n- Additional latency under 5 ms\n- No extra prompts after initial install"
     validations:
-      required: true
+      required: false
   - type: textarea
     id: risks
     attributes:

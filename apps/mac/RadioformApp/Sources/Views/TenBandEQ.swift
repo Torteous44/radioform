@@ -68,9 +68,9 @@ struct TenBandEQ: View {
 
                             // Frequency label
                             Text(index == 10 ? "Pre" : formatFrequency(presetManager.currentFrequencies[index]))
-                                .font(.system(size: 9))
-                                .foregroundColor(index == 10 ? .accentColor.opacity(0.7) : .secondary)
-                                .frame(minWidth: 22)
+                            .font(.system(size: 9))
+                            .foregroundColor(index == 10 ? .accentColor.opacity(0.7) : .secondary)
+                            .frame(minWidth: 22)
                         }
                         .padding(.horizontal, 3)
 
@@ -114,6 +114,18 @@ struct VerticalSlider: View {
 
     private let normalKnobSize: CGFloat = 16
     private let focusedKnobSize: CGFloat = 22
+
+    // While dragging, if the user moves the cursor horizontally beyond this threshold, the dB levels will be adjusted more precisely
+    private let preciseThresholdX: Float = 50
+    // Multiplier that allows for fine-grained dB adjustments 
+    private let preciseFactor: Float = 0.05
+
+    // Remember the drag Y value so we can maintain the slider position when shifting to precise mode
+    @State private var prevDragY: CGFloat? = nil
+
+    // Used for the knob border to reflect the current dragging mode
+    @State private var isDragging: Bool = false
+    @State private var isPreciseDrag: Bool = false
 
     private var knobSize: CGFloat {
         isFocused ? focusedKnobSize : normalKnobSize
@@ -172,8 +184,17 @@ struct VerticalSlider: View {
                         .overlay(
                             Circle()
                                 .stroke(
-                                    isFocused ? Color.accentColor.opacity(0.6) : Color(NSColor.separatorColor).opacity(0.8),
-                                    lineWidth: isFocused ? 1.0 : 0.5
+                                    (isFocused
+                                        ? isDragging
+                                            ? Color.white
+                                            : Color.accentColor.opacity(0.6)
+                                        : Color(NSColor.separatorColor).opacity(0.8)),
+                                    style: StrokeStyle(
+                                        lineWidth: isFocused ? 1 : 0.5,
+
+                                        // Dotted border indicates precise dragging mode
+                                        dash: isDragging && isPreciseDrag ? [2, 2] : []
+                                    )
                                 )
                         )
 
@@ -198,9 +219,36 @@ struct VerticalSlider: View {
                 .gesture(
                     DragGesture(minimumDistance: 1)
                         .onChanged { gesture in
-                            let newValue = 1 - (gesture.location.y / geometry.size.height)
-                            let clampedValue = max(0, min(1, newValue))
-                            value = range.lowerBound + Float(clampedValue) * (range.upperBound - range.lowerBound)
+                            let rangeSpan = range.upperBound - range.lowerBound
+                            let knobCenterX = Float(geometry.size.width / 2)
+                            let mouseDistanceX = abs(Float(gesture.location.x) - knobCenterX)
+                            let multiplier: Float = mouseDistanceX > preciseThresholdX ? preciseFactor : 1
+
+                            isDragging = true
+                            isPreciseDrag = mouseDistanceX > preciseThresholdX
+
+                            if prevDragY == nil {
+                                let newValue = 1 - (gesture.location.y / geometry.size.height)
+                                let clampedValue = max(0, min(1, newValue))
+
+                                value = range.lowerBound + Float(clampedValue) * rangeSpan
+                                prevDragY = gesture.translation.height
+                            } else {
+                                // Vertical difference from the previous drag position
+                                let deltaY = Float(gesture.translation.height - (prevDragY ?? gesture.translation.height))
+
+                                prevDragY = gesture.translation.height
+
+                                let progress = -deltaY / Float(geometry.size.height)
+                                let valueIncrement = progress * rangeSpan * multiplier
+
+                                value = min(max(range.lowerBound, value + valueIncrement), range.upperBound)
+                            }
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                            isPreciseDrag = false
+                            prevDragY = nil
                         }
                 )
             }

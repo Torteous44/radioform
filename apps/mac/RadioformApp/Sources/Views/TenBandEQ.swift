@@ -234,18 +234,17 @@ struct VerticalSlider: View {
                                 let clampedValue = max(0, min(1, newValue))
 
                                 value = range.lowerBound + Float(clampedValue) * rangeSpan
-                                prevDragY = gesture.translation.height
                             } else {
                                 // Vertical difference from the previous drag position
-                                let deltaY = Float(gesture.translation.height - (prevDragY ?? gesture.translation.height))
-
-                                prevDragY = gesture.translation.height
+                                let deltaY = Float(gesture.translation.height - (prevDragY ?? gesture.translation.height))                                
 
                                 let progress = -deltaY / Float(geometry.size.height)
                                 let valueIncrement = progress * rangeSpan * multiplier
 
                                 value = min(max(range.lowerBound, value + valueIncrement), range.upperBound)
                             }
+
+                            prevDragY = gesture.translation.height
                         }
                         .onEnded { _ in
                             isDragging = false

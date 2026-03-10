@@ -205,6 +205,8 @@ struct VerticalSlider: View {
                             .foregroundColor(.primary.opacity(0.8))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
+                            // Reduce horizontal text movement when dragging
+                            .monospacedDigit()
                     }
                 }
                 .frame(width: knobSize, height: knobSize)

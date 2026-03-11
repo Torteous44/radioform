@@ -385,6 +385,9 @@ class PresetManager: ObservableObject {
         applyCurrentStateToAudio()
     }
 
+    /// Round dB level to 1 decimal place (reflecting how dB values are formatted in the UI)
+    private func roundDb(_ db: Float) -> Float { (db * 10).rounded() / 10 }
+
     /// Apply current state to audio, throttled to prevent IPC flooding during rapid updates
     private func applyCurrentStateToAudio() {
         // Throttle: coalesce rapid calls (drag, scroll) into one IPC write per ~30ms
@@ -400,7 +403,7 @@ class PresetManager: ObservableObject {
             let gain = enabled ? currentBands[index] : 0.0
             return EQBand(
                 frequencyHz: frequency,
-                gainDb: gain,
+                gainDb: roundDb(gain),
                 qFactor: currentQFactors[index],
                 filterType: currentFilterTypes[index],
                 enabled: abs(gain) > 0.01

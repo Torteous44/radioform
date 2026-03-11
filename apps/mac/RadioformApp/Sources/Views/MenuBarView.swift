@@ -710,18 +710,20 @@ struct QuitButton: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button("Quit Radioform") {
+        Button(action: {
             NSApp.terminate(nil)
+        }) {
+            Text("Quit Radioform")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(isHovered ? .white : .primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isHovered ? Color.accentColor : Color.clear)
+                )
         }
         .buttonStyle(.plain)
-        .font(.system(size: 11, weight: .regular))
-        .foregroundColor(isHovered ? .white : .primary)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isHovered ? Color.accentColor : Color.clear)
-        )
         .onHover { hovering in
             isHovered = hovering
         }

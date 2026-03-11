@@ -117,7 +117,9 @@ struct VerticalSlider: View {
 
     // While dragging, if the user moves the cursor horizontally beyond this threshold, the dB levels will be adjusted more precisely
     private let preciseThresholdX: Float = 50
-    // Multiplier that allows for fine-grained dB adjustments 
+    // Exit precise mode below this threshold (hysteresis prevents flickering near boundary)
+    private let preciseExitThresholdX: Float = 35
+    // Multiplier that allows for fine-grained dB adjustments
     private let preciseFactor: Float = 0.05
 
     // Remember the drag Y value so we can maintain the slider position when shifting to precise mode
@@ -224,25 +226,19 @@ struct VerticalSlider: View {
                             let rangeSpan = range.upperBound - range.lowerBound
                             let knobCenterX = Float(geometry.size.width / 2)
                             let mouseDistanceX = abs(Float(gesture.location.x) - knobCenterX)
-                            let multiplier: Float = mouseDistanceX > preciseThresholdX ? preciseFactor : 1
 
                             isDragging = true
-                            isPreciseDrag = mouseDistanceX > preciseThresholdX
-
-                            if prevDragY == nil {
-                                let newValue = 1 - (gesture.location.y / geometry.size.height)
-                                let clampedValue = max(0, min(1, newValue))
-
-                                value = range.lowerBound + Float(clampedValue) * rangeSpan
-                            } else {
-                                // Vertical difference from the previous drag position
-                                let deltaY = Float(gesture.translation.height - (prevDragY ?? gesture.translation.height))                                
-
-                                let progress = -deltaY / Float(geometry.size.height)
-                                let valueIncrement = progress * rangeSpan * multiplier
-
-                                value = min(max(range.lowerBound, value + valueIncrement), range.upperBound)
+                            if mouseDistanceX > preciseThresholdX {
+                                isPreciseDrag = true
+                            } else if mouseDistanceX < preciseExitThresholdX {
+                                isPreciseDrag = false
                             }
+                            let multiplier: Float = isPreciseDrag ? preciseFactor : 1
+
+                            let deltaY = Float(gesture.translation.height - (prevDragY ?? gesture.translation.height))
+                            let progress = -deltaY / Float(geometry.size.height)
+                            let valueIncrement = progress * rangeSpan * multiplier
+                            value = min(max(range.lowerBound, value + valueIncrement), range.upperBound)
 
                             prevDragY = gesture.translation.height
                         }

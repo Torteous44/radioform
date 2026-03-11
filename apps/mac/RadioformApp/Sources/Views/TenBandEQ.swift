@@ -224,7 +224,7 @@ struct VerticalSlider: View {
                     DragGesture(minimumDistance: 1)
                         .onChanged { gesture in
                             let rangeSpan = range.upperBound - range.lowerBound
-                            let knobCenterX = Float(geometry.size.width / 2)
+                            let knobCenterX = Float(knobSize / 2)
                             let mouseDistanceX = abs(Float(gesture.location.x) - knobCenterX)
 
                             isDragging = true

@@ -476,6 +476,7 @@ class ProxyDeviceManager {
         if monitoredVolumeElements.isEmpty {
             monitoredProxyDeviceID = nil
             print("[VolumeForward] WARNING: No volume listener registered for proxy device \(proxyDeviceID)")
+            return
         }
 
         // Register mute listener (mute key, distinct from volume scalar)

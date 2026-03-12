@@ -476,6 +476,7 @@ class ProxyDeviceManager {
         if monitoredVolumeElements.isEmpty {
             monitoredProxyDeviceID = nil
             print("[VolumeForward] WARNING: No volume listener registered for proxy device \(proxyDeviceID)")
+            return
         }
 
         // Register mute listener (mute key, distinct from volume scalar)
@@ -592,7 +593,10 @@ class ProxyDeviceManager {
     /// when it restarts (which happens on sleep/wake). Calling startVolumeForwarding
     /// directly would no-op if the proxy device ID is unchanged (the common case),
     /// so we force teardown first to clear monitoredProxyDeviceID and bypass that guard.
-    func reregisterVolumeForwarding() {
+    ///
+    /// Because coreaudiod may not be ready immediately after wake, this method retries
+    /// registration with increasing delays if the initial attempt fails.
+    func reregisterVolumeForwarding(attempt: Int = 1) {
         // stopVolumeForwarding clears monitoredProxyDeviceID, so the same-ID
         // early-return guard in startVolumeForwarding will not block re-registration.
         stopVolumeForwarding()
@@ -603,6 +607,20 @@ class ProxyDeviceManager {
         }
 
         startVolumeForwarding(proxyDeviceID: activeProxyDeviceID)
+
+        if monitoredVolumeElements.isEmpty {
+            if attempt < RadioformConfig.wakeRetryMaxAttempts {
+                let delay = RadioformConfig.wakeRetryDelays[attempt]
+                print("[VolumeForward] Listener registration failed (attempt \(attempt)/\(RadioformConfig.wakeRetryMaxAttempts)) — retrying in \(delay)s")
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.reregisterVolumeForwarding(attempt: attempt + 1)
+                }
+            } else {
+                print("[VolumeForward] ERROR: Listener registration failed after \(RadioformConfig.wakeRetryMaxAttempts) attempts")
+            }
+            return
+        }
+
         enqueueProxyVolumeForward(force: true)
 
         let proxyID = activeProxyDeviceID
@@ -610,7 +628,12 @@ class ProxyDeviceManager {
         volumeForwardQueue.async { [weak self] in
             self?.forwardProxyMuteToPhysical(proxyDeviceID: proxyID, physicalDeviceID: physicalID)
         }
-        print("[VolumeForward] Volume and mute listeners re-registered after wake")
+
+        if attempt > 1 {
+            print("[VolumeForward] Volume and mute listeners re-registered after wake (attempt \(attempt))")
+        } else {
+            print("[VolumeForward] Volume and mute listeners re-registered after wake")
+        }
     }
 
     private func enqueueProxyVolumeForward(force: Bool = false) {

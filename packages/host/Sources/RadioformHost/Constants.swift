@@ -21,6 +21,8 @@ struct RadioformConfig {
     static let heartbeatInterval: TimeInterval = 1.0
     static let presetMonitorInterval: TimeInterval = 0.5
     static let wakeRecoveryDelay: TimeInterval = 1.5
+    static let wakeRetryMaxAttempts = 4
+    static let wakeRetryDelays: [TimeInterval] = [0, 2.0, 4.0, 8.0]
 
     static let deviceWaitTimeout: TimeInterval = 2.0
     static let cleanupWaitTimeout: TimeInterval = 1.2

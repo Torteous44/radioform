@@ -638,6 +638,32 @@ class PresetManager: ObservableObject {
         isEditingPresetName = false
     }
 
+    /// Import an AutoEQ .txt file as a user preset
+    func importAutoEQ(from url: URL) throws -> EQPreset {
+        let content = try String(contentsOf: url, encoding: .utf8)
+
+        // Derive preset name from filename (strip extension)
+        let baseName = url.deletingPathExtension().lastPathComponent
+            // Clean up common AutoEQ suffixes
+            .replacingOccurrences(of: " ParametricEQ", with: "")
+            .replacingOccurrences(of: " Filters", with: "")
+            .replacingOccurrences(of: "ParametricEQ", with: "Imported")
+            .trimmingCharacters(in: .whitespaces)
+        let name = baseName.isEmpty ? "Imported EQ" : baseName
+        let uniqueName = generateUniqueName(name)
+
+        let preset = try AutoEQParser.parse(content: content, name: uniqueName)
+
+        // Save as user preset
+        try savePreset(preset)
+
+        // Return the saved version (reloaded with fresh UUID)
+        if let saved = userPresets.first(where: { $0.name == uniqueName }) {
+            return saved
+        }
+        return preset
+    }
+
     /// Sanitize filename (remove invalid characters)
     private func sanitizeFilename(_ name: String) -> String {
         var safe = name.replacingOccurrences(of: "/", with: "-")

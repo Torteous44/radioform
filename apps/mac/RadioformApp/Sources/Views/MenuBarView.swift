@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Cache font lookup once at launch
 private let radioformFont: Font = {
@@ -384,7 +385,7 @@ struct PresetList: View {
     let userPresetIDs: Set<EQPreset.ID>
     let onSelect: (EQPreset) -> Void
     let onDelete: (EQPreset) -> Void
-    
+
     // Max items to show before scrolling (each item ~40px + 2px spacing)
     private let maxVisibleItems = 13
     private let estimatedItemHeight: CGFloat = 40
@@ -405,9 +406,80 @@ struct PresetList: View {
                         onDelete: onDelete
                     )
                 }
+
+                ImportAutoEQButton(onImport: { preset in
+                    onSelect(preset)
+                })
             }
         }
         .frame(maxHeight: presets.count > maxVisibleItems ? maxHeight : nil)
+    }
+}
+
+struct ImportAutoEQButton: View {
+    let onImport: (EQPreset) -> Void
+    @State private var isHovered = false
+    @State private var importError: String?
+
+    var body: some View {
+        Button {
+            importFile()
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Color(NSColor.separatorColor).opacity(0.4))
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 13, weight: .medium))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(importError ?? "Import AutoEQ")
+                    .font(.system(size: 13))
+                    .foregroundColor(importError != nil ? .red : .primary)
+
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isHovered ? Color(NSColor.separatorColor).opacity(0.5) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+
+    private func importFile() {
+        importError = nil
+
+        let panel = NSOpenPanel()
+        panel.title = "Import AutoEQ Preset"
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let preset = try PresetManager.shared.importAutoEQ(from: url)
+            onImport(preset)
+        } catch {
+            importError = error.localizedDescription
+            // Clear error after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                importError = nil
+            }
+        }
     }
 }
 

@@ -1,6 +1,13 @@
 import SwiftUI
 
 private let radioformLogo: NSImage? = {
+    if let url = Bundle.main.url(
+        forResource: "radioformlogo",
+        withExtension: "svg"
+    ) {
+        return NSImage(contentsOf: url)
+    }
+
     guard let url = Bundle.module.url(
         forResource: "radioformlogo",
         withExtension: "svg",

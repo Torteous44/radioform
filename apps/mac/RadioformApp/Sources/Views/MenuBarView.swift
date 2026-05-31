@@ -1,20 +1,15 @@
 import SwiftUI
 
-// Cache font lookup once at launch
-private let radioformFont: Font = {
-    let size: CGFloat = 22
-    let possibleNames = [
-        "SignPainterHouseScript",
-        "SignPainter-HouseScript",
-        "SignPainter House Script",
-        "SignPainter"
-    ]
-    for name in possibleNames {
-        if NSFont(name: name, size: size) != nil {
-            return .custom(name, size: size)
-        }
+private let radioformLogo: NSImage? = {
+    guard let url = Bundle.module.url(
+        forResource: "radioformlogo",
+        withExtension: "svg",
+        subdirectory: "Resources"
+    ) else {
+        return nil
     }
-    return .system(size: size, weight: .bold)
+
+    return NSImage(contentsOf: url)
 }()
 
 struct MenuBarView: View {
@@ -25,8 +20,13 @@ struct MenuBarView: View {
         VStack(spacing: 0) {
                 // Header with toggle only (no title)
                 HStack {
-                    Text("Radioform")
-                        .font(radioformFont)
+                    if let radioformLogo {
+                        Image(nsImage: radioformLogo)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 132, height: 22)
+                            .accessibilityLabel("Radioform")
+                    }
                         
                     Spacer()
 

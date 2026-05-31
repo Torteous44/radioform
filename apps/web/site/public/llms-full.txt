@@ -13,7 +13,7 @@ It runs from your menu bar. You pick a preset or tweak the sliders yourself, and
 - Mac users who want better sound from their speakers or headphones
 - Music listeners who want to customize their EQ across all apps at once
 - Audiophiles looking for a lightweight, native macOS equalizer
-- Professionals who need per-device EQ profiles (e.g., different settings for studio monitors vs AirPods)
+- Professionals who want different EQ for studio monitors vs AirPods (save a curve and switch)
 - Anyone frustrated that macOS doesn't include a built-in system-wide equalizer
 
 ## Features
@@ -28,16 +28,16 @@ It runs from your menu bar. You pick a preset or tweak the sliders yourself, and
 - Acoustic
 - Classical
 - Hip-Hop
-- Jazz
 - Pop
 - R&B
 - Rock
+- Flat
 
 These are solid starting points. You can also save your own custom curves for specific headphones or speakers.
 
 ### Multi-Device Support
 - AirPods, desk speakers, living room setup—Radioform follows your output device
-- Save different EQ curves per device
+- Save your own EQ curves and switch between them
 - Switching devices does not require restarting the app
 
 ### Built-In Limiter
@@ -46,13 +46,13 @@ These are solid starting points. You can also save your own custom curves for sp
 
 ### Performance
 - Sub-1% CPU usage
-- Zero added latency (sample-by-sample processing, no intermediate buffering)
+- No latency you can hear
 - You won't notice it's running, except that things sound better
 
 ## Technical Architecture
 
 ### Audio Engine
-The audio engine is written in C++ using cascaded biquad filters for precise EQ control. It processes audio sample-by-sample with no intermediate buffering, ensuring zero added latency.
+The audio engine is written in C++ using cascaded biquad filters for precise EQ control. It runs in its own process with pre-allocated buffers, so there's no latency you can hear.
 
 ### Virtual Audio Device
 Radioform installs a virtual audio device using Apple's Audio Server Plugin (libASPL) framework. All system sound passes through this device, gets processed by the EQ engine, and continues to your actual speakers or headphones.
@@ -93,9 +93,9 @@ The app and audio engine communicate through a clean C API and shared memory for
 | Open Source | Yes (GPLv3) | No | Partially | No |
 | Native App | Yes (Swift) | Yes | Electron | Yes |
 | System-Wide EQ | Yes | Yes | Yes | Yes |
-| Per-Device Profiles | Yes | Yes | Limited | No |
+| Saved Custom Curves | Yes | Yes | Limited | No |
 | CPU Usage | Sub-1% | Low | Moderate | Moderate |
-| Latency | Zero | Low | Low | Low |
+| Latency | None audible | Low | Low | Low |
 
 ## Links
 

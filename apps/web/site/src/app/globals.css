@@ -5,24 +5,44 @@
     --background: #ffffff;
     --foreground: #000000;
     --font-serif: var(--font-instrument-serif), serif;
-    --font-space-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New";
+    --font-mono-stack: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 @theme inline {
     --color-background: var(--background);
     --color-foreground: var(--foreground);
-    --font-mono: var(--font-space-mono);
+    --font-mono: var(--font-mono-stack);
 }
 
 body {
     background: var(--background);
     color: var(--foreground);
-    font-family: var(--font-space-mono), monospace;
+    font-family: var(--font-mono-stack);
 }
 
 ::selection {
     background: #404040;
     color: #ffffff;
+}
+
+/* Fast ease-out fade for small state swaps (toggle). */
+@keyframes rf-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.rf-fade {
+    animation: rf-fade 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rf-fade {
+        animation: none;
+    }
 }
 
 /* Primary button (Download) */

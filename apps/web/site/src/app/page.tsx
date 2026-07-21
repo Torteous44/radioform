@@ -1,5 +1,6 @@
 import Image from "next/image";
 import FAQ from "./components/FAQ";
+import FaqStep from "./components/FaqStep";
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -23,10 +24,10 @@ const jsonLd = {
         priceCurrency: "USD",
       },
       featureList: [
-        "10-band fully parametric equalizer (20 Hz to 20 kHz)",
+        "10-band parametric equalizer (32 Hz to 16 kHz)",
         "Built-in presets for Electronic, Acoustic, Classical, Hip-Hop, Pop, R&B, Rock, Flat",
         "Built-in limiter and preamp",
-        "Zero added latency",
+        "No latency you can hear",
         "Sub-1% CPU usage",
         "Native Swift/SwiftUI menu bar app",
         "C++ audio engine with cascaded biquad filters",
@@ -56,7 +57,7 @@ const jsonLd = {
           name: "How does Radioform work?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Radioform creates a virtual audio device that sits between your apps and your speakers. All system audio passes through a high-quality DSP engine where it gets shaped by your EQ settings in real-time—then continues to your actual output device. Zero added latency, sub-1% CPU usage.",
+            text: "Radioform makes a virtual audio device that sits between your apps and your speakers. Everything you play runs through the EQ engine, then goes on to your real output. No delay you can hear. Under 1% CPU.",
           },
         },
         {
@@ -72,7 +73,7 @@ const jsonLd = {
           name: "Is Radioform really free?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Yes. Radioform is released under the GPLv3 license—fully open source, no hidden costs, no subscriptions, no data collection. You can read every line of code, build it yourself, or fork it for your own projects.",
+            text: "Yes. It's GPLv3. Fully open source. No cost, no subscription, no data collection. You can read every line of code, build it yourself, or fork it.",
           },
         },
       ],
@@ -116,26 +117,34 @@ const DOWNLOAD_URL =
   "https://github.com/Torteous44/radioform/releases/latest/download/Radioform.dmg";
 const GITHUB_URL = "https://github.com/Torteous44/radioform";
 
-const FAQ_IMAGES = [
-  "/instructions/frame1.avif",
-  "/instructions/frame2.avif",
-  "/instructions/frame3.avif",
-  "/instructions/frame4.avif",
-];
-
-interface FAQItem {
-  question: string;
-  answer: React.ReactNode;
+async function getStarCount(): Promise<number | null> {
+  try {
+    const res = await fetch(
+      "https://api.github.com/repos/Torteous44/radioform",
+      {
+        headers: { Accept: "application/vnd.github+json" },
+        next: { revalidate: 3600 },
+      },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.stargazers_count === "number"
+      ? data.stargazers_count
+      : null;
+  } catch {
+    return null;
+  }
 }
 
-export default function Home() {
+export default async function Home() {
+  const stars = await getStarCount();
   return (
-    <main className="min-h-screen px-4 sm:px-6 py-12 sm:py-16">
+    <main className="min-h-screen px-4 sm:px-6 pt-[13vh] pb-12 sm:pb-16">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="max-w-md mx-auto">
+      <div className="max-w-[26rem] mx-auto">
         {/* Hero */}
         <div className="relative w-full max-[479px]:hidden aspect-[1000/200] scale-x-[1.13]">
           <Image
@@ -156,15 +165,15 @@ export default function Home() {
         {/* Copy */}
         <div className="text-sm leading-relaxed space-y-4 mb-8">
           <p>
-            Radioform is a free, open-source macOS equalizer that lets you shape
-            your sound system-wide — with fully parametric per-band control.
+            Radioform is a free, open source equalizer for your Mac. It quietly
+            shapes the sound of everything you play.
           </p>
           <p>
-            It tucks into your menubar and stays out of your way. Pick a preset
-            or craft your own EQ curves for different gear.
+            It tucks into your menu bar and stays out of the way. Pick one of
+            the presets, or build your own curve and save it for later.
           </p>
           <p>
-            Created with C++ and Swift. Learn more{" "}
+            Built with C++ and Swift. Read more{" "}
             <a href="/about" className="underline">
               here
             </a>
@@ -209,15 +218,35 @@ export default function Home() {
             >
               <path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282" />
             </svg>
-            Download
+            <span className="-translate-y-px">Download</span>
           </a>
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-secondary rounded-none px-5 py-0 border border-neutral-300 text-sm rounded-full inline-flex items-center justify-center gap-2"
+            className="btn-secondary rounded-none px-5 py-0 border border-neutral-300 text-sm rounded-full inline-flex items-center justify-center gap-1"
           >
-            GitHub
+            {stars !== null ? (
+              <>
+                <span className="-translate-y-px">GitHub</span>
+                <span className="inline-flex items-center gap-0.5 text-[10px] text-neutral-500">
+                  ({stars.toLocaleString("en-US")}
+                  <svg
+                    aria-hidden
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="block translate-y-[0.5px]"
+                  >
+                    <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  )
+                </span>
+              </>
+            ) : (
+              <span className="-translate-y-px">GitHub</span>
+            )}
           </a>
         </div>
 
@@ -229,69 +258,81 @@ export default function Home() {
           <FAQ
             question="How do I get started?"
             answer={
-              <div className="space-y-3 ">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    { img: FAQ_IMAGES[0], text: "First, Download & install" },
-                    {
-                      img: FAQ_IMAGES[1],
-                      text: "Then, select an audio device",
-                    },
-                    {
-                      img: FAQ_IMAGES[2],
-                      text: "Select a preset or make your own",
-                    },
-                    { img: FAQ_IMAGES[3], text: "Finally, Enjoy" },
-                  ].map((step, i) => (
-                    <div key={i}>
-                      <Image
-                        src={step.img}
-                        alt={`Step ${i + 1}`}
-                        width={200}
-                        height={200}
-                        sizes="(min-width: 640px) 128px, 25vw"
-                        className="w-full aspect-square object-cover rounded mb-2"
-                      />
-                      <p className="text-xs">{step.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <FaqStep
+                src="/instructions/faq-getting-started.png"
+                width={843}
+                height={685}
+                alt="Download Radioform, pick the Radioform output, open the EQ, and enjoy."
+              >
+                <p>
+                  Download Radioform and drag it into your Applications folder.
+                  Open it once and it sits in your menu bar.
+                </p>
+                <p>
+                  In your Sound settings, pick the Radioform output that matches
+                  your speakers or your headphones. Now your Mac plays through
+                  it.
+                </p>
+                <p>
+                  Open the menu bar icon and the EQ is there. Start from a
+                  preset, or pull the sliders until it sounds right.
+                  Double-click a band for advanced settings. Enjoy.
+                </p>
+              </FaqStep>
             }
           />
           <FAQ
             question="How does it work?"
             answer={
-              <>
-                Radioform creates a virtual audio device that sits between your
-                apps and your speakers. All system audio passes through a
-                high-quality DSP engine where it gets shaped by your EQ settings
-                in real-time—then continues to your actual output device. Zero
-                added latency, sub-1% CPU usage.
-              </>
+              <FaqStep
+                src="/instructions/faq-how-it-works.png"
+                width={866}
+                height={397}
+                alt="Your apps' sound runs through Radioform to your speakers with zero delay and under 1% CPU."
+              >
+                <p>
+                  Radioform makes a virtual audio device that sits between your
+                  apps and your speakers. Everything you play runs through the
+                  EQ engine, then goes on to your real output. No delay. Under
+                  1% CPU usage.
+                </p>
+              </FaqStep>
             }
           />
           <FAQ
             question="What's under the hood?"
             answer={
-              <>
-                The audio engine is written in C++ using cascaded biquad filters
-                for precise EQ control. The virtual audio device uses
-                Apple&apos;s Audio Server Plugin (libASPL) framework. The menu
-                bar app is native Swift/SwiftUI. Everything talks through a
-                clean C API and shared memory for real-time safety.
-              </>
+              <FaqStep
+                src="/instructions/faq-under-the-hood.png"
+                width={1257}
+                height={471}
+                alt="The C++ driver, the Swift host, and the menu bar app, all wired into macOS CoreAudio."
+              >
+                <p>
+                  The audio engine is C++ with cascaded biquad filters. The
+                  virtual device uses Apple&apos;s Audio Server Plugin
+                  (libASPL). The menu bar app is native Swift and SwiftUI. They
+                  talk through a clean C API and shared memory, so the audio
+                  stays real-time safe.
+                </p>
+              </FaqStep>
             }
           />
           <FAQ
             question="Is it really free?"
             answer={
-              <>
-                Yes. Radioform is released under the GPLv3 license—fully open
-                source, no hidden costs, no subscriptions, no data collection.
-                You can read every line of code, build it yourself, or fork it
-                for your own projects.
-              </>
+              <FaqStep
+                src="/instructions/faq-free.png"
+                width={664}
+                height={287}
+                alt="Radioform is free and open source under GPLv3."
+              >
+                <p>
+                  Yes. It&apos;s GPLv3. Fully open source. No cost, no
+                  subscription, no data collection. You can read every line of
+                  code, build it yourself, or fork it.
+                </p>
+              </FaqStep>
             }
           />
         </section>

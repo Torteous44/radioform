@@ -1,5 +1,13 @@
 
-## [Unreleased]
+## [2.1.2] - 2026-03-12
+
+### Bug Fixes
+
+- First-frame jump and add hysteresis to precise mode
+- Expand quit button clickable area
+- Use knob-local coordinate space for precise-drag threshold calculation
+- Retry volume listener registration with backoff after sleep/wake to handle slow coreaudiod restarts
+- Skip mute listener registration when volume listener fails to prevent leak on wake retry
 
 ### Documentation
 
@@ -10,12 +18,29 @@
 
 - Standardize script output
 - Simplify bug/feature issue templates
+- Centralize generation in script, wire make target, and document usage
 
 ### Other
 
 - Merge pull request #71 from Torteous44/dev
 
 Dev
+- Round dB values
+- Implement precise dB dragging
+- Use tabular numerals for slider dB text
+- Fix duplicate assignment
+- Merge pull request #74 from Torteous44/pr-72
+
+Implement precise slider dragging
+- Merge pull request #75 from Torteous44/fix-quit-button
+
+Fix quit button clickable area
+- Merge pull request #76 from Torteous44/dev
+
+Dev
+- Merge pull request #77 from Torteous44/dev
+
+fix: retry volume listener registration with backoff after sleep/wake…
 
 ## [2.1.1] - 2026-03-01
 

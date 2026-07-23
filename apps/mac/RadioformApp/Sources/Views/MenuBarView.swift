@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 private let radioformLogo: NSImage? = {
     if let url = Bundle.main.url(
@@ -391,7 +392,7 @@ struct PresetList: View {
     let userPresetIDs: Set<EQPreset.ID>
     let onSelect: (EQPreset) -> Void
     let onDelete: (EQPreset) -> Void
-    
+
     // Max items to show before scrolling (each item ~40px + 2px spacing)
     private let maxVisibleItems = 13
     private let estimatedItemHeight: CGFloat = 40
@@ -401,20 +402,280 @@ struct PresetList: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: itemSpacing) {
-                ForEach(presets) { preset in
-                    MenuItemButton(
-                        preset: preset,
-                        isActive: preset.id == activeID,
-                        isCustomPreset: userPresetIDs.contains(preset.id),
-                        onSelect: { onSelect(preset) },
-                        onDelete: onDelete
+        VStack(alignment: .leading, spacing: itemSpacing) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: itemSpacing) {
+                    ForEach(presets) { preset in
+                        MenuItemButton(
+                            preset: preset,
+                            isActive: preset.id == activeID,
+                            isCustomPreset: userPresetIDs.contains(preset.id),
+                            onSelect: { onSelect(preset) },
+                            onDelete: onDelete
+                        )
+                    }
+                }
+            }
+            .frame(maxHeight: presets.count > maxVisibleItems ? maxHeight : nil)
+
+            AutoEQSection(onImport: { preset in
+                onSelect(preset)
+            })
+        }
+    }
+}
+
+struct AutoEQSection: View {
+    let onImport: (EQPreset) -> Void
+    @ObservedObject private var index = AutoEQIndex.shared
+    @State private var isExpanded = false
+    @State private var searchText = ""
+    @State private var isHovered = false
+    @State private var downloadingId: UUID?
+    @State private var errorMessage: String?
+    @FocusState private var isSearchFocused: Bool
+
+    private var searchResults: [AutoEQEntry] {
+        index.search(searchText)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // Toggle button
+            Button {
+                isExpanded.toggle()
+                if isExpanded {
+                    index.loadIfNeeded()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        isSearchFocused = true
+                    }
+                } else {
+                    searchText = ""
+                    errorMessage = nil
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(NSColor.separatorColor).opacity(0.4))
+                            .frame(width: 28, height: 28)
+
+                        Image(systemName: "headphones")
+                            .font(.system(size: 13, weight: .medium))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text("AutoEQ")
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isHovered ? Color(NSColor.separatorColor).opacity(0.5) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Search field
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+
+                        TextField("Search headphones...", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .focused($isSearchFocused)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color(NSColor.separatorColor).opacity(0.3))
                     )
+                    .padding(.horizontal, 8)
+
+                    // Status / results
+                    if index.isLoading {
+                        HStack {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Loading headphone database...")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                    } else if let error = errorMessage ?? index.error {
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                    } else if !searchText.isEmpty {
+                        if searchResults.isEmpty {
+                            Text("No headphones found")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 4)
+                        } else {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    ForEach(searchResults) { entry in
+                                        AutoEQResultRow(
+                                            entry: entry,
+                                            isDownloading: downloadingId == entry.id,
+                                            onSelect: { selectEntry(entry) }
+                                        )
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 200)
+                        }
+                    } else if !index.entries.isEmpty {
+                        Text("\(index.entries.count) headphones available")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 2)
+                    }
+
+                    // Import file fallback
+                    Button {
+                        importFile()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc")
+                                .font(.system(size: 9))
+                            Text("Import from file")
+                                .font(.system(size: 10))
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 2)
+                }
+                .padding(.bottom, 4)
+            }
+        }
+    }
+
+    private func selectEntry(_ entry: AutoEQEntry) {
+        guard downloadingId == nil else { return }
+        downloadingId = entry.id
+        errorMessage = nil
+
+        Task {
+            do {
+                let content = try await index.fetchProfile(entry)
+                let uniqueName = PresetManager.shared.generateUniqueName(entry.name)
+                let preset = try AutoEQParser.parse(content: content, name: uniqueName)
+
+                await MainActor.run {
+                    try? PresetManager.shared.savePreset(preset)
+                    PresetManager.shared.loadAllPresets()
+                    downloadingId = nil
+                    if let saved = PresetManager.shared.userPresets.first(where: { $0.name == uniqueName }) {
+                        onImport(saved)
+                    }
+                    isExpanded = false
+                    searchText = ""
+                }
+            } catch {
+                await MainActor.run {
+                    downloadingId = nil
+                    errorMessage = error.localizedDescription
                 }
             }
         }
-        .frame(maxHeight: presets.count > maxVisibleItems ? maxHeight : nil)
+    }
+
+    private func importFile() {
+        let panel = NSOpenPanel()
+        panel.title = "Import AutoEQ Preset"
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let preset = try PresetManager.shared.importAutoEQ(from: url)
+            onImport(preset)
+            isExpanded = false
+            searchText = ""
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct AutoEQResultRow: View {
+    let entry: AutoEQEntry
+    let isDownloading: Bool
+    let onSelect: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button { onSelect() } label: {
+            HStack(spacing: 8) {
+                if isDownloading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: "headphones")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .frame(width: 14)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(entry.name)
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    Text(entry.source)
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(isHovered ? Color(NSColor.separatorColor).opacity(0.4) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isDownloading)
+        .padding(.horizontal, 4)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
 
